@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"talentan.github.io","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。对于性能优化，记住三点足矣：">
+<meta property="og:type" content="article">
+<meta property="og:title" content="性能优化系列">
+<meta property="og:url" content="https://talentan.github.io/2020/07/27/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%B3%BB%E5%88%97/index.html">
+<meta property="og:site_name" content="追谏">
+<meta property="og:description" content="如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。对于性能优化，记住三点足矣：">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-07-27T23:00:00.000Z">
+<meta property="article:modified_time" content="2020-07-28T04:45:08.940Z">
+<meta property="article:tag" content="前端， 性能优化， 工程化">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://talentan.github.io/2020/07/27/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%B3%BB%E5%88%97/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>性能优化系列 | 追谏</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <a style="position:absolute;z-index:1000;top:0; right:0;border:none;" href="https://github.com/talentAN" target="_blank" rel="noopener"><img width="149" height="149" src="https://github.blog/wp-content/uploads/2008/12/forkme_right_darkblue_121621.png?resize=149%2C149" class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1"></a>
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">追谏</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">后之视今，亦犹今之视昔.</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404/" rel="section"><i class="fa fa-heartbeat fa-fw"></i>公益 404</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://talentan.github.io/2020/07/27/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%B3%BB%E5%88%97/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="追谏">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          性能优化系列
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-07-27 23:00:00" itemprop="dateCreated datePublished" datetime="2020-07-27T23:00:00+00:00">2020-07-27</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%B7%A5%E7%A8%8B%E5%BE%80%E4%BA%8B/" itemprop="url" rel="index"><span itemprop="name">工程往事</span></a>
+                </span>
+            </span>
+
+          
+            <span id="/2020/07/27/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%B3%BB%E5%88%97/" class="post-meta-item leancloud_visitors" data-flag-title="性能优化系列" title="阅读次数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span class="leancloud-visitors-count"></span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h4 id="如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。"><a href="#如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。" class="headerlink" title="如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。"></a>如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。</h4><p>对于性能优化，记住三点足矣：</p>
+<a id="more"></a>
+<ol>
+<li>页面加载分哪些阶段；</li>
+<li>如何压缩各个阶段的时间；</li>
+<li>前端很朴素，前端无魔法。</li>
+</ol>
+<p>好像废话，不过无数的优化手段，绕不出这三句。</p>
+<h4 id="让我们一步步来"><a href="#让我们一步步来" class="headerlink" title="让我们一步步来:"></a>让我们一步步来:</h4><h5 id="页面加载分哪些过程？"><a href="#页面加载分哪些过程？" class="headerlink" title="页面加载分哪些过程？"></a>页面加载分哪些过程？</h5><p>DNS解析 =&gt; TCP链接 =&gt; http请求 =&gt; 下载资源 =&gt;浏览器解析、渲染、绘制</p>
+<h5 id="如何压缩时间？"><a href="#如何压缩时间？" class="headerlink" title="如何压缩时间？"></a>如何压缩时间？</h5><ol>
+<li><strong>笨鸟先飞法</strong> =&gt; 提前干点儿活儿</li>
+<li><strong>偷工减料法</strong> =&gt; 把活儿弄少点儿</li>
+<li><strong>甩锅大法</strong> =&gt; 把活儿分给别人做</li>
+<li><strong>copy/past法</strong> =&gt; 把干好的活儿再拿来用用</li>
+<li><strong>能拖就拖法</strong> =&gt; 不急的事儿能拖就拖</li>
+<li><strong>有钱大法</strong> =&gt; 只要钱到位，一切好说</li>
+</ol>
+<p>前端工作就是这么的朴实无华。。</p>
+<h5 id="看看每个阶段能做什么事儿？"><a href="#看看每个阶段能做什么事儿？" class="headerlink" title="看看每个阶段能做什么事儿？"></a>看看每个阶段能做什么事儿？</h5><h6 id="DNS解析"><a href="#DNS解析" class="headerlink" title="DNS解析"></a>DNS解析</h6><ol>
+<li>笨鸟先飞 =&gt; dns-prefetch</li>
+<li>甩锅大法 =&gt; dns负载均衡</li>
+</ol>
+<h6 id="TCP链接"><a href="#TCP链接" class="headerlink" title="TCP链接"></a>TCP链接</h6><ol start="4">
+<li>copy/past法 =&gt; TCP链接复用</li>
+</ol>
+<h6 id="HTTP请求"><a href="#HTTP请求" class="headerlink" title="HTTP请求"></a>HTTP请求</h6><ol start="2">
+<li>偷工减料法 =&gt; 不发请求(强缓存); 合并请求; 升http2.0(多路复用，头部压缩等);gzip压缩;<br>cookie优化…</li>
+</ol>
+<h6 id="下载资源"><a href="#下载资源" class="headerlink" title="下载资源"></a>下载资源</h6><ol start="2">
+<li>偷工减料法 =&gt; 文件压缩(Code-splitting， Tree-shaking， uglify-js…)</li>
+<li>甩锅大法 =&gt; 跨域资源请求(单页面同时发起100个请求怎么办)</li>
+<li>copy/past法 =&gt; 协商缓存(有哪几种方式，如何强制更新…)</li>
+<li>能拖就拖法 =&gt; 懒加载，按需加载， async/defer(JS)…</li>
+<li>有钱大法 =&gt; 部署CDN</li>
+</ol>
+<h6 id="浏览器解析、渲染、绘制"><a href="#浏览器解析、渲染、绘制" class="headerlink" title="浏览器解析、渲染、绘制"></a>浏览器解析、渲染、绘制</h6><ol start="2">
+<li>偷工减料法 =&gt; 少重排， 少重绘</li>
+<li>甩锅大法 =&gt; 少JS计算，不行给worker; 单图层渲染慢，甩给其他图层;</li>
+<li>copy/past法 =&gt; Storage， indexDB</li>
+<li>能拖就拖法 =&gt; requestAnimationFram/requestIdleCallback</li>
+</ol>
+<h5 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h5><p>在每个阶段中，你能想到多少，做到多少、如何计划，量化，就看少年你的知识广度和深度啦。市场上已有很多成熟的解决方案和优秀的解析文章，此处不做细讲。</p>
+<p>经验视野有限，不足之处还请多多指点…</p>
+<p>我是追谏，与诸君共勉 ~</p>
+
+    </div>
+
+    
+    
+    
+        <div class="reward-container">
+  <div></div>
+  <button onclick="var qr = document.getElementById('qr'); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    送一袋辣条
+  </button>
+  <div id="qr" style="display: none;">
+      
+      <div style="display: inline-block;">
+        <img src="/images/wechatpay.png" alt=" 上缴老婆(微信)">
+        <p>上缴老婆(微信)</p>
+      </div>
+      
+      <div style="display: inline-block;">
+        <img src="/images/alipay.png" alt=" 私房钱(支付宝)">
+        <p>私房钱(支付宝)</p>
+      </div>
+
+  </div>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%89%8D%E7%AB%AF%EF%BC%8C-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%EF%BC%8C-%E5%B7%A5%E7%A8%8B%E5%8C%96/" rel="tag"># 前端， 性能优化， 工程化</a>
+          </div>
+
+        
+
+
+        
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    <div class="comments" id="valine-comments"></div>
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。"><span class="nav-number">1.</span> <span class="nav-text">如果你对性能优化没有体系化了解，或觉得背诵雅虎三十五条军规太烦，推荐继续阅读。</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#让我们一步步来"><span class="nav-number">2.</span> <span class="nav-text">让我们一步步来:</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#页面加载分哪些过程？"><span class="nav-number">2.1.</span> <span class="nav-text">页面加载分哪些过程？</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#如何压缩时间？"><span class="nav-number">2.2.</span> <span class="nav-text">如何压缩时间？</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#看看每个阶段能做什么事儿？"><span class="nav-number">2.3.</span> <span class="nav-text">看看每个阶段能做什么事儿？</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#DNS解析"><span class="nav-number">2.3.1.</span> <span class="nav-text">DNS解析</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#TCP链接"><span class="nav-number">2.3.2.</span> <span class="nav-text">TCP链接</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#HTTP请求"><span class="nav-number">2.3.3.</span> <span class="nav-text">HTTP请求</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#下载资源"><span class="nav-number">2.3.4.</span> <span class="nav-text">下载资源</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#浏览器解析、渲染、绘制"><span class="nav-number">2.3.5.</span> <span class="nav-text">浏览器解析、渲染、绘制</span></a></li></ol></li><li class="nav-item nav-level-5"><a class="nav-link" href="#结语"><span class="nav-number">2.4.</span> <span class="nav-text">结语</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name"></p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">1</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/talentAN" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;talentAN" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="/az15921869329@gmail.com" title="E-Mail → az15921869329@gmail.com"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">GeniusMe</span>
+</div>
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+
+<script>
+NexT.utils.loadComments(document.querySelector('#valine-comments'), () => {
+  NexT.utils.getScript('//unpkg.com/valine/dist/Valine.min.js', () => {
+    var GUEST = ['nick', 'mail', 'link'];
+    var guest = 'nick';
+    guest = guest.split(',').filter(item => {
+      return GUEST.includes(item);
+    });
+    new Valine({
+      el         : '#valine-comments',
+      verify     : false,
+      notify     : false,
+      appId      : 'rtcYYMPdVLezGM0tGkHXDkEl-gzGzoHsz',
+      appKey     : '8khPsVEmPkyiTOlv4Pp8u008',
+      placeholder: "说点儿啥...",
+      avatar     : 'mm',
+      meta       : guest,
+      pageSize   : '10' || 10,
+      visitor    : true,
+      lang       : '' || 'zh-cn',
+      path       : location.pathname,
+      recordIP   : false,
+      serverURLs : ''
+    });
+  }, window.Valine);
+});
+</script>
+
+</body>
+</html>
