@@ -31,22 +31,21 @@ const DomContent = () => {
         <div className="centerAlign box">{socialLinks}</div>
         <ul className={`box ${style.badge} contactBlock`}>
           <li className={`${style.contactBlockItem}`}>
-            <span>
+            <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="calendar" />{' '}
             </span>
-            &nbsp; &nbsp; {birth}
+            {birth}
           </li>
           <li className={`${style.contactBlockItem}`}>
-            <span>
+            <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="map-pin" />
             </span>{' '}
-            &nbsp; &nbsp; {locate}
+            {locate}
           </li>
           <li className={style.contactBlockItem}>
-            <span>
+            <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="mail" />
             </span>{' '}
-            &nbsp; &nbsp;
             <span style={{ fontSize: '0.837rem' }}>{email}</span>
           </li>
         </ul>

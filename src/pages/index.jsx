@@ -11,10 +11,8 @@ export default () => (
     <Layout className="container">
       <Header />
       <SidebarWrapper>
-        <>
-          <AboutMe />
-          <Skills />
-        </>
+        <AboutMe />
+        <Skills />
       </SidebarWrapper>
     </Layout>
   </Layout>
