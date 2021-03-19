@@ -1,12 +1,8 @@
-/* eslint-disable react/forbid-prop-types */
 /* Vendor imports */
 import React from 'react';
-import PropTypes from 'prop-types';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
-import {
-  Layout, Row, Col,
-} from 'antd';
+import { Layout, Row, Col } from 'antd';
 /* App imports */
 import SEO from '../../components/Seo';
 import Header from '../../components/PageLayout/Header';
@@ -20,8 +16,8 @@ const TagPage = ({ data, pageContext }) => {
   const { tag } = pageContext;
   const tagName = Config.tags[tag].name || Utils.capitalize(tag);
   const tagPagePath = Config.pages.tag;
-  const tagImage = data.allFile.edges.find((edge) => edge.node.name === tag).node
-    .childImageSharp.fluid;
+  const tagImage = data.allFile.edges.find(edge => edge.node.name === tag).node.childImageSharp
+    .fluid;
   const posts = data.allMarkdownRemark.edges;
   return (
     <Layout className="outerPadding">
@@ -35,20 +31,14 @@ const TagPage = ({ data, pageContext }) => {
         />
         <SidebarWrapper>
           <div className={`marginTopTitle ${style.tagsList}`}>
-            <h1>
-              #
-              {tagName}
-            </h1>
+            <h1>#{tagName}</h1>
             <div className={style.bannerImgContainer}>
               <Img className={style.bannerImg} fluid={tagImage} alt={tagName} />
             </div>
-            <h4 className="textCenter">
-              {Config.tags[tag].description}
-            </h4>
+            <h4 className="textCenter">{Config.tags[tag].description}</h4>
           </div>
           <Row gutter={[20, 20]}>
             {posts.map((post, key) => (
-            // eslint-disable-next-line react/no-array-index-key
               <Col key={key} xs={24} sm={24} md={12} lg={8}>
                 <PostCard data={post} />
               </Col>
@@ -60,36 +50,10 @@ const TagPage = ({ data, pageContext }) => {
   );
 };
 
-TagPage.propTypes = {
-  data: PropTypes.shape({
-    allMarkdownRemark: PropTypes.shape({
-      edges: PropTypes.arrayOf(PropTypes.object).isRequired,
-    }).isRequired,
-    allFile: PropTypes.shape({
-      edges: PropTypes.arrayOf(
-        PropTypes.shape({
-          node: PropTypes.shape({
-            name: PropTypes.string.isRequired,
-            childImageSharp: PropTypes.shape({
-              fluid: PropTypes.object.isRequired,
-            }).isRequired,
-          }).isRequired,
-        }),
-      ).isRequired,
-    }).isRequired,
-  }).isRequired,
-  pageContext: PropTypes.shape({
-    tag: PropTypes.string.isRequired,
-  }).isRequired,
-};
-
 export const pageQuery = graphql`
   query($tag: String!) {
     allMarkdownRemark(
-      filter: {
-        frontmatter: { tags: { in: [$tag] } }
-        fileAbsolutePath: { regex: "/index.md$/" }
-      }
+      filter: { frontmatter: { tags: { in: [$tag] } }, fileAbsolutePath: { regex: "/index.md$/" } }
       sort: { fields: [frontmatter___date], order: DESC }
     ) {
       edges {

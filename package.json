@@ -39,7 +39,6 @@
     "less": "^3.11.1",
     "moment": "^2.24.0",
     "prismjs": "^1.19.0",
-    "prop-types": "^15.7.2",
     "react": "^16.12.0",
     "react-dom": "^16.12.0",
     "react-fontawesome": "^1.7.1",
@@ -47,21 +46,21 @@
     "react-pdf": "^4.1.0"
   },
   "devDependencies": {
+    "@babel/eslint-parser": "latest",
+    "@babel/plugin-proposal-class-properties": "latest",
+    "@babel/preset-react": "latest",
     "eslint": "latest",
     "eslint-config-airbnb": "^18.0.1",
+    "eslint-config-prettier": "^8.1.0",
     "eslint-loader": "^3.0.3",
     "eslint-plugin-import": "^2.20.1",
     "eslint-plugin-jsx-a11y": "^6.2.3",
+    "eslint-plugin-prettier": "latest",
     "eslint-plugin-react": "^7.19.0",
     "gatsby-plugin-eslint-v2": "^2.0.0-beta.0",
-    "prettier": "latest",
-    "@babel/eslint-parser": "latest",
-    "@babel/preset-react": "latest",
-    "@babel/plugin-proposal-class-properties": "latest",
-    "eslint-config-prettier": "latest",
-    "eslint-plugin-prettier": "latest",
+    "husky": "latest",
     "lint-staged": "latest",
-    "husky": "latest"
+    "prettier": "latest"
   },
   "repository": {
     "type": "git",

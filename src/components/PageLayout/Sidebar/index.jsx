@@ -1,71 +1,67 @@
 import React from 'react';
-import {
-  Affix, Layout, Row, Col,
-} from 'antd';
+import { Affix, Layout, Row, Col, message } from 'antd';
 import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { globalHistory } from '@reach/router';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
-import Config from '../../../../config';
+import ME from '../../../configs/me';
 
 const { Content } = Layout;
-const {
-  facebook, github, instagram, twitter,
-} = Config.social;
 
-const DomContent = () => (
-  <aside>
-    <div className={style.profileAvatar} />
-    <div className={`${style.name} centerAlign`}>
-      <div className={`${style.boxName} centerAlign`}>
-        <h2>
-          Rolwin
-          {' '}
-          <span>Reevan</span>
-        </h2>
+const DomContent = () => {
+  const { name, title, social, birth, locate, email } = ME;
+  const socialLinks = Object.keys(social).map(key => {
+    return (
+      <a key={key} href={social[key]} target="_blank" label="button" rel="noopener noreferrer">
+        <FA name={key} />
+      </a>
+    );
+  });
+  return (
+    <aside>
+      <div className={style.profileAvatar} />
+      <div className={`${style.name} centerAlign`}>
+        <div className={`${style.boxName} centerAlign`}>
+          <h2>
+            <span>{name}</span>
+          </h2>
+        </div>
+        <div className={`${style.badge} ${style.badgeGray}`}>{title}</div>
+        <div className="centerAlign box">{socialLinks}</div>
+        <ul className={`box ${style.badge} contactBlock`}>
+          <li className={`${style.contactBlockItem}`}>
+            <span>
+              <FeatherIcon size="19" icon="calendar" />{' '}
+            </span>
+            &nbsp; &nbsp; {birth}
+          </li>
+          <li className={`${style.contactBlockItem}`}>
+            <span>
+              <FeatherIcon size="19" icon="map-pin" />
+            </span>{' '}
+            &nbsp; &nbsp; {locate}
+          </li>
+          <li className={style.contactBlockItem}>
+            <span>
+              <FeatherIcon size="19" icon="mail" />
+            </span>{' '}
+            &nbsp; &nbsp;
+            <span style={{ fontSize: '0.837rem' }}>{email}</span>
+          </li>
+        </ul>
+        <div className={style.resumeDownload} onClick={() => message.info('当前稳定，感谢关注~')}>
+          {/* <a download target="_blank" style={{ display: 'flex', alignItems: 'center' }}>
+            <FeatherIcon size="19" icon="download" style={{ marginRight: '8px' }} />
+            简历
+          </a> */}
+        </div>
       </div>
-      <div className={`${style.badge} ${style.badgeGray}`}>Software Engineer</div>
-      <div className="centerAlign box">
-        <a href={facebook} target="_blank" label="button" rel="noopener noreferrer"><FA name="facebook-f" /></a>
-        <a href={twitter} target="_blank" label="button" rel="noopener noreferrer"><FA name="twitter" /></a>
-        <a href={github} target="_blank" label="button" rel="noopener noreferrer"><FA name="github" /></a>
-        <a href={instagram} target="_blank" label="button" rel="noopener noreferrer"><FA name="instagram" /></a>
-      </div>
-      <ul className={`box ${style.badge} contactBlock`}>
-        <li className={`${style.contactBlockItem}`}>
-          <span>
-            <FeatherIcon size="19" icon="calendar" />
-            {' '}
-          </span>
-&nbsp; &nbsp; May 9,1995
-        </li>
-        <li className={`${style.contactBlockItem}`}>
-          <span><FeatherIcon size="19" icon="map-pin" /></span>
-          {' '}
-&nbsp; &nbsp; Bangalore, India
-        </li>
-        <li className={`${style.contactBlockItem}`}>
-          <span><FeatherIcon size="19" icon="mail" /></span>
-          {' '}
-&nbsp; &nbsp;
-          <a
-            href="mailto:&#114;&#111;&#108;&#119;&#105;&#110;&#109;&#111;&#110;&#116;&#101;&#105;&#114;&#111;&#064;&#103;&#109;&#097;&#105;&#108;&#046;&#099;&#111;&#109;"
-            target="_top"
-          >
-            <span className={style.emailHider}>@</span>
-          </a>
-        </li>
-      </ul>
-      <div className={style.resumeDownload}>
-        <a href="../resume.pdf" download target="_blank">Download CV</a>
-      </div>
-    </div>
-  </aside>
-);
+    </aside>
+  );
+};
 
-const Sidebar = (props) => {
+const Sidebar = props => {
   const [width] = useWindowSize();
   const { children } = props;
   const { pathname } = globalHistory.location;
@@ -89,11 +85,11 @@ const Sidebar = (props) => {
         <Content className={`${style.content} ${style.background}`}>
           <Row>
             <Col sm={24} md={9} lg={6} className={style.sidebarContent}>
-              { domContent }
+              {domContent}
             </Col>
             <Col sm={24} md={15} lg={18}>
               <Layout className={`${style.background} ${style.boxContent} borderRadiusSection`}>
-                { children }
+                {children}
               </Layout>
             </Col>
           </Row>
@@ -103,7 +99,7 @@ const Sidebar = (props) => {
   );
 };
 
-export const Sidebar404 = (props) => {
+export const Sidebar404 = props => {
   const { children } = props;
   return (
     <Layout>

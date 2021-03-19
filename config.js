@@ -14,13 +14,6 @@ module.exports = {
     resume: 'resume',
     tag: 'tags',
   },
-  social: {
-    github: 'https://github.com/rolwin100',
-    facebook: 'https://www.facebook.com/rolwin.monteiro',
-    twitter: 'https://twitter.com/rolwin100',
-    instagram: 'https://www.instagram.com/reevan100/',
-    rss: '/rss.xml',
-  },
   contactFormUrl: 'https://getform.io/f/09a3066f-c638-40db-ad59-05e4ed71e451',
   googleAnalyticTrackingId: 'G-EVBYYC3V2N',
   tags: {
