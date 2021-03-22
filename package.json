@@ -11,7 +11,8 @@
     "serve": "gatsby serve",
     "clean": "gatsby clean",
     "test": "echo \"Write tests! -> https://gatsby.dev/unit-testing\" && exit 1",
-    "lint": "eslint --ext .js src && stylelint \"src/**/*.{css,less}\""
+    "lint": "eslint --ext .js src && stylelint \"src/**/*.{css,less}\"",
+    "deploy": "gatsby build --prefix-paths && gh-pages -d public"
   },
   "dependencies": {
     "antd": "^4.0.1",
@@ -58,6 +59,7 @@
     "eslint-plugin-prettier": "latest",
     "eslint-plugin-react": "^7.19.0",
     "gatsby-plugin-eslint-v2": "^2.0.0-beta.0",
+    "gh-pages": "^3.1.0",
     "husky": "latest",
     "lint-staged": "latest",
     "prettier": "latest"
