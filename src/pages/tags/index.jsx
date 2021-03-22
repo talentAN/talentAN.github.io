@@ -15,7 +15,6 @@ const Tags = ({ data }) => {
     .map(edge => edge.node.frontmatter.tags)
     .reduce((prev, curr) => prev.concat(curr));
   rawTags.filter((tag, index) => index === rawTags.indexOf(tag)).sort(); // Remove duplicates and sort values
-  // const tagPage = Config.pages.tag;
   const tagData = Config.tags;
   return (
     <Layout className="outerPadding">
@@ -33,16 +32,19 @@ const Tags = ({ data }) => {
               <h1 className="titleSeparate">#标签</h1>
             </div>
             <Row gutter={[30, 20]}>
-              {edges.map(val => (
-                <Col key={val.node.name} xs={24} sm={24} md={12} lg={8}>
-                  <TagCard
-                    img={val.node.childImageSharp.fluid.src}
-                    name={val.node.name}
-                    description={tagData[val.node.name].description}
-                    color={tagData[val.node.name].color}
-                  />
-                </Col>
-              ))}
+              {/* 愚蠢的hardcode，哈哈哈哈哈哈 */}
+              {edges
+                .filter(val => tagData[val.node.name].description !== 'to be added...')
+                .map(val => (
+                  <Col key={val.node.name} xs={24} sm={24} md={12} lg={8}>
+                    <TagCard
+                      img={val.node.childImageSharp.fluid.src}
+                      name={val.node.name}
+                      description={tagData[val.node.name].description}
+                      color={tagData[val.node.name].color}
+                    />
+                  </Col>
+                ))}
             </Row>
           </>
         </SidebarWrapper>

@@ -8,8 +8,7 @@ const TagCard = props => {
   const { img, name, description, color } = props;
   const tagPage = Config.pages.tag;
 
-  //愚蠢的hardcode，哈哈哈哈哈哈
-  return description === 'to be added...' ? null : (
+  return (
     <Link className={style.tagCard} to={Utils.resolvePageUrl(tagPage, name)} disable>
       <div className={style.tagCard}>
         <div
