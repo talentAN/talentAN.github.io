@@ -19,11 +19,11 @@ const AboutMe = () => {
         <SEO title="About" description={description} path="" />
         <h1 className="titleSeparate">关于</h1>
         <p>
-          你好，我是追谏，目前是
+          你好，我是追谏，目前任
           <a href="https://www.sensorsdata.cn/" target="_blank">
             @神策数据
           </a>
-          的前端工程师。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。
+          前端工程师。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。
         </p>
         <p dangerouslySetInnerHTML={domHtml(pageText.paraTwo)} />
       </div>
