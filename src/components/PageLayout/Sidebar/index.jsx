@@ -10,7 +10,7 @@ import ME from '../../../configs/me';
 const { Content } = Layout;
 
 const DomContent = () => {
-  const { name, title, social, birth, locate, email } = ME;
+  const { name, title, social, birth, locate, email, company } = ME;
   const socialLinks = Object.keys(social).map(key => {
     return (
       <a key={key} href={social[key]} target="_blank" label="button" rel="noopener noreferrer">
@@ -30,23 +30,35 @@ const DomContent = () => {
         <div className={`${style.badge} ${style.badgeGray}`}>{title}</div>
         <div className="centerAlign box">{socialLinks}</div>
         <ul className={`box ${style.badge} contactBlock`}>
-          <li className={`${style.contactBlockItem}`}>
+          <li className={style.contactBlockItem} style={{ alignItems: 'flex-start' }}>
             <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="calendar" />{' '}
             </span>
             {birth}
           </li>
-          <li className={`${style.contactBlockItem}`}>
+          <li className={style.contactBlockItem} style={{ alignItems: 'flex-start' }}>
             <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="map-pin" />
             </span>{' '}
             {locate}
           </li>
-          <li className={style.contactBlockItem}>
+          <li className={style.contactBlockItem} style={{ alignItems: 'flex-start' }}>
             <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="mail" />
             </span>{' '}
-            <span style={{ fontSize: '0.837rem' }}>{email}</span>
+            <span>{email}</span>
+          </li>
+          <li className={style.contactBlockItem} style={{ alignItems: 'flex-start' }}>
+            <span style={{ marginRight: '16px' }}>
+              <FeatherIcon size="19" icon="flag" />{' '}
+            </span>
+            <a
+              href="https://www.sensorsdata.cn/"
+              target="_blank"
+              style={{ color: '#000', fontWeight: 600 }}
+            >
+              {company}
+            </a>
           </li>
         </ul>
         <div className={style.resumeDownload} onClick={() => message.info('当前稳定，感谢关注~')}>

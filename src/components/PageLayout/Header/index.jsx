@@ -39,7 +39,7 @@ export default () => {
             {header.map(item => {
               const { label, link } = item;
               return (
-                <li className={style.navItem}>
+                <li className={style.navItem} key={label}>
                   <Link to={link} onClick={toggleMenu} activeClassName={style.anchorActive}>
                     {label}
                   </Link>
