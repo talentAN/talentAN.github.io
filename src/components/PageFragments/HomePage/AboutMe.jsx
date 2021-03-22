@@ -6,16 +6,9 @@ import { stripTags, domHtml } from '../../../utils/stripTags';
 import SEO from '../../Seo';
 
 const pageText = {
-  paraOne: `Hello !! My name is talentan Monteiro. I'm a full stack web developer who is
-    passionate about various web technologies. I like to experiment with different web
-    technologies. I have an experience of nearly 3 years working with LAMP stack, MERN stack
-    and ELK stack. Building fancy UI's just like this one that your seeing 😅 and writing blogs about tech stacks
-    is what Rolwin loves to do. Check my blog which I update every week for some Javascript and some
-    cool notes on web technologies.`,
-  paraTwo: `Currently I work mostly with Javascript technologies like ReactJS and NodeJS. I also
-    have hands on experience working with cloud infrastructures like <b>AWS/GCP</b> and have deployed applications
-    keeping scalability in mind. Docker, Kubernetes, Jenkins, SonarQube are some of the cool
-    tools I use for <b>CI/ CD</b>. I'm always a learner and a self taught programmer.`,
+  paraOne:
+    '你好少年，我是追谏，目前是@神策数据的前端工程师。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。',
+  paraTwo: `除了技术，对历史和教育投入精力较多。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪`,
 };
 
 const AboutMe = () => {
@@ -28,18 +21,25 @@ const AboutMe = () => {
           description={description}
           path=""
           keywords={[
-            'Rolwin',
-            'Reevan',
-            'Monteiro',
+            'talentan',
+            'adam_an02',
+            'anzhen',
             'FullStack developer',
             'Javascript',
             'ReactJS',
             'NodeJS',
-            'Gatsby',
+            'sensorsdata',
+            '神策数据',
           ]}
         />
-        <h1 className="titleSeparate">About Me</h1>
-        <p>{pageText.paraOne}</p>
+        <h1 className="titleSeparate">关于我</h1>
+        <p>
+          你好，我是追谏，目前是
+          <a href="https://www.sensorsdata.cn/" target="_blank">
+            @神策数据
+          </a>
+          的前端工程师。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。
+        </p>
         <p dangerouslySetInnerHTML={domHtml(pageText.paraTwo)} />
       </div>
       <Row gutter={[20, 20]}>
@@ -48,40 +48,35 @@ const AboutMe = () => {
             img="location.png"
             height={60}
             alt="location image"
-            textH4="Born and bought up in"
-            textH3="Mangalore, KA, India"
+            textH4="土生土长东北银"
+            textH3="不能喝酒"
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
-          <AboutTile
-            img="coffee.png"
-            alt="coffee image"
-            textH4="Love Coffee"
-            textH3="Coffee + Me = Happiness"
-          />
+          <AboutTile img="dive.png" alt="coffee image" textH4="AOW" textH3="愿疫情早日结束" />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile
-            img="meeting.png"
+            img="billiards.png"
             alt="meeting image"
-            textH4="Socially Awkward"
-            textH3="At times"
+            textH4="中式 + 斯诺克"
+            textH3="人菜瘾大"
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile
-            img="motorcycle.png"
+            img="bike-1.png"
             alt="motorcycle image"
-            textH4="Love Riding"
-            textH3="Biker for life"
+            textH4="骑行"
+            textH3="Always on the way"
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile
-            img="web.png"
+            img="home-office.png"
             alt="web image"
-            textH4="Self Taught Programmer"
-            textH3="Thanks to the Web Resources"
+            textH4="”自教“工程师"
+            textH3="感谢开源"
             height={60}
             width={60}
           />
@@ -90,14 +85,13 @@ const AboutMe = () => {
           <AboutTile
             img="graduation.png"
             alt="graduation image"
-            textH4="Pursued B.Tech in"
-            textH3="Computer Science"
+            textH4="学士学位"
+            textH3="信息学"
             height={60}
             width={60}
           />
         </Col>
       </Row>
-      <div>随便加点儿啥</div>
     </>
   );
 };
