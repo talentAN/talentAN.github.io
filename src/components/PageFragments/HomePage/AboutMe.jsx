@@ -16,22 +16,7 @@ const AboutMe = () => {
   return (
     <div style={{ marginBottom: '16px' }}>
       <div>
-        <SEO
-          title="About"
-          description={description}
-          path=""
-          keywords={[
-            'talentan',
-            'adam_an02',
-            'anzhen',
-            'FullStack developer',
-            'Javascript',
-            'ReactJS',
-            'NodeJS',
-            'sensorsdata',
-            '神策数据',
-          ]}
-        />
+        <SEO title="About" description={description} path="" />
         <h1 className="titleSeparate">关于我</h1>
         <p>
           你好，我是追谏，目前是

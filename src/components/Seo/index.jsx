@@ -1,6 +1,5 @@
 /* Vendor imports */
 import React from 'react';
-import PropTypes from 'prop-types';
 import { Helmet } from 'react-helmet';
 import { StaticQuery, graphql } from 'gatsby';
 /* App imports */
@@ -19,12 +18,23 @@ const detailsQuery = graphql`
   }
 `;
 
+const KEYWORDS = [
+  'talentan',
+  'adam_an02',
+  'FullStack developer',
+  'Javascript',
+  'NodeJS',
+  'React',
+  'SensorsData',
+  '神策数据',
+];
+
 function SEO({
   title,
   description,
+  keywords = [],
   path,
   lang,
-  keywords,
   contentType,
   imageUrl,
   translations,
@@ -33,18 +43,12 @@ function SEO({
   return (
     <StaticQuery
       query={detailsQuery}
-      render={(data) => {
-        const metaKeywords = keywords && keywords.length > 0
-          ? { name: 'keywords', content: keywords.join(', ') }
-          : [];
-        const pageUrl = Utils.resolvePageUrl(
-          Config.siteUrl,
-          Config.pathPrefix,
-          path,
-        );
+      render={data => {
+        const metaKeywords = { name: 'keywords', content: [...KEYWORDS, ...keywords].join(', ') };
+        const pageUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
         const metaImageUrl = Utils.resolveUrl(
           Config.siteUrl,
-          imageUrl || data.file.childImageSharp.fixed.src,
+          imageUrl || data.file.childImageSharp.fixed.src
         );
 
         return (
@@ -81,16 +85,12 @@ function SEO({
               // Translated versions of page
               .concat(
                 translations
-                  ? translations.map((obj) => ({
-                    rel: 'alternate',
-                    hreflang: obj.hreflang,
-                    href: Utils.resolvePageUrl(
-                      Config.siteUrl,
-                      Config.pathPrefix,
-                      obj.path,
-                    ),
-                  }))
-                  : [],
+                  ? translations.map(obj => ({
+                      rel: 'alternate',
+                      hreflang: obj.hreflang,
+                      href: Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, obj.path),
+                    }))
+                  : []
               )}
           />
         );
@@ -98,36 +98,5 @@ function SEO({
     />
   );
 }
-
-SEO.propTypes = {
-  title: PropTypes.string.isRequired,
-  description: PropTypes.string.isRequired,
-  path: PropTypes.string.isRequired,
-  lang: PropTypes.string,
-  contentType: PropTypes.oneOf(['article', 'website']),
-  imageUrl: PropTypes.string,
-  keywords: PropTypes.arrayOf(PropTypes.string),
-  translations: PropTypes.arrayOf(
-    PropTypes.shape({
-      hreflang: PropTypes.string.isRequired,
-      path: PropTypes.string.isRequired,
-    }),
-  ),
-  meta: PropTypes.arrayOf(
-    PropTypes.shape({
-      property: PropTypes.string.isRequired,
-      content: PropTypes.string.isRequired,
-    }),
-  ),
-};
-
-SEO.defaultProps = {
-  lang: 'en_US',
-  contentType: 'website',
-  imageUrl: null,
-  keywords: [],
-  translations: [],
-  meta: [],
-};
 
 export default SEO;

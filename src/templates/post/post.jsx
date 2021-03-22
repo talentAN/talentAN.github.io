@@ -16,23 +16,19 @@ import style from './post.module.less';
 const Post = ({ data }) => {
   const { html, frontmatter } = data.markdownRemark;
   const {
-    title, cover: { childImageSharp: { fluid } }, excerpt, path,
+    title,
+    cover: {
+      childImageSharp: { fluid },
+    },
+    excerpt,
+    path,
   } = frontmatter;
 
-  const canonicalUrl = Utils.resolvePageUrl(
-    Config.siteUrl,
-    Config.pathPrefix,
-    path,
-  );
+  const canonicalUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
   return (
     <Layout className="outerPadding">
       <Layout className="container">
-        <SEO
-          title={title}
-          description={excerpt}
-          path={path}
-          keywords={['Rolwin', 'Reevan', 'Monteiro', 'FullStack developer', 'Javascript', 'ReactJS', 'NodeJS', 'Gatsby', 'technology']}
-        />
+        <SEO title={title} description={excerpt} path={path} />
         <Header />
         <SidebarWrapper>
           <div className="marginTopTitle">
