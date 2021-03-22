@@ -14,7 +14,7 @@ const pageText = {
 const AboutMe = () => {
   const description = `${pageText.paraOne} ${stripTags(pageText.paraTwo)}`;
   return (
-    <>
+    <div style={{ marginBottom: '16px' }}>
       <div>
         <SEO
           title="About"
@@ -92,7 +92,7 @@ const AboutMe = () => {
           />
         </Col>
       </Row>
-    </>
+    </div>
   );
 };
 export default AboutMe;
