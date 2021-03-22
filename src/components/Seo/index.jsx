@@ -8,7 +8,7 @@ import Utils from '../../utils/pageUtils';
 
 const detailsQuery = graphql`
   query DefaultSEOQuery {
-    file(name: { eq: "facebook-icon" }) {
+    file(name: { eq: "sensorsdata" }) {
       childImageSharp {
         fixed(width: 600) {
           ...GatsbyImageSharpFixed_noBase64
@@ -43,12 +43,12 @@ function SEO({
   return (
     <StaticQuery
       query={detailsQuery}
-      render={data => {
+      render={() => {
         const metaKeywords = { name: 'keywords', content: [...KEYWORDS, ...keywords].join(', ') };
         const pageUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
         const metaImageUrl = Utils.resolveUrl(
           Config.siteUrl,
-          imageUrl || data.file.childImageSharp.fixed.src
+          imageUrl || 'https://www.sensorsdata.cn/favicon.ico'
         );
 
         return (

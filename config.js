@@ -1,7 +1,7 @@
 module.exports = {
   pathPrefix: '',
   siteUrl: 'https://talentan.github.com',
-  siteTitle: 'talentan',
+  siteTitle: '追谏',
   siteDescription: 'Logbook of talentan',
   author: 'talentan',
   postsForArchivePage: 3,

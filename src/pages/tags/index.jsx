@@ -1,6 +1,5 @@
 import React from 'react';
 import { Layout, Row, Col } from 'antd';
-import PropTypes from 'prop-types';
 import { graphql } from 'gatsby';
 import Header from '../../components/PageLayout/Header';
 import SEO from '../../components/Seo';
@@ -31,7 +30,7 @@ const Tags = ({ data }) => {
         <SidebarWrapper>
           <>
             <div className="marginTopTitle">
-              <h1 className="titleSeparate">#Tags</h1>
+              <h1 className="titleSeparate">#标签</h1>
             </div>
             <Row gutter={[30, 20]}>
               {edges.map(val => (
@@ -50,34 +49,6 @@ const Tags = ({ data }) => {
       </Layout>
     </Layout>
   );
-};
-
-Tags.propTypes = {
-  data: PropTypes.shape({
-    allMarkdownRemark: PropTypes.shape({
-      edges: PropTypes.arrayOf(
-        PropTypes.shape({
-          node: PropTypes.shape({
-            frontmatter: PropTypes.shape({
-              tags: PropTypes.arrayOf(PropTypes.string.isRequired).isRequired,
-            }).isRequired,
-          }).isRequired,
-        }).isRequired
-      ).isRequired,
-    }).isRequired,
-    allFile: PropTypes.shape({
-      edges: PropTypes.arrayOf(
-        PropTypes.shape({
-          node: PropTypes.shape({
-            name: PropTypes.string.isRequired,
-            childImageSharp: PropTypes.shape({
-              fluid: PropTypes.object.isRequired,
-            }).isRequired,
-          }).isRequired,
-        }).isRequired
-      ).isRequired,
-    }).isRequired,
-  }).isRequired,
 };
 
 export const query = graphql`
