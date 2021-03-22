@@ -1,5 +1,4 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import { graphql } from 'gatsby';
 import { Layout, Row, Col } from 'antd';
 import Header from '../../components/PageLayout/Header';
@@ -21,7 +20,7 @@ const Blog = ({ data }) => (
       />
       <SidebarWrapper>
         <div className="marginTopTitle">
-          <h1 className="titleSeparate">Blog</h1>
+          <h1 className="titleSeparate">博文</h1>
         </div>
         <Row gutter={[20, 20]}>
           {data.allMarkdownRemark &&
@@ -35,14 +34,6 @@ const Blog = ({ data }) => (
     </Layout>
   </Layout>
 );
-
-Blog.propTypes = {
-  data: PropTypes.shape({
-    allMarkdownRemark: PropTypes.shape({
-      edges: PropTypes.arrayOf(PropTypes.object.isRequired).isRequired,
-    }).isRequired,
-  }).isRequired,
-};
 
 export const query = graphql`
   {

@@ -7,7 +7,7 @@ import SEO from '../../Seo';
 
 const pageText = {
   paraOne:
-    '你好少年，我是追谏，目前是@神策数据的前端工程师。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。',
+    '你好少年，我是追谏，目前是工作于@神策数据。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。',
   paraTwo: `除了技术，对历史和教育投入精力较多。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪`,
 };
 
@@ -17,7 +17,7 @@ const AboutMe = () => {
     <div style={{ marginBottom: '16px' }}>
       <div>
         <SEO title="About" description={description} path="" />
-        <h1 className="titleSeparate">关于我</h1>
+        <h1 className="titleSeparate">关于</h1>
         <p>
           你好，我是追谏，目前是
           <a href="https://www.sensorsdata.cn/" target="_blank">
@@ -38,6 +38,14 @@ const AboutMe = () => {
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
+          <AboutTile
+            img="bike-1.png"
+            alt="motorcycle image"
+            textH4="骑行"
+            textH3="Always on the way"
+          />
+        </Col>
+        <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile img="dive.png" alt="coffee image" textH4="AOW" textH3="愿疫情早日结束" />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
@@ -48,19 +56,12 @@ const AboutMe = () => {
             textH3="人菜瘾大"
           />
         </Col>
-        <Col xs={24} sm={24} md={12} lg={8}>
-          <AboutTile
-            img="bike-1.png"
-            alt="motorcycle image"
-            textH4="骑行"
-            textH3="Always on the way"
-          />
-        </Col>
+
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile
             img="home-office.png"
             alt="web image"
-            textH4="”自教“工程师"
+            textH4={`”自学“工程师`}
             textH3="感谢开源"
             height={60}
             width={60}
@@ -68,7 +69,7 @@ const AboutMe = () => {
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile
-            img="graduation.png"
+            img="graduation.jpeg"
             alt="graduation image"
             textH4="学士学位"
             textH3="信息学"
