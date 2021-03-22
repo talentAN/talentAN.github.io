@@ -14,7 +14,7 @@ module.exports = {
     resume: 'resume',
     tag: 'tags',
   },
-  contactFormUrl: 'https://getform.io/f/09a3066f-c638-40db-ad59-05e4ed71e451',
+  contactFormUrl: 'https://getform.io/f/6b5df9e9-cf7a-481d-a952-3b9a65c7210b',
   googleAnalyticTrackingId: 'G-EVBYYC3V2N',
   tags: {
     javascript: {
