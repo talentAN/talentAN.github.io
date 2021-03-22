@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://talentan.github.com/sitemap.xml
+Host: https://talentan.github.com
