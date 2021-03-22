@@ -4,13 +4,13 @@ import Config from '../../../config';
 import Utils from '../../utils/pageUtils';
 import style from './tags.module.less';
 
-const TagCard = (props) => {
-  const {
-    img, name, description, color,
-  } = props;
+const TagCard = props => {
+  const { img, name, description, color } = props;
   const tagPage = Config.pages.tag;
-  return (
-    <Link className={style.tagCard} to={Utils.resolvePageUrl(tagPage, name)}>
+
+  //愚蠢的hardcode，哈哈哈哈哈哈
+  return description === 'to be added...' ? null : (
+    <Link className={style.tagCard} to={Utils.resolvePageUrl(tagPage, name)} disable>
       <div className={style.tagCard}>
         <div
           className={style.tagImg}
@@ -20,14 +20,9 @@ const TagCard = (props) => {
         />
         <div className={style.pd20px}>
           <div className="textCenter">
-            <h4 style={{ color: `${color}` }}>
-              #
-              {name}
-            </h4>
+            <h4 style={{ color: `${color}` }}>#{name}</h4>
           </div>
-          <p>
-            {description}
-          </p>
+          <p>{description}</p>
         </div>
       </div>
     </Link>

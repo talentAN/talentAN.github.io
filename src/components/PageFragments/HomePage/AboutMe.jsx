@@ -34,7 +34,7 @@ const AboutMe = () => {
             height={60}
             alt="location image"
             textH4="土生土长东北银"
-            textH3="不能喝酒"
+            textH3="但不能喝酒"
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
