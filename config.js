@@ -54,5 +54,15 @@ module.exports = {
       description: 'to be added...',
       color: '#257acc',
     },
+    未归类: {
+      name: '未归类',
+      description: '杂七杂八，有啥放啥',
+      color: '#666',
+    },
+    人生: {
+      name: '人生',
+      description: '悟已往之不谏，知来者之可追。后之视今，亦犹今之视昔。',
+      color: '#000',
+    },
   },
 };

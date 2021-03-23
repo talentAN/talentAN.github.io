@@ -20,7 +20,7 @@ const AboutMe = () => {
         <SEO title="About" description={description} path="" />
         <h1 className="titleSeparate">关于</h1>
         <p>
-          你好，我是追谏，目前任
+          你好，我是追谏，现任
           <OutboundLink href="https://www.sensorsdata.cn/" target="_blank">
             @神策数据
           </OutboundLink>

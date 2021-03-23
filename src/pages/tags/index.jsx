@@ -16,6 +16,13 @@ const Tags = ({ data }) => {
     .reduce((prev, curr) => prev.concat(curr));
   rawTags.filter((tag, index) => index === rawTags.indexOf(tag)).sort(); // Remove duplicates and sort values
   const tagData = Config.tags;
+  // 把未分类标签放到最后
+  const i = edges.findIndex(t => t.node.name === '未归类');
+  const i_last = edges.length - 1;
+  if (i !== i_last) {
+    [edges[i], edges[i_last]] = [edges[i_last], edges[i]];
+  }
+
   return (
     <Layout className="outerPadding">
       <Layout className="container">
