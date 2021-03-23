@@ -3,7 +3,7 @@ import moment from 'moment';
 import { Link } from 'gatsby';
 import style from './postCard.module.less';
 import Utils from '../../utils/pageUtils';
-import { trackInSiteClick } from '../../track';
+import { trackBlog } from '../../track';
 
 const PostCard = props => {
   const {
@@ -15,7 +15,7 @@ const PostCard = props => {
   return (
     <div
       className={style.postCard}
-      onClick={() => trackInSiteClick(Utils.resolvePageUrl(frontmatter.path))}
+      onClick={() => trackBlog(Utils.resolvePageUrl(frontmatter.path))}
     >
       <Link to={Utils.resolvePageUrl(frontmatter.path)}>
         <div

@@ -1,12 +1,20 @@
 import { trackCustomEvent } from 'gatsby-plugin-google-analytics';
 
-export const trackInSiteClick = path => {
+export const trackBlog = path => {
   trackCustomEvent({
     // string - required - The object that was interacted with (e.g.video)
-    category: 'in-site',
+    category: 'blog',
     // string - required - Type of interaction (e.g. 'play')
     action: 'Click',
     // number - optional - Numeric value associated with the event. (e.g. A product ID)
+    value: path,
+  });
+};
+
+export const trackTag = path => {
+  trackCustomEvent({
+    category: 'tag',
+    action: 'Click',
     value: path,
   });
 };
