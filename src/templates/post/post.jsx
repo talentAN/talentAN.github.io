@@ -2,6 +2,7 @@ import React from 'react';
 import { Layout } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
+import FeatherIcon from 'feather-icons-react';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
@@ -38,6 +39,25 @@ const Post = ({ data }) => {
             </div>
             <article className={style.blogArticle} dangerouslySetInnerHTML={{ __html: html }} />
             <Comment pageCanonicalUrl={canonicalUrl} pageId={title} />
+            <div
+              style={{
+                background: '#eee',
+                borderRadius: '8px',
+                padding: '4px',
+                display: 'flex',
+                justifyContent: 'start',
+                alignItems: 'center',
+              }}
+            >
+              <FeatherIcon
+                size="19"
+                icon="alert-triangle"
+                style={{ marginRight: '8px', color: '#fa8c16' }}
+              />
+              <span style={{ fontStyle: 'italic', fontWeight: 'bold', color: '#333' }}>
+                未经授权禁止转载！
+              </span>
+            </div>
           </div>
         </SidebarWrapper>
       </Layout>
