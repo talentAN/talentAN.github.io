@@ -6,9 +6,9 @@
   "license": "MIT",
   "scripts": {
     "build": "gatsby build",
-    "start": "npm run develop",
+    "start": "gatsby clean && gatsby develop",
     "serve": "gatsby serve",
-    "clean": "gatsby clean",
+    "test": "gatsby build && gatsby serve",
     "lint": "eslint --ext .js src && stylelint \"src/**/*.{css,less}\"",
     "deploy": "gh-pages -d public -r $site"
   },

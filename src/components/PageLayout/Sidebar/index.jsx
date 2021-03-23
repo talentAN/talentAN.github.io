@@ -3,6 +3,7 @@ import { Affix, Layout, Row, Col, message } from 'antd';
 import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
 import { globalHistory } from '@reach/router';
+import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
 import ME from '../../../configs/me';
@@ -13,9 +14,15 @@ const DomContent = () => {
   const { name, title, social, birth, locate, email, company } = ME;
   const socialLinks = Object.keys(social).map(key => {
     return (
-      <a key={key} href={social[key]} target="_blank" label="button" rel="noopener noreferrer">
+      <OutboundLink
+        key={key}
+        href={social[key]}
+        target="_blank"
+        label="button"
+        rel="noopener noreferrer"
+      >
         <FA name={key} />
-      </a>
+      </OutboundLink>
     );
   });
   return (
@@ -52,13 +59,13 @@ const DomContent = () => {
             <span style={{ marginRight: '16px' }}>
               <FeatherIcon size="19" icon="flag" />{' '}
             </span>
-            <a
+            <OutboundLink
               href="https://www.sensorsdata.cn/"
               target="_blank"
               style={{ color: '#000', fontWeight: 600 }}
             >
               {company}
-            </a>
+            </OutboundLink>
           </li>
         </ul>
         <div className={style.resumeDownload} onClick={() => message.info('当前稳定，感谢关注~')}>
