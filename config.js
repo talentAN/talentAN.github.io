@@ -18,7 +18,7 @@ module.exports = {
   tags: {
     javascript: {
       name: 'javascript',
-      description: '观其大略，不求甚解',
+      description: '使用人数最多的编程语言。 (￣▽￣)',
       color: '#f0da50',
     },
     html: {
@@ -66,8 +66,7 @@ module.exports = {
     },
     通识: {
       name: '通识',
-      description:
-        '有些文章很神奇：”懂得的人不用看，不懂的人看不懂😅“，希望此专题不会让你类似感受🤣',
+      description: '观其大略，不求甚解。',
       color: '#a0d911',
     },
   },

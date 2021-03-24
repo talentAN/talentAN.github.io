@@ -12,9 +12,9 @@ const SkillsProgress = () => (
         <ProgressBar percent={90} text="NodeJS" />
       </Col>
       <Col xs={24} sm={24} md={12}>
-        <ProgressBar percent={80} text="PostgreSQL" />
         <ProgressBar percent={78} text="数据可视化" />
-        <ProgressBar percent={60} text="历史" />
+        <ProgressBar percent={80} text="PostgreSQL" />
+        <ProgressBar percent={60} text="数据分析" />
       </Col>
     </Row>
   </div>
