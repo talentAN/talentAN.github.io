@@ -56,7 +56,7 @@ module.exports = {
     },
     未归类: {
       name: '未归类',
-      description: '杂七杂八，有啥放啥',
+      description: '杂七杂八，有啥放啥。',
       color: '#666',
     },
     人生: {

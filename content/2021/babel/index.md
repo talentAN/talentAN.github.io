@@ -1,57 +1,83 @@
 ---
-title: Babel通识
+title: Babel
 path: blog/general-knowledge-babel
 tags: [javascript, 通识]
 cover: ./babel.png
 date: 2021-03-25
-excerpt: babel的基本目的，核心流程概念。建议阅读此篇后再去看官方文档学习使用。
+excerpt: 科普文。介绍Babel出现的原因、功能、核心机制和概念。对于萌新，建议阅读此篇后再去官方文档学习使用。
 ---
 
-### why babel?
+## Why babel?
 
-我们想获得某个对象的深层次属性
-
-```javascript
-// 麻烦
-const a = a && a.b && a.b.c;
-// 简单
-const a = a?.b?.c;
-```
-
-语言的改动跟法律的改动一样，是有滞后性的。一个提案可能要好几年才会得以实施。
-
-如果有某种工具能把
+当我们想拼接一个字符串。
 
 ```javascript
-const a = a?.b?.c;
+// 语法a：麻烦，但浏览器能执行。
+var name = 'Your name is ' + first + ' ' + last + '.';
+
+// 语法b：简单，但浏览器不认识(现在已经认识了，只是用来举个例子)。
+var name = `Your name is ${first} ${last}.`;
 ```
 
-转化成
+如果有个工具能把 a 编译成 b 就爽了！ 🤔
+
+于是 babel 出现了。
+
+**<font color="red">babel 的出现使我们可以更早的使用提案中的、尚未被执行环境(浏览器/NodeJS 等)支持的 JS 语法，从而提升开发效率和舒适度。</font>**
+
+## 核心机制
+
+babel 的执行分 3 步：
+
+1. 解析(源码 => AST)
+
+2. 转化(AST => AST')
+
+3. 输出(AST' => 目标代码)
+
+![](./process.webp)
+
+<font color=grey>_对 AST(抽象语法树)不太了解的同学，可以在[AST Explorer](https://astexplorer.net/)上学习体验。_</font>
+
+最需我们关注的是「转化」，这部分功能由 babel 的各种 plugin 实现。
+
+如你需要转化 React 的 jsx 语法，需在 babel 配置文件中添加对应的插件
 
 ```javascript
-const a = a && a.b && a.b.c;
+module.exports = {
+  plugins: ['@babel/plugin-transform-react-jsx'],
+};
 ```
 
-就好了，于是 babel 出现了。
+在实际工作中，当你使用 React，至少需要配置@babel/plugin-syntax-jsx、@babel/plugin-transform-react-jsx、@babel/plugin-transform-react-display-name 三个 plugin，才能保证功能正常运行。
 
-### 核心概念
+这时我们可以用 preset 进行配置，preset 是一组插件的集合。
 
-babel 的处理流程： Tokenizer => Parser => Traverser(Transformer) => Generator
+```diff
+module.exports = {
+- plugins: ['@babel/plugin-transform-react-jsx'],
++ presets:['@babel/preset-react]
+};
+```
 
-Parser 需要知道最新的语法；
+## 总结
 
-plugins 进行转化
+babel 的本质就是一个编译器。
 
-### 发展
+工具的出现是为了解决特定问题。为了切割物体，人们发明了刀子；为了更早使用 JS 语言新特性，人们发明了 babel。
 
-一组 plugins，babel 采取了 preset 配置，更方便。
+一个好的工具往往会有很多应用场景。
 
-为啥 Parser 不支持 plugin？ 我们应该维持语言上的统一认知。
+对刀子，厨师可以用之切菜；艺术家可用之雕刻；士兵可以用之杀敌。
 
-plugin 太灵活，都不知道啥时候干了啥... macro 了解下
+对 babel，webpack 可以用之做打包工具；eslint 可以用之做语法检查；”轮子哥“们可以用之创建新的语法。 😅
 
-### 后记
+当你尝试了解一个新工具，不用迷失于其繁复的应用场景中。<font color=red>把握其出现的原因，最核心的功能即可。</font>
 
-追谏曰：规范促进稳定，但无法阻挡人们的追求。技术如是，人亦如是。把”大象装进冰箱里“这个问题曾被当笑话看，现在看来这个答案何其朴实。
+## 参考资料
 
-工具的出现必然是为解决某些问题，解决问题往往会分为。
+[深入浅出 Babel 上篇：架构和原理 + 实战](https://bobi.ink/2019/10/01/babel/)
+
+[Zero-config code transformation with babel-plugin-macros](https://babeljs.io/blog/2017/09/11/zero-config-with-babel-macros)
+
+[I Can Babel Macros (and So Can You!) - Shawn "swyx" Wang | JSConf Hawaii 2019](https://youtu.be/1WNT5RCENfo)
