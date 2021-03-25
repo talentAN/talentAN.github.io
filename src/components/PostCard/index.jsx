@@ -11,7 +11,6 @@ const PostCard = props => {
       node: { frontmatter },
     },
   } = props;
-
   return (
     <div
       className={style.postCard}
@@ -32,7 +31,11 @@ const PostCard = props => {
               {frontmatter ? moment(frontmatter.date).format('MMM Do YYYY') : ''}
             </span>
           </p>
-          <h3>{frontmatter ? frontmatter.title : ''}</h3>
+          <h3>
+            {frontmatter && frontmatter.hot ? <span>🔥</span> : ''}
+            {frontmatter && frontmatter.recommended ? <span>👍</span> : ''}
+            {frontmatter ? frontmatter.title : ''}
+          </h3>
           <p>{frontmatter ? frontmatter.excerpt : ''}</p>
           <p style={{ color: '#ce6d96', wordSpacing: '10px' }}>
             {frontmatter.tags.length ? `#${frontmatter.tags.join(' #')}` : ''}

@@ -1,5 +1,5 @@
 import { trackCustomEvent } from 'gatsby-plugin-google-analytics';
-
+//TODO: 傻逼了，google里还没设置白名单呢，track个屁呀...
 export const trackBlog = path => {
   trackCustomEvent({
     // string - required - The object that was interacted with (e.g.video)
