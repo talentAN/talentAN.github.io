@@ -5,7 +5,7 @@ module.exports = {
   siteDescription: 'Logbook of talentan',
   author: 'talentan',
   postsForArchivePage: 3,
-  defaultLanguage: 'cn',
+  defaultLanguage: 'en',
   pages: {
     home: '/',
     blog: 'blog',
