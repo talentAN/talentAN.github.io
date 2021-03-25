@@ -11,6 +11,10 @@ const PostCard = props => {
       node: { frontmatter },
     },
   } = props;
+
+  const showHot = frontmatter && frontmatter.hot;
+  const showRecommended = !showHot && frontmatter && frontmatter.recommended;
+
   return (
     <div
       className={style.postCard}
@@ -32,8 +36,8 @@ const PostCard = props => {
             </span>
           </p>
           <h3>
-            {frontmatter && frontmatter.hot ? <span>🔥</span> : ''}
-            {frontmatter && frontmatter.recommended ? <span>👍</span> : ''}
+            {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
+            {showRecommended && <span style={{ marginRight: '4px' }}>👍</span>}
             {frontmatter ? frontmatter.title : ''}
           </h3>
           <p>{frontmatter ? frontmatter.excerpt : ''}</p>

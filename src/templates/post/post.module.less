@@ -1,28 +1,40 @@
 @import (reference) '../../styles/index.less';
 
-.bannerImgContainer{
-    padding: 1rem 4rem;
-    margin-bottom: 2rem;
-    .bannerImg{
-        border-radius: 10px;
-    }
-    @media only screen and (max-width: 767px) {
-            padding: 1rem 0;
-        
-    }
+.bannerImgContainer {
+  padding: 1rem 4rem;
+  margin-bottom: 2rem;
+  .bannerImg {
+    border-radius: 10px;
+  }
+  @media only screen and (max-width: 767px) {
+    padding: 1rem 0;
+  }
 }
-.blogArticle{
-    h1, h2, h3, h4, h5, h6 {
-        margin-top: 2rem;
-      }
-    li, p{
-        color: black;
-    }
-    a{
-        color: #0d25da;
-        font-weight: 600;
-        :hover{
-            color: #0d25da;
-        }
-    }
+.blogArticle {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin-top: 2rem;
+  }
+  li,
+  p {
+    color: inherit;
+  }
+  a {
+    color: #1890ff;
+    font-weight: 600;
+  }
+  del {
+    color: #888;
+  }
+
+  // 引用
+  blockquote {
+    padding: 0 1em;
+    color: #6a737d !important;
+    border-left: 0.25em solid #dfe2e5;
+  }
 }
