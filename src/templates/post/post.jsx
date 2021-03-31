@@ -54,7 +54,7 @@ const Post = ({ data }) => {
                 style={{ marginRight: '8px', color: '#fa8c16' }}
               />
               <span style={{ fontStyle: 'italic', fontWeight: 'bold', color: '#333' }}>
-                转载请注明作者、出处及相关链接，否则追究其法律责任！
+                著作权归作者所有。商业转载请联系作者获得授权；非商业转载请注明作者、出处。
               </span>
             </div>
           </div>

@@ -61,8 +61,13 @@ module.exports = {
     },
     人生: {
       name: '人生',
-      description: '悟已往之不谏，知来者之可追。后之视今，亦犹今之视昔。',
+      description: '后之视今，亦犹今之视昔。',
       color: '#000',
+    },
+    策论: {
+      name: '策论',
+      description: '只要思想不滑坡，办法总比困难多🤔',
+      color: '#04a9e8',
     },
     通识: {
       name: '通识',

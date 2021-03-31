@@ -49,7 +49,7 @@ h4 {
   }
 }
 ul {
-  margin: 0;
+  margin: 0 0 1rem 0;
 }
 
 .titleSeparate {
@@ -137,10 +137,18 @@ ul {
 .react-pdf__Document {
   background: lightslategray;
 }
-
-// blog自定义
-
 // 全局覆盖
+// git diff delete
 .token.deleted {
   color: red !important; // 替换git diff被删掉的代码颜色
+}
+// blog角注样式
+.footnotes {
+  li {
+    color: red;
+    margin-bottom: 4px;
+    p {
+      display: inline !important;
+    }
+  }
 }

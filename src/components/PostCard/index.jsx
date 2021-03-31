@@ -12,6 +12,9 @@ const PostCard = props => {
     },
   } = props;
 
+  const showHot = frontmatter && frontmatter.hot;
+  const showRecommended = !showHot && frontmatter && frontmatter.recommended;
+
   return (
     <div
       className={style.postCard}
@@ -32,7 +35,11 @@ const PostCard = props => {
               {frontmatter ? moment(frontmatter.date).format('MMM Do YYYY') : ''}
             </span>
           </p>
-          <h3>{frontmatter ? frontmatter.title : ''}</h3>
+          <h3>
+            {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
+            {showRecommended && <span style={{ marginRight: '4px' }}>👍</span>}
+            {frontmatter ? frontmatter.title : ''}
+          </h3>
           <p>{frontmatter ? frontmatter.excerpt : ''}</p>
           <p style={{ color: '#ce6d96', wordSpacing: '10px' }}>
             {frontmatter.tags.length ? `#${frontmatter.tags.join(' #')}` : ''}

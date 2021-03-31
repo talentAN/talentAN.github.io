@@ -49,6 +49,8 @@ export const query = graphql`
             title
             tags
             excerpt
+            hot
+            recommended
             cover {
               childImageSharp {
                 fluid(maxWidth: 288) {
