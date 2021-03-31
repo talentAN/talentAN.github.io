@@ -18,7 +18,7 @@ module.exports = {
   tags: {
     javascript: {
       name: 'javascript',
-      description: '使用人数最多的编程语言。 (￣▽￣)',
+      description: 'to be added...',
       color: '#f0da50',
     },
     html: {
@@ -58,6 +58,11 @@ module.exports = {
       name: '未归类',
       description: '杂七杂八，有啥放啥。',
       color: '#666',
+    },
+    前端: {
+      name: '前端',
+      description: '想改名叫全端 —。—',
+      color: '#f0da50',
     },
     人生: {
       name: '人生',

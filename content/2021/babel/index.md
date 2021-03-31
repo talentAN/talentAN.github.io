@@ -1,7 +1,7 @@
 ---
 title: Babel
-path: blog/general-knowledge-babel
-tags: [javascript, 通识]
+path: blog/f2e-babel
+tags: [前端, 通识]
 cover: ./babel.png
 date: 2021-03-25
 excerpt: 科普文。介绍Babel出现的原因、功能、核心机制和概念。对于萌新，建议阅读此篇后再去官方文档学习使用。

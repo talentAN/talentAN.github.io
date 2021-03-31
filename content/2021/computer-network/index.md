@@ -1,9 +1,9 @@
 ---
 title: 计算机网络基础(0门槛)
-path: blog/deep-in-network-protocol
-tags: [通识]
+path: blog/computer-network
+tags: [前端, 通识]
 cover: ./network.png
-date: 2021-03-27
+date: 2021-03-31
 excerpt: '这可能是史上最通俗易懂的计算机网络科普贴。'
 hot: false
 recommended: true
@@ -175,7 +175,7 @@ Q: TCP 这么牛逼，还要 UDP 干啥？
 [^注4]: 如果行话看着太累，跳过即可。
 [^注5]: 偷自“如无必要 勿增实体”。笔者认为学习应先关注问题本质及核心解决思路，在学习解决方案及衍化的过程中逐渐理解概念和细节不迟。
 
-## 参考资料
+### 参考资料
 
 [TCP/IP 协议族到底怎么回事](https://juejin.cn/post/6844903906926051341)
 
