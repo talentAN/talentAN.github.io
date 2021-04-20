@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Affix, Layout, Row, Col, message } from 'antd';
 import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
@@ -7,13 +7,22 @@ import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
 import ME from '../../../configs/me';
+import wechat from '../../../images/Wechat.jpeg';
 
 const { Content } = Layout;
 
 const DomContent = () => {
+  const [showWeChat, setShowWeChat] = useState(false);
   const { name, title, social, birth, locate, email, company } = ME;
   const socialLinks = Object.keys(social).map(key => {
-    return (
+    return key === 'weixin' ? (
+      <FA
+        style={{ color: 'rgba(0, 0, 0, 0.65)' }}
+        name={key}
+        onMouseEnter={() => setShowWeChat(true)}
+        onMouseLeave={() => setShowWeChat(false)}
+      />
+    ) : (
       <OutboundLink
         key={key}
         href={social[key]}
@@ -36,6 +45,7 @@ const DomContent = () => {
         </div>
         <div className={`${style.badge} ${style.badgeGray}`}>{title}</div>
         <div className="centerAlign box">{socialLinks}</div>
+        <div>{showWeChat && <img src={wechat} />}</div>
         <ul className={`box ${style.badge} contactBlock`}>
           <li className={style.contactBlockItem} style={{ alignItems: 'flex-start' }}>
             <span style={{ marginRight: '16px' }}>
