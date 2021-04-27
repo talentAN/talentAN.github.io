@@ -1,6 +1,6 @@
 ---
-title: 前端性能优化-话题终结者
-path: blog/end-of-f2e-optimise
+title: 网页性能优化-meta
+path: blog/meta-webpage-optimise
 tags: [前端]
 cover: ./cover.jpeg
 date: 2021-04-27
@@ -51,7 +51,7 @@ recommended: true
 
 #### 整体过程
 
-一个网页从请求到加载完成的过程，基本可描述为：<font color="#b37feb"> _DNS 解析 => TCP 链接 => HTTP 请求 => Server 响应回复资源 => 浏览器解析执行(JS/CSS/HTML) => Render Tree 合成=> 渲染(计算布局/绘制) [^注2]_</font>
+一个网页从发起请求到加载完成的过程，基本可描述为：<font color="#b37feb"> _DNS 解析 => TCP 链接 => HTTP 请求 => Server 响应回复资源 => 浏览器解析执行(JS/CSS/HTML) => Render Tree 合成=> 渲染(计算布局/绘制) [^注2]_</font>
 
 #### 串行优化
 
@@ -175,23 +175,23 @@ recommended: true
 
 并行优化，要知道哪些阶段可以并行运行。
 
-比如 script 标签加上 async 或 defer 属性，JS 文件的下载和 HTML 解析就可以并行执行。所以一些广告、监控类的，不会操作 DOM 的独立 JS 文件，可酌情添加 async 或 defer 属性，以增加并行，减少整体耗时；
+JS 文件的下载和 HTML 解析可以并行执行，前提是 script 标签加上 async 或 defer 属性。所以一些广告、监控类的，不会操作 DOM 的独立 JS 文件，可酌情添加 async 或 defer 属性，以增加并行，减少整体耗时；
 
 ![](./async-defer.jpeg)
 
 > _图片来自网络，如侵权请联系作者删除。_
 
-比如浏览器的 JS 引擎是单线程的，但我们也可以开启一个并行的 worker 线程，用于处理一些计算密集型任务，以防止页面阻塞。
+浏览器 JS 引擎是单线程的，但 work 线程可与其并行运行。所以可用 worker 处理一些计算密集型任务，以防止页面阻塞。
 
-还有哪些过程有并行优化空间呢？可以思考下。
+还有哪些过程可并行执行？可自行进一步学习。
 
 #### 流程优化
 
 流程优化，重要的质疑和思考。
 
-比如对于单页应用，Server 返回的 HTML 的 root 节点都是空的，需要客户端自己再请求数据，并进行相应的填充。为什么不直接让 Server 直接返回数据填好的、页面渲染后的完整的 HTML？所以业界产生了 **SSR** 方案；
+对于单页应用，Server 返回的 HTML 的 root 节点都是空的，需要客户端自己再请求数据，并进行相应的填充。为什么不直接让 Server 直接返回数据填好的、页面渲染后的完整的 HTML？所以业界产生了 **SSR** 方案；
 
-比如 google 也会思考，稳定传输就必须用 TCP？所以 HTTP3 在 UDP 的上层实现安全机制，从而丢弃了 TCP，实现传输效率的大幅提升。
+网络稳定传输必须用 TCP？google 发起的 HTTP3 在 UDP 上层实现安全机制，从而丢弃了 TCP，实现传输效率的大幅提升；
 
 <font color="#ff0000">流程的形成有一定原因，但不见得是最优解。</font>多质疑、学习、思考，这个时间不会被浪费。
 
@@ -215,6 +215,8 @@ recommended: true
 ### 课后题
 
 如何对自己所在公司的<font color="#b37feb">开发流程</font>进行“性能优化”？
+
+<!-- ### 鸣谢 -->
 
 ### 拓展阅读
 
