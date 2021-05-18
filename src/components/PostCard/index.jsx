@@ -8,12 +8,22 @@ import { trackBlog } from '../../track';
 const PostCard = props => {
   const {
     data: {
-      node: { frontmatter },
+      node: { frontmatter = {} },
     },
   } = props;
 
-  const showHot = frontmatter && frontmatter.hot;
-  const showRecommended = !showHot && frontmatter && frontmatter.recommended;
+  const {
+    hot = false,
+    recommended = false,
+    isTranslated = false,
+    title: _title,
+    excerpt = '',
+    tags = [],
+    date = '',
+  } = frontmatter;
+  const showHot = !!hot;
+  const showRecommended = !showHot && recommended;
+  const title = isTranslated ? `[译] ${_title}` : _title;
 
   return (
     <div
@@ -24,25 +34,30 @@ const PostCard = props => {
         <div
           className={style.postCardImg}
           style={{
-            backgroundImage: `url(${
-              frontmatter ? frontmatter.cover.childImageSharp.fluid.src : ''
-            })`,
+            backgroundImage: frontmatter
+              ? `url(${frontmatter.cover.childImageSharp.fluid.src})`
+              : `url('')`,
+            backgroundPositionX: 'center',
           }}
         />
         <div className={style.mrTp20}>
           <p>
             <span className={style.dateHolder}>
-              {frontmatter ? moment(frontmatter.date).format('MMM Do YYYY') : ''}
+              {date ? moment(date).format('MMM Do YYYY') : ''}
             </span>
           </p>
           <h3>
             {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
             {showRecommended && <span style={{ marginRight: '4px' }}>👍</span>}
-            {frontmatter ? frontmatter.title : ''}
+            {title}
           </h3>
-          <p>{frontmatter ? frontmatter.excerpt : ''}</p>
-          <p style={{ color: '#ce6d96', wordSpacing: '10px' }}>
-            {frontmatter.tags.length ? `#${frontmatter.tags.join(' #')}` : ''}
+          <p>{excerpt}</p>
+          <p style={{ color: '#ce6d96' }}>
+            {tags.map(tag => (
+              <span key={tag} style={{ marginRight: '12px' }}>
+                #{tag}
+              </span>
+            ))}
           </p>
         </div>
       </Link>

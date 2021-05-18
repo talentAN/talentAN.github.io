@@ -15,6 +15,7 @@ exports.createPages = ({ actions, graphql }) => {
             frontmatter {
               path
               tags
+              keywords
             }
             fileAbsolutePath
           }

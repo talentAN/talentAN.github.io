@@ -23,16 +23,18 @@ const Post = ({ data }) => {
     },
     excerpt,
     path,
+    isTranslated = false,
+    keywords = [],
   } = frontmatter;
   const canonicalUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
   return (
     <Layout className="outerPadding">
       <Layout className="container">
-        <SEO title={title} description={excerpt} path={path} />
+        <SEO title={title} description={excerpt} path={path} keywords={keywords} />
         <Header />
         <SidebarWrapper>
           <div className="marginTopTitle">
-            <h1>{title}</h1>
+            <h1>{`${isTranslated ? '[译] ' : ''}${title}`}</h1>
             <div className={style.bannerImgContainer}>
               <Img className={style.bannerImg} fluid={fluid} title={excerpt} alt={title} />
             </div>
@@ -54,7 +56,9 @@ const Post = ({ data }) => {
                 style={{ marginRight: '8px', color: '#fa8c16' }}
               />
               <span style={{ fontStyle: 'italic', fontWeight: 'bold', color: '#333' }}>
-                著作权归作者所有。商业转载请联系作者获得授权；非商业转载请注明作者、出处。
+                {isTranslated
+                  ? `著作权归原作者所有，本译文仅供学习分享，禁做商用。`
+                  : `著作权归作者所有。商业转载请联系作者获得授权；非商业转载请注明作者、出处。`}
               </span>
             </div>
           </div>
@@ -75,6 +79,8 @@ export const pageQuery = graphql`
         tags
         path
         excerpt
+        keywords
+        isTranslated
         cover {
           childImageSharp {
             fluid(maxWidth: 1000) {

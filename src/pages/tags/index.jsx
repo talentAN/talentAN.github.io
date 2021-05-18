@@ -22,7 +22,6 @@ const Tags = ({ data }) => {
   if (i !== i_last) {
     [edges[i], edges[i_last]] = [edges[i_last], edges[i]];
   }
-
   return (
     <Layout className="outerPadding">
       <Layout className="container">
@@ -39,19 +38,16 @@ const Tags = ({ data }) => {
               <h1 className="titleSeparate">#标签</h1>
             </div>
             <Row gutter={[30, 20]}>
-              {/* 愚蠢的hardcode，哈哈哈哈哈哈 */}
-              {edges
-                .filter(val => tagData[val.node.name].description !== 'to be added...')
-                .map(val => (
-                  <Col key={val.node.name} xs={24} sm={24} md={12} lg={8}>
-                    <TagCard
-                      img={val.node.childImageSharp.fluid.src}
-                      name={val.node.name}
-                      description={tagData[val.node.name].description}
-                      color={tagData[val.node.name].color}
-                    />
-                  </Col>
-                ))}
+              {edges.map(val => (
+                <Col key={val.node.name} xs={24} sm={24} md={12} lg={8}>
+                  <TagCard
+                    img={val.node.childImageSharp.fluid.src}
+                    name={tagData[val.node.name].name}
+                    description={tagData[val.node.name].description}
+                    color={tagData[val.node.name].color}
+                  />
+                </Col>
+              ))}
             </Row>
           </>
         </SidebarWrapper>

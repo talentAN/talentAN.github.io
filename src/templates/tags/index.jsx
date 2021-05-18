@@ -64,6 +64,8 @@ export const pageQuery = graphql`
             path
             tags
             excerpt
+            isTranslated
+            keywords
             cover {
               childImageSharp {
                 fluid(maxWidth: 600) {

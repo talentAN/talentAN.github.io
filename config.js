@@ -2,7 +2,7 @@ module.exports = {
   pathPrefix: '',
   siteUrl: 'https://talentan.github.com',
   siteTitle: '追谏',
-  siteDescription: 'Logbook of talentan',
+  siteDescription: '追谏的个人网站',
   author: 'talentan',
   postsForArchivePage: 3,
   defaultLanguage: 'en',
@@ -20,39 +20,6 @@ module.exports = {
       name: 'javascript',
       description: 'to be added...',
       color: '#f0da50',
-    },
-    html: {
-      name: 'HTML',
-      description: 'to be added...',
-      // 'A markup language that powers the web. All websites use HTML for structuring the content.',
-      color: '#dd3431',
-    },
-    css: {
-      name: 'css',
-      description: 'to be added...',
-      //'CSS is used to style the HTML element and to give a very fancy look for the web application.',
-      color: '#43ace0',
-    },
-    nodejs: {
-      name: 'Node.js',
-      description: 'to be added...', // 'Node.js is a tool for executing JavaScript in a variety of environments.',
-      color: '#90c53f',
-    },
-    reactjs: {
-      name: 'reactjs',
-      description: 'to be added...', //'React is an open source JavaScript library used for designing user interfaces.',
-      color: '#61dbfa',
-    },
-    typescript: {
-      name: 'typescript',
-      description: 'to be added...',
-      // 'TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.',
-      color: '#257acc',
-    },
-    history: {
-      name: '中国史',
-      description: 'to be added...',
-      color: '#257acc',
     },
     未归类: {
       name: '未归类',
@@ -78,6 +45,11 @@ module.exports = {
       name: '通识',
       description: '观其大略，不求甚解。',
       color: '#a0d911',
+    },
+    'Personal Development for Smart People': {
+      name: 'Personal Development for Smart People',
+      description: '个人发展指南，楼主认证 ✔️。',
+      color: '#142f83',
     },
   },
 };

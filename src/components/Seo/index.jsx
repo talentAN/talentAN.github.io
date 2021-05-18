@@ -27,6 +27,9 @@ const KEYWORDS = [
   'React',
   'SensorsData',
   '神策数据',
+  '追谏',
+  '个人成长',
+  'Personal Development for Smart People',
 ];
 
 function SEO({
