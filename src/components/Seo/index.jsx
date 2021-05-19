@@ -35,7 +35,7 @@ const KEYWORDS = [
 function SEO({
   title,
   description,
-  keywords = [],
+  keywords,
   path,
   lang,
   contentType,
@@ -43,6 +43,7 @@ function SEO({
   translations,
   meta,
 }) {
+  keywords = Array.isArray(keywords) ? keywords : Config.keywords;
   return (
     <StaticQuery
       query={detailsQuery}

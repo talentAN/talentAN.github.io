@@ -52,4 +52,17 @@ module.exports = {
       color: '#142f83',
     },
   },
+  keywords: [
+    'talentan',
+    'blog',
+    '个人博客',
+    'Personal Development for Smart People',
+    '前端',
+    '技术',
+    '转型',
+    '计算机',
+    '个人发展',
+    '翻译',
+    '职业',
+  ],
 };
