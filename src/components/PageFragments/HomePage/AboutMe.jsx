@@ -48,7 +48,7 @@ const AboutMe = () => {
           />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
-          <AboutTile img="dive.png" alt="coffee image" textH4="AOW" textH3="愿疫情早日结束" />
+          <AboutTile img="dive.png" alt="coffee image" textH4="潜水" textH3="愿疫情早日结束" />
         </Col>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile

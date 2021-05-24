@@ -3,7 +3,7 @@ const ME = {
   title: '前端工程师',
   birth: 'Dec 29,1992',
   locate: 'Beijing, China',
-  email: 'adam_an02@163.com', // TODO: 那个傻逼样式还没弄
+  email: 'adam_an02@163.com',
   social: {
     github: 'https://github.com/talentan',
     weixin: '',
