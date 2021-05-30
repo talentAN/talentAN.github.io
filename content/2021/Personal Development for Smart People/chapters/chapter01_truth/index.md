@@ -8,7 +8,7 @@ excerpt: 《个人发展指南》 —— 第1章 真实
 isTranslated: true
 keywords:
   ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第一章', 'truth', '真实']
-prePage: ''
+prePage: 'blog/translation/pdfsp/summary'
 nextPage: 'blog/translation/pdfsp/chapter_2'
 ---
 
@@ -278,7 +278,7 @@ nextPage: 'blog/translation/pdfsp/chapter_2'
 > 你尽可以把世界欺蒙多年，<br/>
 > 赢得世人称羡赞誉无数，<br/>
 > 但你若对那镜中人欺瞒失信<br/>
-> 最终便只得心痛与泪水的惠顾。<br/> > _—— 1934 by Dale Wimbrow (1895-1954) Used by permission._
+> 最终便只得心痛与泪水的惠顾。<br/> _—— 1934 by Dale Wimbrow (1895-1954) Used by permission._
 
 我建议你按照字面意思按照诗首节中的说明进行操作。照镜子，看看自己。镜中回首的人是你的朋友么？
 

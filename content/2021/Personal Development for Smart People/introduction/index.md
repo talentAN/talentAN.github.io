@@ -8,7 +8,7 @@ excerpt: 《个人发展指南》 —— 引言
 isTranslated: true
 keywords: ['翻译', 'Personal Development for Smart People', '「个人发展」', '中文', '入口', '引言']
 prePage: ''
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_1'
 ---
 
 > _在遇到问题时，我只考虑如何解决，而非“漂亮”的解决。但问题被解决后，若方案不够“漂亮”，我知道自己错了。 <br /> —— R. BUCKMINSTER FULLER_

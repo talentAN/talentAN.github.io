@@ -46,30 +46,21 @@ const Post = ({ data }) => {
             <Comment pageCanonicalUrl={canonicalUrl} pageId={title} />
             {hasLinkPage && (
               <div className={style.links}>
-                <Button href={`${location.origin}/${prePage}`} type="link" disabled={!prePage}>
+                <Button href={`/${prePage}`} type="link" disabled={!prePage}>
                   上一章
                 </Button>
-                <Button href={`${location.origin}/${nextPage}`} type="link" disabled={!nextPage}>
+                <Button href={`/${nextPage}`} type="link" disabled={!nextPage}>
                   下一章
                 </Button>
               </div>
             )}
-            <div
-              style={{
-                background: '#eee',
-                borderRadius: '8px',
-                padding: '4px',
-                display: 'flex',
-                justifyContent: 'start',
-                alignItems: 'center',
-              }}
-            >
+            <div className={style.announcement}>
               <FeatherIcon
                 size="19"
                 icon="alert-triangle"
                 style={{ marginRight: '8px', color: '#fa8c16' }}
               />
-              <span style={{ fontStyle: 'italic', fontWeight: 'bold', color: '#333' }}>
+              <span className={style.label}>
                 {isTranslated
                   ? `著作权归原作者所有，本译文仅供学习分享，禁做商用。`
                   : `著作权归作者所有。商业转载请联系作者获得授权；非商业转载请注明作者、出处。`}
