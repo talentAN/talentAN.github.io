@@ -3,11 +3,13 @@ title: Personal Development for Smart People —— Chapter2 Love
 path: blog/translation/pdfsp/chapter_2
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
-date: 2021-05-28
+date: 2021-05-30
 excerpt: 《个人发展指南》 —— 第2章 爱
 isTranslated: true
 keywords:
   ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第一章', 'love', '爱']
+prePage: 'blog/translation/pdfsp/chapter_1'
+nextPage: ''
 ---
 
 > _任何东西都会向你敞开心扉，如果你足够爱它。 —— GEORGE WASHINGTON CARVER_

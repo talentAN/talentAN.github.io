@@ -6,6 +6,8 @@ cover: ./babel.png
 date: 2021-03-25
 excerpt: 科普文。介绍Babel出现的原因、功能、核心机制和概念。对于萌新，建议阅读此篇后再去官方文档学习使用。
 keywords: ['前端', '工具', '面试', 'babel', 'f2e']
+prePage: ''
+nextPage: ''
 ---
 
 ## Why babel?

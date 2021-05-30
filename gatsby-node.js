@@ -16,6 +16,8 @@ exports.createPages = ({ actions, graphql }) => {
               path
               tags
               keywords
+              prePage
+              nextPage
             }
             fileAbsolutePath
           }

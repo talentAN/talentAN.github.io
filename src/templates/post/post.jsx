@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout } from 'antd';
+import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
 import FeatherIcon from 'feather-icons-react';
@@ -25,7 +25,11 @@ const Post = ({ data }) => {
     path,
     isTranslated = false,
     keywords = [],
+    prePage = '',
+    nextPage = '',
   } = frontmatter;
+
+  const hasLinkPage = prePage || nextPage;
   const canonicalUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
   return (
     <Layout className="outerPadding">
@@ -40,6 +44,16 @@ const Post = ({ data }) => {
             </div>
             <article className={style.blogArticle} dangerouslySetInnerHTML={{ __html: html }} />
             <Comment pageCanonicalUrl={canonicalUrl} pageId={title} />
+            {hasLinkPage && (
+              <div className={style.links}>
+                <Button href={`${location.origin}/${prePage}`} type="link" disabled={!prePage}>
+                  上一章
+                </Button>
+                <Button href={`${location.origin}/${nextPage}`} type="link" disabled={!nextPage}>
+                  下一章
+                </Button>
+              </div>
+            )}
             <div
               style={{
                 background: '#eee',
@@ -81,6 +95,8 @@ export const pageQuery = graphql`
         excerpt
         keywords
         isTranslated
+        prePage
+        nextPage
         cover {
           childImageSharp {
             fluid(maxWidth: 1000) {
