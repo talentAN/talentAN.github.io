@@ -9,7 +9,7 @@ isTranslated: true
 keywords:
   ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第3章', 'power', '力量']
 prePage: 'blog/translation/pdfsp/chapter_2'
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_4'
 ---
 
 > _最有力量的人，是能掌控自己的人。 —— SENECA_
