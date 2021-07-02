@@ -17,7 +17,7 @@ keywords:
     '掌权',
   ]
 prePage: 'blog/translation/pdfsp/chapter_4'
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_6'
 ---
 
 > _“敢于做伟大的事情，赢得光荣的胜利，即使有失败的痕迹，也比和那些既不享受也不受苦的可怜人为伍要好得多，因为他们生活在不知胜利也不知失败的灰色黄昏里。” — THEODORE ROOSEVELT_
