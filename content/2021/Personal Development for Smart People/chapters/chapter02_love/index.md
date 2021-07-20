@@ -4,7 +4,7 @@ path: blog/translation/pdfsp/chapter_2
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-05-30
-excerpt: 《个人发展指南》 —— 第2章 爱
+excerpt: 《聪明人的个人发展》 —— 第2章 爱
 isTranslated: true
 keywords:
   ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第二章', 'love', '爱']

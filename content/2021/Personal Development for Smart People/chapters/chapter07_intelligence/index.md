@@ -4,7 +4,7 @@ path: blog/translation/pdfsp/chapter_7
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-07-16
-excerpt: 《个人发展指南》 —— 第7章 智慧
+excerpt: 《聪明人的个人发展》 —— 第7章 智慧
 isTranslated: true
 keywords:
   [

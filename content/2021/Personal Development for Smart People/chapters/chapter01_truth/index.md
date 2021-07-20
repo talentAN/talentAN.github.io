@@ -4,7 +4,7 @@ path: blog/translation/pdfsp/chapter_1
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-05-24
-excerpt: 《个人发展指南》 —— 第1章 真实
+excerpt: 《聪明人的个人发展》 —— 第1章 真实
 isTranslated: true
 keywords:
   ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第一章', 'truth', '真实']

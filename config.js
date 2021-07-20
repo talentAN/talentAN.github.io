@@ -43,7 +43,7 @@ module.exports = {
     },
     'Personal Development for Smart People': {
       name: 'Personal Development for Smart People',
-      description: '个人发展指南，楼主认证 ✔️。',
+      description: '聪明人的个人发展，楼主认证 ✔️。',
       color: '#142f83',
     },
   },

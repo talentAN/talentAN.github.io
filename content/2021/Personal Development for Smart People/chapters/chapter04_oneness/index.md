@@ -4,7 +4,7 @@ path: blog/translation/pdfsp/chapter_4
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-06-16
-excerpt: 《个人发展指南》 —— 第4章 一体性
+excerpt: 《聪明人的个人发展》 —— 第4章 一体性
 isTranslated: true
 keywords:
   [

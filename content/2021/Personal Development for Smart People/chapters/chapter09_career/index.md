@@ -4,7 +4,7 @@ path: blog/translation/pdfsp/chapter_9
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-07-25
-excerpt: 《个人发展指南》 —— 第9章 职业
+excerpt: 《聪明人的个人发展》 —— 第9章 职业
 isTranslated: true
 keywords: ['Personal Development for Smart People', '翻译', '个人发展', '中文', 'Career', '职业']
 prePage: 'blog/translation/pdfsp/chapter_8'
