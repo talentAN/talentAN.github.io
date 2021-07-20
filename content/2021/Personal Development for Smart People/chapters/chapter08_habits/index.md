@@ -8,7 +8,7 @@ excerpt: 《个人发展指南》 —— 第8章 习惯
 isTranslated: true
 keywords: ['Personal Development for Smart People', '翻译', '个人发展', '中文', 'Habits', '习惯']
 prePage: 'blog/translation/pdfsp/chapter_7'
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_9'
 ---
 
 > _“良好的习惯使食欲之类的本能受到自动控制，让我们的天性可以自由地探索更广阔的的生活，” — RALPH W. SOCKMAN_
