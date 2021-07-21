@@ -8,7 +8,7 @@ import SEO from '../../components/Seo';
 const Contact = () => (
   <Layout className="outerPadding">
     <Layout className="container">
-      <SEO title="Contact" description="contact to talentan" path="/contact" />
+      <SEO title="联系" description="联系追谏" path="contact" />
       <Header />
       <SidebarWrapper>
         <div className="marginTopTitle">

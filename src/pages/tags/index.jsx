@@ -26,12 +26,7 @@ const Tags = ({ data }) => {
     <Layout className="outerPadding">
       <Layout className="container">
         <Header />
-        <SEO
-          title="Tags"
-          description="This page consists of various Tags on various technologies that I'll be using
-          to write blogs. You can check the blogs related to the tags by clicking on any of the tags below."
-          path="tags"
-        />
+        <SEO title="标签" description="追谏博客标签分类" path="tags" />
         <SidebarWrapper>
           <>
             <div className="marginTopTitle">

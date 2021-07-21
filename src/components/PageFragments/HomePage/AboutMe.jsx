@@ -7,8 +7,7 @@ import { stripTags, domHtml } from '../../../utils/stripTags';
 import SEO from '../../Seo';
 
 const pageText = {
-  paraOne:
-    '你好少年，我是追谏，目前是工作于@神策数据。14年华东师范大学毕业，从猎头站始发、途径HR、当前停靠技术站😆。主用NodeJS、ReactJS，开发B端产品。',
+  paraOne: '追谏个人博客，聪明人的个人发展。',
   paraTwo: `除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪`,
 };
 
@@ -17,7 +16,7 @@ const AboutMe = () => {
   return (
     <div style={{ marginBottom: '16px' }}>
       <div>
-        <SEO title="About" description={description} path="" />
+        <SEO title="关于" description={description} path="" />
         <h1 className="titleSeparate">关于</h1>
         <p>你好，我是追谏。</p>
         <p>

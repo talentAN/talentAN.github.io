@@ -12,7 +12,7 @@ const Blog = ({ data }) => {
     <Layout className="outerPadding">
       <Layout className="container">
         <Header />
-        <SEO title="Blog" description="good articles" path="blog" />
+        <SEO title="追谏" description="追谏博客列表" path="blog" />
         <SidebarWrapper>
           <div className="marginTopTitle">
             <h1 className="titleSeparate">博文</h1>

@@ -1,11 +1,10 @@
 module.exports = {
   pathPrefix: '',
-  siteUrl: 'https://talentan.github.com',
+  siteUrl: 'https://www.talentan.cn',
   siteTitle: '追谏',
   siteDescription: '追谏的个人网站',
   author: 'talentan',
-  postsForArchivePage: 3,
-  defaultLanguage: 'en',
+  defaultLanguage: 'cn',
   pages: {
     home: '/',
     blog: 'blog',
@@ -49,15 +48,10 @@ module.exports = {
   },
   keywords: [
     'talentan',
-    'blog',
-    '个人博客',
+    '追谏',
+    '个人发展',
     'Personal Development for Smart People',
     '前端',
-    '技术',
     '转型',
-    '计算机',
-    '个人发展',
-    '翻译',
-    '职业',
   ],
 };

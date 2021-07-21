@@ -5,6 +5,7 @@ import { StaticQuery, graphql } from 'gatsby';
 /* App imports */
 import Config from '../../../config';
 import Utils from '../../utils/pageUtils';
+import favicon from '../../../static/favicon.ico';
 
 const detailsQuery = graphql`
   query DefaultSEOQuery {
@@ -18,42 +19,18 @@ const detailsQuery = graphql`
   }
 `;
 
-const KEYWORDS = [
-  'talentan',
-  'adam_an02',
-  'FullStack developer',
-  'Javascript',
-  'NodeJS',
-  'React',
-  'SensorsData',
-  '神策数据',
-  '追谏',
-  '个人成长',
-  'Personal Development for Smart People',
-];
-
-function SEO({
-  title,
-  description,
-  keywords,
-  path,
-  lang,
-  contentType,
-  imageUrl,
-  translations,
-  meta,
-}) {
-  keywords = Array.isArray(keywords) ? keywords : Config.keywords;
+function SEO({ title, description, keywords, path, imageUrl, translations, meta }) {
+  keywords = Array.isArray(keywords) ? keywords : [];
   return (
     <StaticQuery
       query={detailsQuery}
       render={() => {
-        const metaKeywords = { name: 'keywords', content: [...KEYWORDS, ...keywords].join(', ') };
+        const metaKeywords = {
+          name: 'keywords',
+          content: [...Config.keywords, ...keywords].join(', '),
+        };
         const pageUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
-        const metaImageUrl = Utils.resolveUrl(
-          Config.siteUrl,
-          imageUrl || 'https://www.sensorsdata.cn/favicon.ico'
-        );
+        const metaImageUrl = Utils.resolveUrl(Config.siteUrl, favicon);
 
         return (
           <Helmet
@@ -64,21 +41,13 @@ function SEO({
                 { name: 'description', content: description }, // Page description
                 /* Open Graph */
                 { property: 'og:title', content: title },
-                { property: 'og:type', content: contentType || 'website' },
+                { property: 'og:type', content: 'website' },
                 { property: 'og:url', content: pageUrl },
                 { property: 'og:description', content: description },
                 { property: 'og:image', content: metaImageUrl },
                 { property: 'og:image:alt', content: description },
                 { property: 'og:site_name', content: Config.siteTitle },
-                { property: 'og:locale', content: lang || 'en_US' },
-                /* Twitter card */
-                { name: 'twitter:card', content: 'summary_large_image' },
-                { name: 'twitter:title', content: title },
-                { name: 'twitter:description', content: description },
-                { name: 'twitter:image', content: metaImageUrl },
-                { name: 'twitter:image:alt', content: description },
-                { name: 'twitter:site', content: Config.author },
-                { name: 'twitter:creator', content: Config.author },
+                { property: 'og:locale', content: 'zh_CN' },
               ]
                 .concat(metaKeywords) // Keywords
                 .concat(meta || []) // Other provided metadata
