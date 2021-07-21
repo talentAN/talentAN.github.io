@@ -8,7 +8,7 @@ excerpt: 《聪明人的个人发展》 —— 第9章 职业
 isTranslated: true
 keywords: ['Personal Development for Smart People', '翻译', '个人发展', '中文', 'Career', '职业']
 prePage: 'blog/translation/pdfsp/chapter_8'
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_10'
 ---
 
 > _“劳动就是有形可见的爱。” — KAHLIL GIBRAN_
