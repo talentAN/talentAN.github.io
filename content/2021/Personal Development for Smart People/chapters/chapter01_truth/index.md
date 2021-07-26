@@ -6,8 +6,7 @@ cover: ./cover.png
 date: 2021-05-24
 excerpt: 《聪明人的个人发展》 —— 第1章 真实
 isTranslated: true
-keywords:
-  ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第一章', 'truth', '真实']
+keywords: ['个人发展', 'truth', '真实']
 prePage: 'blog/translation/pdfsp/summary'
 nextPage: 'blog/translation/pdfsp/chapter_2'
 ---

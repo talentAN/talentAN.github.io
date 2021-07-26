@@ -6,8 +6,7 @@ cover: ./cover.png
 date: 2021-05-30
 excerpt: 《聪明人的个人发展》 —— 第2章 爱
 isTranslated: true
-keywords:
-  ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第二章', 'love', '爱']
+keywords: ['个人发展', 'love', '爱']
 prePage: 'blog/translation/pdfsp/chapter_1'
 nextPage: 'blog/translation/pdfsp/chapter_3'
 ---

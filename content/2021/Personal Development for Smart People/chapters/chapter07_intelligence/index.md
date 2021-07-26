@@ -6,16 +6,7 @@ cover: ./cover.png
 date: 2021-07-16
 excerpt: 《聪明人的个人发展》 —— 第7章 智慧
 isTranslated: true
-keywords:
-  [
-    'Personal Development for Smart People',
-    '翻译',
-    '个人发展',
-    '中文',
-    '第7章',
-    'Intelligence',
-    '智慧',
-  ]
+keywords: ['个人发展', 'Intelligence', '智慧']
 prePage: 'blog/translation/pdfsp/chapter_6'
 nextPage: 'blog/translation/pdfsp/chapter_8'
 ---

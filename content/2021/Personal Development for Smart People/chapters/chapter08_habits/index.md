@@ -6,7 +6,7 @@ cover: ./cover.png
 date: 2021-07-20
 excerpt: 《聪明人的个人发展》 —— 第8章 习惯
 isTranslated: true
-keywords: ['Personal Development for Smart People', '翻译', '个人发展', '中文', 'Habits', '习惯']
+keywords: ['个人发展', 'Habits', '习惯']
 prePage: 'blog/translation/pdfsp/chapter_7'
 nextPage: 'blog/translation/pdfsp/chapter_9'
 ---

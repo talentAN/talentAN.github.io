@@ -6,9 +6,9 @@ cover: ./cover.png
 date: 2021-07-29
 excerpt: 《聪明人的个人发展》 —— 第10章 金钱
 isTranslated: true
-keywords: ['Personal Development for Smart People', '翻译', '个人发展', '中文', 'Money', '金钱']
-prePage: 'blog/translation/pdfsp/chapter_8'
-nextPage: 'blog/translation/pdfsp/chapter_10'
+keywords: ['个人发展', 'Money', '金钱']
+prePage: 'blog/translation/pdfsp/chapter_9'
+nextPage: ''
 ---
 
 > _“品质因贫穷而受挫的人，要崛起并不容易。” — JUVENAL_

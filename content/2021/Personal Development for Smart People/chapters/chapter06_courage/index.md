@@ -6,8 +6,7 @@ cover: ./cover.png
 date: 2021-07-13
 excerpt: 《聪明人的个人发展》 —— 第6章 勇气
 isTranslated: true
-keywords:
-  ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第6章', 'Courage', '勇气']
+keywords: ['个人发展', 'Courage', '勇气']
 prePage: 'blog/translation/pdfsp/chapter_5'
 nextPage: 'blog/translation/pdfsp/chapter_7'
 ---

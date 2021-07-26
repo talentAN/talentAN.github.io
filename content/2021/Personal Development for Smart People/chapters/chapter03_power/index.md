@@ -6,8 +6,7 @@ cover: ./cover.png
 date: 2021-06-05
 excerpt: 《聪明人的个人发展》 —— 第3章 力量
 isTranslated: true
-keywords:
-  ['Personal Development for Smart People', '翻译', '个人发展', '中文', '第3章', 'power', '力量']
+keywords: ['个人发展', 'power', '力量']
 prePage: 'blog/translation/pdfsp/chapter_2'
 nextPage: 'blog/translation/pdfsp/chapter_4'
 ---
