@@ -7,7 +7,7 @@ import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
 import ME from '../../../configs/me';
-import wechat from '../../../images/Wechat.jpeg';
+import wechat from '../../../images/Wechat.jpg';
 
 const { Content } = Layout;
 
