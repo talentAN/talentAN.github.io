@@ -8,7 +8,7 @@ excerpt: 《聪明人的个人发展》 —— 第12章 人际关系
 isTranslated: true
 keywords: ['个人发展', 'RelationShips', '人际关系']
 prePage: 'blog/translation/pdfsp/chapter_11'
-nextPage: ''
+nextPage: 'blog/translation/pdfsp/chapter_13'
 ---
 
 > _最惨的孤独是缺乏真诚的友谊。 — SIR FRANCIS BACON_
