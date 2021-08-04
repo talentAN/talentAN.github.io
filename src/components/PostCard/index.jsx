@@ -20,17 +20,17 @@ const PostCard = props => {
     excerpt = '',
     tags = [],
     date = '',
+    path,
   } = frontmatter;
   const showHot = !!hot;
   const showRecommended = !showHot && recommended;
   const title = isTranslated ? `[译] ${_title}` : _title;
 
+  const contentUrl = Utils.resolvePageUrl(path);
+
   return (
-    <div
-      className={style.postCard}
-      onClick={() => trackBlog(Utils.resolvePageUrl(frontmatter.path))}
-    >
-      <Link to={Utils.resolvePageUrl(frontmatter.path)}>
+    <div className={style.postCard} onClick={() => trackBlog(contentUrl)}>
+      <Link to={contentUrl}>
         <div
           className={style.postCardImg}
           style={{
@@ -40,7 +40,9 @@ const PostCard = props => {
             backgroundPositionX: 'center',
           }}
         />
-        <div className={style.mrTp20}>
+      </Link>
+      <div className={style.mrTp20}>
+        <Link to={contentUrl}>
           <p>
             <span className={style.dateHolder}>
               {date ? moment(date).format('MMM Do YYYY') : ''}
@@ -52,15 +54,17 @@ const PostCard = props => {
             {title}
           </h3>
           <p>{excerpt}</p>
-          <p style={{ color: '#ce6d96' }}>
-            {tags.map(tag => (
-              <span key={tag} style={{ marginRight: '12px' }}>
+        </Link>
+        <p>
+          {tags.map(tag => (
+            <Link to={Utils.resolvePageUrl(`tags/${tag}`)}>
+              <span key={tag} className={style.tag}>
                 #{tag}
               </span>
-            ))}
-          </p>
-        </div>
-      </Link>
+            </Link>
+          ))}
+        </p>
+      </div>
     </div>
   );
 };
