@@ -18,6 +18,7 @@ const DomContent = () => {
     return key === 'weixin' ? (
       <FA
         style={{ color: 'rgba(0, 0, 0, 0.65)' }}
+        key={key}
         name={key}
         onMouseEnter={() => setShowWeChat(true)}
         onMouseLeave={() => setShowWeChat(false)}

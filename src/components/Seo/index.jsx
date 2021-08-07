@@ -47,7 +47,7 @@ function SEO({ title, description, keywords, path, imageUrl, translations, meta 
                 { property: 'og:image', content: metaImageUrl },
                 { property: 'og:image:alt', content: description },
                 { property: 'og:site_name', content: Config.siteTitle },
-                { property: 'og:locale', content: 'zh_CN' },
+                { property: 'og:locale', content: 'zh-CN' },
               ]
                 .concat(metaKeywords) // Keywords
                 .concat(meta || []) // Other provided metadata

@@ -9,8 +9,9 @@ const Home = props => {
     preBodyComponents,
     postBodyComponents,
   } = props;
+
   return (
-    <html lang="en-US" {...htmlAttributes}>
+    <html lang="zh-CN" {...htmlAttributes}>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="x-ua-compatible" content="ie=edge" />
