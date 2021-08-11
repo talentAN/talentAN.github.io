@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
-Sitemap: https://www.talentan.cn/sitemap.xml
+Sitemap: https://www.talentan.cn/sitemap/sitemap-index.xml
 Host: https://www.talentan.cn
