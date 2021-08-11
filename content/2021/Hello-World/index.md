@@ -7,6 +7,7 @@ date: 2021-03-22
 excerpt: talentan.github.io
 prePage: ''
 nextPage: ''
+totalCount: 50
 ---
 
 第一个正经八经的个人界面开张咯 ~
