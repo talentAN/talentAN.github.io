@@ -57,10 +57,8 @@ const PostCard = props => {
         </Link>
         <p>
           {tags.map(tag => (
-            <Link to={Utils.resolvePageUrl(`tags/${tag}`)}>
-              <span key={tag} className={style.tag}>
-                #{tag}
-              </span>
+            <Link to={Utils.resolvePageUrl(`tags/${tag}`)} key={tag}>
+              <span className={style.tag}>#{tag}</span>
             </Link>
           ))}
         </p>

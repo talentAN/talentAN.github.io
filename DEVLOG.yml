@@ -1,0 +1,2 @@
+推荐、热门，直接读取 ga 数据:
+  2021.08.11: 直接读取走不通(https://stackoverflow.com/questions/25606671/google-analytics-access-api-without-login)，考虑周期CI：读取GA => 设置configFile => 再publish
