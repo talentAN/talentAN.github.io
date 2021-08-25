@@ -27,6 +27,9 @@ const AboutMe = () => {
           前端工程师。
         </p>
         <p dangerouslySetInnerHTML={domHtml(pageText.paraTwo)} />
+        <p>
+          微信公众号<span style={{ color: '#304cfd', fontWeight: 'bold' }}>追谏</span>，欢迎关注~
+        </p>
       </div>
       <Row gutter={[20, 20]}>
         <Col xs={24} sm={24} md={12} lg={8}>
