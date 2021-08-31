@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Affix, Layout, Row, Col, message } from 'antd';
+import { Affix, Layout, Row, Col } from 'antd';
 import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
 import { globalHistory } from '@reach/router';
 import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
+import { WIDTH_MOBILE } from '../../../configs/layout';
 import ME from '../../../configs/me';
 import wechat from '../../../images/Wechat.jpg';
 
@@ -22,6 +23,7 @@ const DomContent = () => {
         name={key}
         onMouseEnter={() => setShowWeChat(true)}
         onMouseLeave={() => setShowWeChat(false)}
+        onClick={() => setShowWeChat(!showWeChat)}
       />
     ) : (
       <OutboundLink
@@ -79,12 +81,12 @@ const DomContent = () => {
             </OutboundLink>
           </li>
         </ul>
-        <div className={style.resumeDownload} onClick={() => message.info('当前稳定，感谢关注~')}>
-          {/* <a download target="_blank" style={{ display: 'flex', alignItems: 'center' }}>
+        {/* <div className={style.resumeDownload} onClick={() => message.info('目前稳定，感谢关注~')}>
+          <a download target="_blank" style={{ display: 'flex', alignItems: 'center' }}>
             <FeatherIcon size="19" icon="download" style={{ marginRight: '8px' }} />
             简历
-          </a> */}
-        </div>
+          </a>
+        </div> */}
       </div>
     </aside>
   );
@@ -102,7 +104,7 @@ const Sidebar = props => {
       </Affix>
     );
   }
-  if (width < 768) {
+  if (width < WIDTH_MOBILE) {
     domContent = <></>;
     if (pathname === '/') {
       domContent = <DomContent />;
