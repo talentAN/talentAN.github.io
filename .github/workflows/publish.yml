@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - master
-  schedule:
-    - cron: '0 21 * * *'
 jobs:
   build-and-deploy-to-github:
     runs-on: ubuntu-latest
