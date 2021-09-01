@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
@@ -9,12 +9,14 @@ import SEO from '../../components/Seo';
 import Comment from '../../components/Comment';
 import Config from '../../../config';
 import Utils from '../../utils/pageUtils';
+import support from '../../images/support.jpg';
 
 import 'prismjs/themes/prism-solarizedlight.css';
 import './highlight-syntax.less';
 import style from './post.module.less';
 
 const Post = ({ data }) => {
+  const [showSupport, setShowSupport] = useState(false);
   const { html, frontmatter } = data.markdownRemark;
   const {
     title,
@@ -29,8 +31,24 @@ const Post = ({ data }) => {
     nextPage = '',
   } = frontmatter;
 
-  const hasLinkPage = prePage || nextPage;
+  const hasLinkPage = prePage || nextPage; // 是否有上一页 | 下一页
   const canonicalUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
+
+  const goSupportRef = useRef();
+  const supportCodeRef = useRef();
+
+  useEffect(() => {
+    const hideSupport = e => {
+      if (e.target !== supportCodeRef.current && e.target !== goSupportRef.current) {
+        setShowSupport(false);
+      }
+    };
+    document.addEventListener('click', hideSupport);
+    return () => {
+      document.removeEventListener('click', hideSupport);
+    };
+  }, []);
+
   return (
     <Layout className="outerPadding">
       <Layout className="container">
@@ -67,6 +85,14 @@ const Post = ({ data }) => {
               </span>
             </div>
           </div>
+          <div
+            className={style.hamburgerText}
+            onClick={() => setShowSupport(true)}
+            ref={goSupportRef}
+          >
+            赞赏
+          </div>
+          {showSupport && <img src={support} className={style.supportImg} ref={supportCodeRef} />}
         </SidebarWrapper>
       </Layout>
     </Layout>
@@ -74,7 +100,7 @@ const Post = ({ data }) => {
 };
 
 export const pageQuery = graphql`
-  query($postPath: String!) {
+  query ($postPath: String!) {
     markdownRemark(frontmatter: { path: { eq: $postPath } }) {
       html
       timeToRead

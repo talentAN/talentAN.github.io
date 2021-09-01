@@ -2,13 +2,13 @@
 title: Personal Development for Smart People —— Afterword
 path: blog/translation/pdfsp/afterword
 tags: ['Personal Development for Smart People']
-cover: ./cover.png
+cover: ./cover.jpg
 date: 2021-08-07
 excerpt: 《聪明人的个人发展》 —— 后记
 isTranslated: true
 keywords: ['个人发展', 'Afterword', '后记']
 prePage: 'blog/translation/pdfsp/chapter_13'
-nextPage: ''
+nextPage: 'blog/from-hr-to-developer'
 totalCount: 20
 ---
 

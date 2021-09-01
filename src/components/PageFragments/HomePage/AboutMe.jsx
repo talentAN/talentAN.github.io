@@ -1,22 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col } from 'antd';
 import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import AboutTile from '../../AbouTile';
-import { stripTags, domHtml } from '../../../utils/stripTags';
-
 import SEO from '../../Seo';
-
-const pageText = {
-  paraOne: '追谏个人博客，聪明人的个人发展。',
-  paraTwo: `除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪`,
-};
+import QrCode from '../../../images/qr-code.jpg';
 
 const AboutMe = () => {
-  const description = `${pageText.paraOne} ${stripTags(pageText.paraTwo)}`;
+  const [showCode, setShowCode] = useState(false);
+  const QrRefEntry = useRef();
+  const QrRef = useRef();
+
+  useEffect(() => {
+    const hideQrCode = e => {
+      if (e.target !== QrRef.current && e.target !== QrRefEntry.current) {
+        setShowCode(false);
+      }
+    };
+    document.addEventListener('click', hideQrCode);
+    return () => {
+      document.removeEventListener('click', hideQrCode);
+    };
+  }, []);
+
   return (
     <div style={{ marginBottom: '16px' }}>
       <div>
-        <SEO title="关于" description={description} path="" />
+        <SEO title="关于" path="" />
         <h1 className="titleSeparate">关于</h1>
         <p>你好，我是追谏。</p>
         <p>
@@ -26,8 +35,22 @@ const AboutMe = () => {
           </OutboundLink>
           前端工程师。
         </p>
-        <p dangerouslySetInnerHTML={domHtml(pageText.paraTwo)} />
+        <p>
+          除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪
+        </p>
+        <p>
+          微信公众号
+          <span
+            ref={QrRefEntry}
+            style={{ color: '#1890ff', fontWeight: 'bold', cursor: 'pointer' }}
+            onClick={() => setShowCode(true)}
+          >
+            追谏
+          </span>
+          ，欢迎关注~
+        </p>
       </div>
+      {showCode && <img ref={QrRef} src={QrCode} />}
       <Row gutter={[20, 20]}>
         <Col xs={24} sm={24} md={12} lg={8}>
           <AboutTile

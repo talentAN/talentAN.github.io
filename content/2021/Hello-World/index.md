@@ -4,7 +4,7 @@ path: blog/first-blog
 tags: [未归类]
 cover: ./talentan.jpg
 date: 2021-03-22
-excerpt: talentan.github.io
+excerpt: www.talentan.cn
 prePage: ''
 nextPage: ''
 totalCount: 50

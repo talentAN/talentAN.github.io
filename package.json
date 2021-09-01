@@ -37,7 +37,6 @@
     "gatsby-source-filesystem": "^2.1.48",
     "gatsby-transformer-remark": "^2.6.50",
     "gatsby-transformer-sharp": "^2.4.2",
-    "googleapis": "^84.0.0",
     "less": "^3.11.1",
     "moment": "^2.24.0",
     "prismjs": "^1.19.0",
