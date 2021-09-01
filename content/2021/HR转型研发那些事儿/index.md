@@ -5,8 +5,11 @@ tags: [人生]
 cover: ./cover.png
 date: 2021-08-24
 excerpt: 老夫曾为HR，后来转型搞研发。欲知此间有趣事，进来看看吧😝
+isTranslated: false
+keywords: ['转行', '职业', '工作']
 prePage: 'blog/translation/pdfsp/afterword'
 nextPage: ''
+totalCount: 27
 ---
 
 刚入职场就选中了自己喜欢的行业无疑是幸运的，但并非每个人都能如此。

@@ -47,6 +47,7 @@ export const query = graphql`
             hot
             recommended
             isTranslated
+            totalCount
             cover {
               childImageSharp {
                 fluid(maxWidth: 288) {

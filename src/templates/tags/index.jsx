@@ -51,7 +51,7 @@ const TagPage = ({ data, pageContext }) => {
 };
 
 export const pageQuery = graphql`
-  query($tag: String!) {
+  query ($tag: String!) {
     allMarkdownRemark(
       filter: { frontmatter: { tags: { in: [$tag] } }, fileAbsolutePath: { regex: "/index.md$/" } }
       sort: { fields: [frontmatter___date], order: DESC }
@@ -66,6 +66,7 @@ export const pageQuery = graphql`
             excerpt
             isTranslated
             keywords
+            totalCount
             cover {
               childImageSharp {
                 fluid(maxWidth: 600) {

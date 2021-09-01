@@ -17,7 +17,7 @@ jobs:
         with:
           github_token: ${{ secrets.GH_ACTION_DEPLOY_KEY}}
           publish_dir: ./public
-  sync:
+  sync-to-gitee:
     needs: build-and-deploy-to-github
     runs-on: ubuntu-latest
     steps:

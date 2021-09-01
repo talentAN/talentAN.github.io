@@ -1,9 +1,10 @@
 import React from 'react';
 import moment from 'moment';
 import { Link } from 'gatsby';
-import style from './postCard.module.less';
 import Utils from '../../utils/pageUtils';
+import { formatNumber } from '../../utils/tools';
 import { trackBlog } from '../../track';
+import style from './postCard.module.less';
 
 const PostCard = props => {
   const {
@@ -21,12 +22,15 @@ const PostCard = props => {
     tags = [],
     date = '',
     path,
+    totalCount,
   } = frontmatter;
+
   const showHot = !!hot;
   const showRecommended = !showHot && recommended;
-  const title = isTranslated ? `[译] ${_title}` : _title;
 
+  const title = isTranslated ? `[译] ${_title}` : _title;
   const contentUrl = Utils.resolvePageUrl(path);
+  const label_viewed = `${formatNumber(totalCount)}阅`;
 
   return (
     <div className={style.postCard} onClick={() => trackBlog(contentUrl)}>
@@ -43,10 +47,9 @@ const PostCard = props => {
       </Link>
       <div className={style.mrTp20}>
         <Link to={contentUrl}>
-          <p>
-            <span className={style.dateHolder}>
-              {date ? moment(date).format('MMM Do YYYY') : ''}
-            </span>
+          <p className={style.tips}>
+            <span className={style.dateHolder}>{moment(date).format('MMM Do YYYY')}</span>
+            <span className={style.totalCount}>{label_viewed}</span>
           </p>
           <h3>
             {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
