@@ -42,7 +42,10 @@ const setAnalyticsData = async () => {
       totalCounts[title] = Number(count);
     });
     // 获取文件存储路径
-    const path_totalCount = path.resolve(process.cwd(), 'googleAnalytics/totalCount.js');
+    const path_totalCount = path.join(
+      process.env.GITHUB_WORKSPACE,
+      'googleAnalytics/totalCount.js'
+    );
 
     // 写入数据
     const newTotalCountStr =
