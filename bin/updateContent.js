@@ -3,15 +3,23 @@ const process = require('process');
 const path = require('path');
 const totalCounts = require('../googleAnalytics/totalCount');
 
+const paths = Object.keys(totalCounts);
+
 //-----------------helpers start---------------------------------------------
 // 读取文件对应访问量
 const _getTotalCount = variables => {
-  const key = 'title:';
+  const key = 'path:';
   const path_content = variables
     .find(v => v.indexOf(key) === 0)
     .slice(key.length, 200)
     .trim();
-  return totalCounts[path_content] || 0;
+  let res = 0;
+  paths.forEach(path_page => {
+    if (path_page.indexOf(path_content) === 1) {
+      res += totalCounts[path_page];
+    }
+  });
+  return res;
 };
 
 //-----------------helpers end-----------------------------------------------

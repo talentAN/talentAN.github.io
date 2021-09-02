@@ -27,7 +27,7 @@ const setAnalyticsData = async () => {
     'start-date': '2021-03-01',
     'end-date': 'today',
     metrics: 'ga:pageviews',
-    dimensions: 'ga:pageTitle',
+    dimensions: 'ga:pagePath',
   };
 
   await analytics.data.ga.get(params, (err, res) => {
@@ -38,8 +38,8 @@ const setAnalyticsData = async () => {
     const rows = res.data.rows;
     const totalCounts = {};
     rows.forEach(row => {
-      const title = row[0].split(' | 追谏')[0];
-      totalCounts[title] = Number(row[1]);
+      const [title, count] = row;
+      totalCounts[title] = Number(count);
     });
     // 获取文件存储路径
     const path_totalCount = path.resolve(process.cwd(), 'googleAnalytics/totalCount.js');
