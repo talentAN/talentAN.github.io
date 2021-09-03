@@ -87,7 +87,7 @@ async function run() {
     // ---------------------分割线-------------------------------------------
 
     core.startGroup('创建Commit');
-    const commitMessage = `deploy: ${process.env.GITHUB_SHA}`;
+    const commitMessage = `[更新GA数据]-deploy: ${process.env.GITHUB_SHA}`;
     process.chdir(workDir);
     await exec.exec('git', ['add', '.']);
     await exec.exec('git', ['commit', '-m', commitMessage]);

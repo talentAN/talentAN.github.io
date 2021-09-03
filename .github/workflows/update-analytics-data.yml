@@ -3,39 +3,22 @@ on:
   schedule:
     - cron: '0 21 * * *'
 jobs:
-  # 获取统计数据，写入googleAnalytics/totalCount
-  get-analytics-data:
+  update-analytics-data:
     runs-on: ubuntu-latest
     env:
       client_email: ${{secrets.GA_AUTH_CLIENT_EMAIL}}
       private_key: ${{secrets.GA_AUTH_PRIVATE_KEY}}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
-        with:
-          node-version: 12
-      - run: npm install googleapis
-      - run: node bin/setAnalyticsData.js
-  # 更新博客数据
-  update-analytics-content:
-    needs: get-analytics-data
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
-        with:
-          node-version: 12
-      - run: node bin/updateContent.js
-  # 合入master
-  commit-to-master:
-    needs: update-analytics-content
-    runs-on: ubuntu-latest
-    env:
       github_token: ${{secrets.GH_ACTION_DEPLOY_KEY}}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
         with:
           node-version: 12
+      # 获取GA数据
+      - run: npm install googleapis
+      - run: node bin/setAnalyticsData.js
+      # 更新博客数据
+      - run: node bin/updateContent.js
+      # 合入master并发布
       - run: npm run install-action
       - run: node bin/commitToMaster.js

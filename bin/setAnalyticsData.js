@@ -44,14 +44,10 @@ const setAnalyticsData = async () => {
     // 获取文件存储路径
     const path_totalCount = path.join(
       process.env.GITHUB_WORKSPACE,
-      'googleAnalytics/totalCount.js'
+      'googleAnalytics/totalCount.json'
     );
 
-    // 写入数据
-    const newTotalCountStr =
-      'const totalCounts = ' + JSON.stringify(totalCounts) + '\n' + 'module.exports = totalCounts;';
-
-    fs.writeFileSync(path_totalCount, newTotalCountStr);
+    fs.writeFileSync(path_totalCount, JSON.stringify(totalCounts));
     console.info('Set Analytics Data Done');
   });
 };
