@@ -1,8 +1,11 @@
 const fs = require('fs');
 const process = require('process');
 const path = require('path');
-const totalCounts = require('../googleAnalytics/totalCount');
 
+// 读取数据
+const path_totalCount = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/totalCount.json');
+const data = fs.readFileSync(path_totalCount, 'utf8');
+const totalCounts = JSON.parse(data);
 const paths = Object.keys(totalCounts);
 
 //-----------------helpers start---------------------------------------------
