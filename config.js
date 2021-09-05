@@ -15,35 +15,40 @@ module.exports = {
   contactFormUrl: 'https://getform.io/f/6b5df9e9-cf7a-481d-a952-3b9a65c7210b', // 联系表单
   googleAnalyticTrackingId: 'UA-192824662-1', // google追踪
   tags: {
-    未归类: {
-      name: '未归类',
-      description: '杂七杂八，有啥放啥。',
-      color: '#666',
-    },
-    前端: {
-      name: '前端',
-      description: '想改名叫全端 —。—',
-      color: '#f0da50',
+    'Personal Development for Smart People': {
+      name: 'Personal Development for Smart People',
+      description: '聪明人的个人发展，追谏认证 ✔️。',
+      color: '#142f83',
     },
     人生: {
       name: '人生',
       description: '后之视今，亦犹今之视昔。',
       color: '#000',
     },
-    策论: {
-      name: '策论',
-      description: '只要思想不滑坡，办法总比困难多🤔',
-      color: '#04a9e8',
-    },
     通识: {
       name: '通识',
       description: '观其大略，不求甚解。',
       color: '#a0d911',
     },
-    'Personal Development for Smart People': {
-      name: 'Personal Development for Smart People',
-      description: '聪明人的个人发展，楼主认证 ✔️。',
-      color: '#142f83',
+    前端: {
+      name: '前端',
+      description: '想改名叫全端 —。—',
+      color: '#f0da50',
+    },
+    // 策论: {
+    //   name: '策论',
+    //   description: '只要思想不滑坡，办法总比困难多🤔',
+    //   color: '#04a9e8',
+    // },
+    酝酿池: {
+      name: '酝酿池',
+      description: '不定何时就从这里蹦出了灵感。',
+      color: '#fa541c',
+    },
+    未归类: {
+      name: '未归类',
+      description: '杂七杂八，有啥放啥。',
+      color: '#bfbfbf',
     },
   },
   keywords: [

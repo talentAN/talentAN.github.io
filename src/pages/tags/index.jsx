@@ -11,17 +11,11 @@ const Tags = ({ data }) => {
   const {
     allFile: { edges },
   } = data;
-  const rawTags = data.allMarkdownRemark.edges
-    .map(edge => edge.node.frontmatter.tags)
-    .reduce((prev, curr) => prev.concat(curr));
-  rawTags.filter((tag, index) => index === rawTags.indexOf(tag)).sort(); // Remove duplicates and sort values
   const tagData = Config.tags;
-  // 把未分类标签放到最后
-  const i = edges.findIndex(t => t.node.name === '未归类');
-  const i_last = edges.length - 1;
-  if (i !== i_last) {
-    [edges[i], edges[i_last]] = [edges[i_last], edges[i]];
-  }
+  // 排序
+  const _edges = Object.keys(tagData).map(tag => {
+    return edges.find(e => e.node.name === tag);
+  });
   return (
     <Layout className="outerPadding">
       <Layout className="container">
@@ -33,7 +27,7 @@ const Tags = ({ data }) => {
               <h1 className="titleSeparate">#标签</h1>
             </div>
             <Row gutter={[30, 20]}>
-              {edges.map(val => (
+              {_edges.map(val => (
                 <Col key={val.node.name} xs={24} sm={24} md={12} lg={8}>
                   <TagCard
                     img={val.node.childImageSharp.fluid.src}
