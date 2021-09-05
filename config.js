@@ -42,12 +42,12 @@ module.exports = {
     // },
     酝酿池: {
       name: '酝酿池',
-      description: '不定何时就从这里蹦出了灵感。',
+      description: '一锅大杂烩，不定何时就从这里蹦出了灵感。',
       color: '#fa541c',
     },
     未归类: {
       name: '未归类',
-      description: '杂七杂八，有啥放啥。',
+      description: '',
       color: '#bfbfbf',
     },
   },
