@@ -20,6 +20,11 @@ module.exports = {
       description: '聪明人的个人发展，追谏认证 ✔️。',
       color: '#142f83',
     },
+    工程往事: {
+      name: '工程往事',
+      description: '工程 <=> 人生 <=> 历史',
+      color: '#e89c45',
+    },
     人生: {
       name: '人生',
       description: '后之视今，亦犹今之视昔。',
@@ -42,7 +47,7 @@ module.exports = {
     // },
     酝酿池: {
       name: '酝酿池',
-      description: '一锅大杂烩，不定何时就从这里蹦出了灵感。',
+      description: '不在博文中展示，一锅大杂烩，不定何时就从这里蹦出了灵感。',
       color: '#fa541c',
     },
     未归类: {

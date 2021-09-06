@@ -18,11 +18,13 @@ const Blog = ({ data }) => {
           </div>
           <Row gutter={[20, 20]}>
             {data.allMarkdownRemark &&
-              data.allMarkdownRemark.edges.map((val, key) => (
-                <Col key={key} xs={24} sm={24} md={12} lg={8}>
-                  <PostCard data={val} />
-                </Col>
-              ))}
+              data.allMarkdownRemark.edges
+                .filter(edge => !edge.node.frontmatter.tags.some(t => t === '酝酿池')) // 过滤酝酿池的内容，没必要展示在博客列表页
+                .map((val, key) => (
+                  <Col key={key} xs={24} sm={24} md={12} lg={8}>
+                    <PostCard data={val} />
+                  </Col>
+                ))}
           </Row>
         </SidebarWrapper>
       </Layout>
