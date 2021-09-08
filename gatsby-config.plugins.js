@@ -7,6 +7,14 @@ module.exports = [
   'gatsby-plugin-less',
   'gatsby-plugin-offline',
   {
+    resolve: `gatsby-plugin-valine`,
+    options: {
+      appId: `54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz`,
+      appKey: `aijtas9PQHTSFT9y53JTquND`,
+      avatar: `robohash`,
+    },
+  },
+  {
     resolve: 'gatsby-source-filesystem',
     options: {
       name: 'images',

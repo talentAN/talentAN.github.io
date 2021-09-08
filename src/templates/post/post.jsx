@@ -3,12 +3,10 @@ import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
 import FeatherIcon from 'feather-icons-react';
+import Valine from 'gatsby-plugin-valine';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
-import Comment from '../../components/Comment';
-import Config from '../../../config';
-import Utils from '../../utils/pageUtils';
 import support from '../../images/support.jpg';
 
 import 'prismjs/themes/prism-solarizedlight.css';
@@ -32,7 +30,6 @@ const Post = ({ data }) => {
   } = frontmatter;
 
   const hasLinkPage = prePage || nextPage; // 是否有上一页 | 下一页
-  const canonicalUrl = Utils.resolvePageUrl(Config.siteUrl, Config.pathPrefix, path);
 
   const goSupportRef = useRef();
   const supportCodeRef = useRef();
@@ -61,7 +58,15 @@ const Post = ({ data }) => {
               <Img className={style.bannerImg} fluid={fluid} title={excerpt} alt={title} />
             </div>
             <article className={style.blogArticle} dangerouslySetInnerHTML={{ __html: html }} />
-            <Comment pageCanonicalUrl={canonicalUrl} pageId={title} />
+            <Valine
+              appId="54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz"
+              appKey="aijtas9PQHTSFT9y53JTquND"
+              path={path}
+              placeholder="我相信你不会刻意刷评价，所以没有启用恼人的验证码"
+              highlight={false}
+              meta={['nick', 'mail']}
+              avatar={'mp'} // 头像
+            />
             {hasLinkPage && (
               <div className={style.links}>
                 <Button href={`/${prePage}`} type="link" disabled={!prePage}>

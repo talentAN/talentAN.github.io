@@ -19,7 +19,13 @@ const Blog = ({ data }) => {
           <Row gutter={[20, 20]}>
             {data.allMarkdownRemark &&
               data.allMarkdownRemark.edges
-                .filter(edge => !edge.node.frontmatter.tags.some(t => t === '酝酿池')) // 过滤酝酿池的内容，没必要展示在博客列表页
+                .filter(edge => {
+                  const { tags, path } = edge.node.frontmatter;
+                  return (
+                    !tags.some(t => t === '酝酿池') && // 过滤酝酿池的内容
+                    path.indexOf('blog/past-versions') !== 0 // 过滤历史版本内容
+                  );
+                })
                 .map((val, key) => (
                   <Col key={key} xs={24} sm={24} md={12} lg={8}>
                     <PostCard data={val} />
