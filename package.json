@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "antd": "^4.0.1",
+    "d3-scale": "^4.0.0",
     "feather-icons-react": "^0.4.1",
     "font-awesome": "^4.7.0",
     "gatsby": "^2.29.2",

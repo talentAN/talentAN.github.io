@@ -8,7 +8,7 @@ const ME = {
     github: 'https://github.com/talentan',
     weixin: '',
     linkedin: 'https://www.linkedin.com/in/adam-an-07237374/',
-    zhihu: 'https://www.zhihu.com/people/adam_gllue/posts', //TODO: not show yet, 还有那个照片的静态资源，居然都tm不能改... 什么杰宝
+    zhihu: 'https://www.zhihu.com/people/adam_gllue/posts', //TODO: not show yet
   },
   company: 'SensorsData',
 };

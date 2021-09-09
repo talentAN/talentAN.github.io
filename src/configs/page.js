@@ -6,5 +6,5 @@ export const header = [
   { label: '关于', link: pages.home },
   { label: '博文', link: `/${pages.blog}` },
   { label: '标签', link: `/${pages.tag}` },
-  { label: '联系', link: `/${pages.contact}` },
+  { label: '统计', link: `/${pages.static}` },
 ];

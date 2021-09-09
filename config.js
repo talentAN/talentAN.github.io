@@ -8,7 +8,7 @@ module.exports = {
   pages: {
     home: '/',
     blog: 'blog',
-    contact: 'contact',
+    static: 'static',
     resume: 'resume',
     tag: 'tags',
   },
@@ -63,5 +63,6 @@ module.exports = {
     'Personal Development for Smart People',
     '前端',
     '转型',
+    '工程往事',
   ],
 };
