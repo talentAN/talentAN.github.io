@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: ''
 nextPage: ''
-totalCount: 2
+totalCount: 3
 ---
 
 不知你是否还记得我在[《HR 转型研发那些事儿》](/blog/from-hr-to-developer)一文中写的一句话：我眼中的世界再不是从前的世界了。
