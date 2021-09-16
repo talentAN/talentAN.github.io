@@ -22,7 +22,7 @@ module.exports = {
     },
     工程往事: {
       name: '工程往事',
-      description: '工程 <=> 人生 <=> 历史',
+      description: '工程 <=> 生活 <=> 历史',
       color: '#e89c45',
     },
     人生: {
