@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人发展', 'Health', '健康']
 prePage: 'blog/translation/pdfsp/chapter_10'
 nextPage: 'blog/translation/pdfsp/chapter_12'
-totalCount: 9
+totalCount: 11
 ---
 
 > _“身体也有它的权利，而且它将拥有这些权利。身体不能被践踏或轻视，否则会有危险。身体是灵魂最好的朋友，最亲切、最尽职的伙伴。然而许多勤奋的人却忽略了这一点，这就是很多作家们痛苦的原因。一些好人把它当作敌人，然后它就成了魔鬼，困扰着他们。” — AUGUSTUS WILLIAM HARE AND JULIUS CHARLES HARE_
