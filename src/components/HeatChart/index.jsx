@@ -75,7 +75,6 @@ const _getShowMonth = (startSunday, isFirstColumn = false) => {
 
 const HeatChart = props => {
   const { data } = props;
-
   const startSunday = _getStartDate();
   const allDates = _getAllDate(startSunday);
   const { min, max, total } = _getExtends(data);

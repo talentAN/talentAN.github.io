@@ -54,7 +54,6 @@ const setBlobPageData = rows => {
 // 设置「统计页」数据
 const setStaticPageData = rows => {
   console.info('开始 => 写入「统计页」访问数据');
-
   // 获取文件存储路径
   const path_all = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js');
   fs.writeFileSync(path_all, 'export const data = ' + JSON.stringify(rows));
