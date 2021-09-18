@@ -157,6 +157,18 @@ const HeatChart = props => {
           </g>
         </svg>
       </div>
+      <div className={style.tip}>
+        <span className={style.label}>less</span>
+        {new Array(5).fill(1).map((item, i) => {
+          const fill = colorCalculator(min + ((max - min) * i) / 4);
+          return (
+            <svg width={10} height={10} style={{ marginRight: '4px' }}>
+              <rect width={10} height={10} rx={2} ry={2} className={style.rect} style={{ fill }} />
+            </svg>
+          );
+        })}
+        <span className={style.label}>more</span>
+      </div>
     </div>
   );
 };
