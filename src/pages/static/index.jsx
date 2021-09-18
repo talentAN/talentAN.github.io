@@ -3,7 +3,7 @@ import { Layout } from 'antd';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
-import HeatChart from './HeatChart';
+import HeatChart from '../../components/HeatChart';
 import { data } from '../../../googleAnalytics/all';
 
 /**
