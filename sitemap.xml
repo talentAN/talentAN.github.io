@@ -35,6 +35,6 @@
 <url> <loc>https://www.talentan.cn/tags/未归类</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
 <url> <loc>https://www.talentan.cn/</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
 <url> <loc>https://www.talentan.cn/blog/</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
-<url> <loc>https://www.talentan.cn/contact/</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
+<url> <loc>https://www.talentan.cn/static/</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
 <url> <loc>https://www.talentan.cn/tags/</loc> <changefreq>daily</changefreq> <priority>0.7</priority> </url>
 </urlset>
