@@ -4,7 +4,7 @@ const M = K * K;
 
 export const formatNumber = num => {
   num = Number(num);
-  if (num < 1) {
+  if (num < 0) {
     return `${(num * 100).toFixed(2)}%`;
   }
   if (num < K) {

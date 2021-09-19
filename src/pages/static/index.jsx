@@ -66,8 +66,8 @@ const Contact = () => {
 
   const layouts = {
     lg: [
-      { i: 'total', x: 0, y: 0, w: 6, h: 5, static: true },
-      { i: 'last_year', x: 6, y: 0, w: 24, h: 5, static: true },
+      { i: 'total', x: 0, y: 0, w: 6, h: 5, static: false },
+      { i: 'last_year', x: 6, y: 0, w: 24, h: 5, static: false },
     ],
     sm: [
       { i: 'total', x: 0, y: 0, w: 12, h: 5, static: true },

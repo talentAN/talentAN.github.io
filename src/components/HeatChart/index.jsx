@@ -113,7 +113,7 @@ const HeatChart = props => {
                                   次访问
                                 </>
                               ) : (
-                                '无阅读'
+                                '无访问'
                               )}
                             </span>
                           }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col } from 'antd';
+import { Link } from 'gatsby';
 import { OutboundLink } from 'gatsby-plugin-google-analytics';
 import AboutTile from '../../AbouTile';
 import SEO from '../../Seo';
@@ -37,6 +38,16 @@ const AboutMe = () => {
         </p>
         <p>
           除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪
+        </p>
+        <p>
+          强烈推荐两个系列文章：
+          <Link to={'/tags/Personal%20Development%20for%20Smart%20People'}>
+            《聪明人的个人发展》
+          </Link>
+          、<Link to={'/tags/工程往事'}>《工程往事》</Link>。
+        </p>
+        <p>
+          网站相关统计数据，可以点击<Link to={'/static'}>这里</Link>查看 ~
         </p>
         <p>
           微信公众号
