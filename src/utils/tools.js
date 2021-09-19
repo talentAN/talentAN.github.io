@@ -8,7 +8,7 @@ export const formatNumber = num => {
     return `${(num * 100).toFixed(2)}%`;
   }
   if (num < K) {
-    return num;
+    return Math.round(num) === num ? num : num.toFixed(2);
   }
   if (num < M) {
     return `${(num / K).toFixed(2)}K`;

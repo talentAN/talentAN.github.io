@@ -57,21 +57,28 @@ const tables = [
 const Contact = () => {
   const filteredData = {};
   let total = 0;
+  let total_time = 0;
   data.forEach(d => {
-    const [path, date, pageViews] = d;
+    const [path, date, pageViews, avgTimeOnPage] = d;
     filteredData[date] = filteredData[date] || 0;
     filteredData[date] += pageViews * 1;
+
     total += pageViews * 1;
+    total_time += pageViews * avgTimeOnPage;
   });
 
   const layouts = {
     lg: [
-      { i: 'total', x: 0, y: 0, w: 6, h: 5, static: false },
-      { i: 'last_year', x: 6, y: 0, w: 24, h: 5, static: false },
+      { i: 'total', x: 0, y: 0, w: 8, h: 3, static: false },
+      { i: 'total_time', x: 8, y: 0, w: 8, h: 3, static: false },
+      { i: 'total_article', x: 16, y: 0, w: 8, h: 3, static: false },
+      { i: 'last_year', x: 0, y: 3, w: 24, h: 5, static: false },
     ],
     sm: [
-      { i: 'total', x: 0, y: 0, w: 12, h: 5, static: true },
-      { i: 'last_year', x: 0, y: 5, w: 12, h: 5, static: true },
+      { i: 'total', x: 0, y: 0, w: 12, h: 3, static: true },
+      { i: 'total_time', x: 0, y: 3, w: 12, h: 3, static: true },
+      { i: 'total_article', x: 0, y: 6, w: 12, h: 3, static: true },
+      { i: 'last_year', x: 0, y: 9, w: 12, h: 5, static: true },
     ],
   };
   return (
@@ -95,6 +102,16 @@ const Contact = () => {
             <div key="total">
               <LayoutWrapper title="累计访问量">
                 <NumberChart data={total} />
+              </LayoutWrapper>
+            </div>
+            <div key="total_time">
+              <LayoutWrapper title="累计阅读时长(h)">
+                <NumberChart data={total_time / 3600} />
+              </LayoutWrapper>
+            </div>
+            <div key="total_article">
+              <LayoutWrapper title="累计文章数">
+                <NumberChart data={25} />
               </LayoutWrapper>
             </div>
             <div key="last_year">
