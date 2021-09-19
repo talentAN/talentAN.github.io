@@ -1,16 +1,18 @@
 import React from 'react';
 import { Layout } from 'antd';
+
+import { Responsive, WidthProvider } from 'react-grid-layout';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
+import LayoutWrapper from '../../components/LayoutWrapper';
 import HeatChart from '../../components/HeatChart';
+import NumberChart from '../../components/Charts/Number';
+import { WIDTH_MOBILE } from '../../configs/layout';
 import { data } from '../../../googleAnalytics/all';
+import 'react-grid-layout/css/styles.css';
 
-/**
- * 下期：
- * - 支持更多图标
- * - 支持crossfilter联动
- */
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 /**
  *
@@ -27,12 +29,15 @@ import { data } from '../../../googleAnalytics/all';
 const tables = [
   {
     name: '整体阅读量',
+    type: 'number',
   },
   {
     name: '累计阅读时长',
+    type: 'number',
   },
   {
     name: '每日阅读量',
+    type: 'HeatChart',
     dimension: 'date',
     measure: 'count',
   },
@@ -51,12 +56,24 @@ const tables = [
 
 const Contact = () => {
   const filteredData = {};
+  let total = 0;
   data.forEach(d => {
     const [path, date, pageViews] = d;
     filteredData[date] = filteredData[date] || 0;
     filteredData[date] += pageViews * 1;
+    total += pageViews * 1;
   });
 
+  const layouts = {
+    lg: [
+      { i: 'total', x: 0, y: 0, w: 6, h: 5, static: true },
+      { i: 'last_year', x: 6, y: 0, w: 24, h: 5, static: true },
+    ],
+    sm: [
+      { i: 'total', x: 0, y: 0, w: 12, h: 5, static: true },
+      { i: 'last_year', x: 0, y: 5, w: 12, h: 5, static: true },
+    ],
+  };
   return (
     <Layout className="outerPadding">
       <Layout className="container">
@@ -65,7 +82,29 @@ const Contact = () => {
         <SidebarWrapper>
           <div className="marginTopTitle">
             <h1 className="titleSeparate">统计</h1>
-            <HeatChart data={filteredData} />
+          </div>
+          <ResponsiveGridLayout
+            breakpoints={{ lg: 800, sm: WIDTH_MOBILE }}
+            cols={{ lg: 30, sm: 12 }}
+            layouts={layouts}
+            rowHeight={30}
+            isDraggable={true}
+            verticalCompact={true}
+            margin={[8, 8]}
+          >
+            <div key="total">
+              <LayoutWrapper title="累计访问量">
+                <NumberChart data={total} />
+              </LayoutWrapper>
+            </div>
+            <div key="last_year">
+              <LayoutWrapper key="last_year" title="近一年访问日期分布">
+                <HeatChart data={filteredData} />
+              </LayoutWrapper>
+            </div>
+          </ResponsiveGridLayout>
+          <div style={{ visibility: 'hidden', wordBreak: 'break-all' }}>
+            临时方案。屏幕宽度渐变RGL会忽然变小，有空看看啥问题
           </div>
         </SidebarWrapper>
       </Layout>

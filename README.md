@@ -2,6 +2,8 @@ feature：
 
 - CI 增量运行
 - 文章列表增量加载（暂时还好）
+- 统计分析（crossfilter?）
+- 页面性能评估优化
 
 content：
 

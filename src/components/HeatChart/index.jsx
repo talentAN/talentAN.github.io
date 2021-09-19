@@ -77,16 +77,11 @@ const HeatChart = props => {
   const { data } = props;
   const startSunday = _getStartDate();
   const allDates = _getAllDate(startSunday);
-  const { min, max, total } = _getExtends(data);
+  const { min, max } = _getExtends(data);
   const colorCalculator = _colorGenerator(min, max);
 
   return (
     <div className={style.root}>
-      <p>
-        去年累计
-        <span style={{ fontWeight: 'bold', fontSize: '20px', margin: '0 4px' }}>{total}</span>
-        次访问
-      </p>
       <div className={style.wrapper}>
         <svg width={722} height={112}>
           <g transform="translate(10, 20)">
