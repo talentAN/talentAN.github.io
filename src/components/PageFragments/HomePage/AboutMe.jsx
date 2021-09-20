@@ -37,17 +37,19 @@ const AboutMe = () => {
           前端工程师。
         </p>
         <p>
+          详见这篇
+          <Link to={'/blog/from-hr-to-developer'}>《HR转型研发那些事儿》</Link>
+        </p>
+        <p>
           除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪
         </p>
         <p>
-          强烈推荐两个系列文章：
+          网站统计数据，可以点击
+          <Link to={'/static'}>这里</Link>查看，
           <Link to={'/tags/Personal%20Development%20for%20Smart%20People'}>
             《聪明人的个人发展》
           </Link>
-          、<Link to={'/tags/工程往事'}>《工程往事》</Link>。
-        </p>
-        <p>
-          网站相关统计数据，可以点击<Link to={'/static'}>这里</Link>查看 ~
+          是目前最热门系列~
         </p>
         <p>
           微信公众号
