@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人发展', 'Oneness', '一体性']
 prePage: 'blog/translation/pdfsp/chapter_3'
 nextPage: 'blog/translation/pdfsp/chapter_5'
-totalCount: 36
+totalCount: 39
 ---
 
 > _“世界上的差异只有程度上的，而没有种类上的，因为一体性是一切的秘密。”— SWAMI VlVEKANANDA_
