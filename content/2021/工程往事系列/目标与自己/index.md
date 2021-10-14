@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/summary'
 nextPage: 'blog/smart-engineering/purpose-2'
-totalCount: 3
+totalCount: 5
 ---
 
 剥去所谓的概念、流程、规范，工程就是从“想要” => “得到”的过程。
