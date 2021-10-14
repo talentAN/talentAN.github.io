@@ -62,7 +62,7 @@ const Post = ({ data }) => {
               appId="54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz"
               appKey="aijtas9PQHTSFT9y53JTquND"
               path={path}
-              placeholder="没启用验证码，相信你不会恶意发评论 ~"
+              placeholder="没启用验证码，相信你不会恶意留言🤓"
               highlight={false}
               meta={['nick', 'mail']}
               avatar={'mp'} // 头像
