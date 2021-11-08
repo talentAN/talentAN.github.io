@@ -17,7 +17,7 @@ module.exports = {
   tags: {
     'Personal Development for Smart People': {
       name: 'Personal Development for Smart People',
-      description: '聪明人的个人发展，追谏认证 ✔️。',
+      description: '聪明人的个人成长，追谏认证 ✔️。',
       color: '#142f83',
     },
     工程往事: {
@@ -59,7 +59,7 @@ module.exports = {
   keywords: [
     'talentan',
     '追谏',
-    '个人发展',
+    '个人成长',
     'Personal Development for Smart People',
     '前端',
     '转型',

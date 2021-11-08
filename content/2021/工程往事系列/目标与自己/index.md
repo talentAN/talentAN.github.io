@@ -77,7 +77,7 @@ totalCount: 6
 
 有时间可以琢磨下：如果没有名利的收益，哪些事情是我们依然愿意做的呢？
 
-> _比如我翻译[聪明人的个人发展](/tags/Personal%20Development%20for%20Smart%20People)、试图输出[工程往事系列](/tags/工程往事)..._
+> _比如我翻译[聪明人的个人成长](/tags/Personal%20Development%20for%20Smart%20People)、试图输出[工程往事系列](/tags/工程往事)..._
 
 **这些事的背后藏着我们的人生目的。**
 

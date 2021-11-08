@@ -4,9 +4,9 @@ path: blog/translation/pdfsp/chapter_5
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-06-20
-excerpt: 《聪明人的个人发展》 —— 第5章 掌权
+excerpt: 《聪明人的个人成长》 —— 第5章 掌权
 isTranslated: true
-keywords: ['个人发展', 'Authority', '掌权']
+keywords: ['个人成长', 'Authority', '掌权']
 prePage: 'blog/translation/pdfsp/chapter_4'
 nextPage: 'blog/translation/pdfsp/chapter_6'
 totalCount: 21

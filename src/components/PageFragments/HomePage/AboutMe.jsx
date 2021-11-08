@@ -47,7 +47,7 @@ const AboutMe = () => {
           网站统计数据，可以点击
           <Link to={'/static'}>这里</Link>查看，
           <Link to={'/tags/Personal%20Development%20for%20Smart%20People'}>
-            《聪明人的个人发展》
+            《聪明人的个人成长》
           </Link>
           是目前最热门系列~
         </p>

@@ -4,15 +4,15 @@ path: blog/translation/pdfsp/afterword
 tags: ['Personal Development for Smart People']
 cover: ./cover.jpg
 date: 2021-08-07
-excerpt: 《聪明人的个人发展》 —— 后记
+excerpt: 《聪明人的个人成长》 —— 后记
 isTranslated: true
-keywords: ['个人发展', 'Afterword', '后记']
+keywords: ['个人成长', 'Afterword', '后记']
 prePage: 'blog/translation/pdfsp/chapter_13'
 nextPage: 'blog/from-hr-to-developer'
 totalCount: 27
 ---
 
-聪明人的个人发展是使你与真实、爱和力量的核心原则（以及延伸的次要原则）更加一致的方法。当你的思想和行动是真实的、有爱的、强大的，你就会有意识地、聪明地生活。这是你作为一个人所能做的最好的事情。
+聪明人的个人成长是使你与真实、爱和力量的核心原则（以及延伸的次要原则）更加一致的方法。当你的思想和行动是真实的、有爱的、强大的，你就会有意识地、聪明地生活。这是你作为一个人所能做的最好的事情。
 
 尽管我很强烈的希望能与你分享这本书中的观点，但这也是我最需要阅读的书。当我遵循第一部分的七项原则时，我的生活就能正常进行。我一直专注于创造性的自我表达，我愿意并有效地服务于他人，我与充实产生共鸣，而且非常快乐和充实。如果我偏离了这条道路，开始违反这些原则，生活就会变得很艰难。我会做出错误的决定，我被问题和障碍所淹没，我从生活模式陷入了生存模式，我感到不适应和有压力。
 

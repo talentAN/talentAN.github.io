@@ -4,9 +4,9 @@ path: blog/translation/pdfsp/chapter_13
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-08-06
-excerpt: 《聪明人的个人发展》 —— 第13章 精神
+excerpt: 《聪明人的个人成长》 —— 第13章 精神
 isTranslated: true
-keywords: ['个人发展', 'Spirituality', '精神']
+keywords: ['个人成长', 'Spirituality', '精神']
 prePage: 'blog/translation/pdfsp/chapter_12'
 nextPage: 'blog/translation/pdfsp/afterword'
 totalCount: 16
