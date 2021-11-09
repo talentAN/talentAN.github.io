@@ -51,7 +51,7 @@ totalCount: 9
 
 **我想把自己的感受，或者说从工程视角看到的世界描述出来。**
 
-我知道，它会像[聪明人的个人发展](/tags/Personal%20Development%20for%20Smart%20People)一样，指导我们过更“机智”的生活。
+我知道，它会像[聪明人的个人成长](/tags/Personal%20Development%20for%20Smart%20People)一样，指导我们过更“机智”的生活。
 
 ### 如何阅读此系列
 

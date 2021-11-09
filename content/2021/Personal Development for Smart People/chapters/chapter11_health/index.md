@@ -4,9 +4,9 @@ path: blog/translation/pdfsp/chapter_11
 tags: ['Personal Development for Smart People']
 cover: ./cover.png
 date: 2021-08-01
-excerpt: 《聪明人的个人发展》 —— 第11章 健康
+excerpt: 《聪明人的个人成长》 —— 第11章 健康
 isTranslated: true
-keywords: ['个人发展', 'Health', '健康']
+keywords: ['个人成长', 'Health', '健康']
 prePage: 'blog/translation/pdfsp/chapter_10'
 nextPage: 'blog/translation/pdfsp/chapter_12'
 totalCount: 17
