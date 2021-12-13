@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: ''
 nextPage: 'blog/smart-engineering/purpose-1'
-totalCount: 9
+totalCount: 11
 ---
 
 2019 年 11 月，「工程往事」四个字第一次出现在我的日志中。
