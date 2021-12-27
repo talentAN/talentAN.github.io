@@ -1,15 +1,15 @@
 ---
-title: 工程往事系列 —— 目的 & 社会
+title: 目的 & 社会
 path: blog/smart-engineering/purpose-2
 tags: [工程往事]
-cover: ./cover.png
+cover: ./cover.jpeg
 date: 2021-10-13
-excerpt: '用目的视角看社会。'
+excerpt: '用目的视角看社会'
 hot: false
 recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/purpose-1'
-nextPage: ''
+nextPage: 'blog/smart-engineering/art-of-trick'
 totalCount: 11
 ---
 
@@ -69,9 +69,9 @@ totalCount: 11
 
 ### 再挖挖
 
-如果说一些事件、现象，还能稍稍让我们想想其背后的目的。
+一些事件、现象，可能还会稍稍让我们想想其背后的目的。
 
-一些司空见惯的东西，可能就被我们下意识忽略了。
+一些司空见惯的东西，却可能被下意识忽略了。
 
 比如风俗、习惯、传统、道德、法律、价值观、政治体系...
 
@@ -116,7 +116,7 @@ totalCount: 11
 
 想看清自己和社会，「目的」是个有效的工具。
 
-但如果你因为有一把锤子，于是看啥都是钉子，那你可真是个“锤子”[^注2]。
+**但如果你因为自己有一把锤子，于是看啥都是钉子，那你可真是个“锤子”**[^注2]。
 
 有了目标，就该动手了。
 
