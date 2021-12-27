@@ -111,7 +111,7 @@ const Contact = () => {
             </div>
             <div key="total_article">
               <LayoutWrapper title="累计文章数">
-                <NumberChart data={26} />
+                <NumberChart data={27} />
               </LayoutWrapper>
             </div>
             <div key="last_year">
