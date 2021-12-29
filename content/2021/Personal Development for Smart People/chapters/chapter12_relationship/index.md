@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'RelationShips', '亲密关系']
 prePage: 'blog/translation/pdfsp/chapter_11'
 nextPage: 'blog/translation/pdfsp/chapter_13'
-totalCount: 27
+totalCount: 29
 ---
 
 > _最惨的孤独是缺乏真诚的友谊。 — SIR FRANCIS BACON_
