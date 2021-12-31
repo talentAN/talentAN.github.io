@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/purpose-2'
 nextPage: ''
-totalCount: 1
+totalCount: 3
 ---
 
 解决了首要问题（**我的目的是啥？**）后，接下来就是想办法实现它。
