@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 12
       # 获取GA数据
-      - run: npm install googleapis
+      - run: npm install googleapis moment
       - run: node bin/setAnalyticsData.js
       # 更新博客数据
       - run: node bin/updateContent.js

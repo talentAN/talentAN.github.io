@@ -9,7 +9,7 @@ import LayoutWrapper from '../../components/LayoutWrapper';
 import HeatChart from '../../components/HeatChart';
 import NumberChart from '../../components/Charts/Number';
 import { WIDTH_MOBILE } from '../../configs/layout';
-import { data } from '../../../googleAnalytics/all';
+import { data } from '../../../googleAnalytics/static';
 import 'react-grid-layout/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -25,6 +25,8 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
  *  - 累计阅读时间
  *  - 最热
  *  - 表太多估计要用到immer
+ *
+ * - 数据量太大，统计页面加载太慢，先用简单数据吧。crossfilter后面再说
  */
 const tables = [
   {
@@ -55,18 +57,7 @@ const tables = [
 ];
 
 const Contact = () => {
-  const filteredData = {};
-  let total = 0;
-  let total_time = 0;
-  data.forEach(d => {
-    const [path, date, pageViews, avgTimeOnPage] = d;
-    filteredData[date] = filteredData[date] || 0;
-    filteredData[date] += pageViews * 1;
-
-    total += pageViews * 1;
-    total_time += pageViews * avgTimeOnPage;
-  });
-
+  const { filteredData,total,total_time } = data;
   const layouts = {
     lg: [
       { i: 'total', x: 0, y: 0, w: 8, h: 3, static: false },
