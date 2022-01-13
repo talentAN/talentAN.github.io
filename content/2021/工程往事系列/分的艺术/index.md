@@ -3,12 +3,12 @@ title: 工程的“套路”
 path: blog/smart-engineering/art-of-trick
 tags: [工程往事]
 cover: ./cover.jpeg
-date: 2021-12-25
+date: 2022-02-10
 excerpt: '聊聊工程领域的基本“套路”'
 hot: false
 recommended: false
 keywords: ['工程往事']
-prePage: 'blog/smart-engineering/purpose-2'
+prePage: 'blog/smart-engineering/move-now'
 nextPage: ''
 totalCount: 3
 ---
@@ -127,9 +127,11 @@ Life will find its way -->
 
 还有川建国同志感人肺腑的呐喊：“China！！！China！！！China！！！”
 
-问题转移是再常见不过的手段。只是有人玩得好，有人玩的差 😆
+问题转移是再常见不过的手段。虽然不治根，但至少能治标一时。只是有人玩得好，有人玩的差罢了 😆
 
 ### 套路 3 —— 强化自己
+
+想想《小马过河》的故事，同样的问题，对老牛、小马、松鼠的难度是不一样的。
 
 问题和能力是相对的。能力强，问题就小；能力弱，问题就大。
 
@@ -151,7 +153,7 @@ Life will find its way -->
 
 别给自己太多限制，勿忘“初心”即可。
 
-> _课后作业： 以上手段可用来解决问题，请结合自己的实际学习、工作、生活，思考如何创造问题？_
+> _课后作业： 以上手段可用来解决问题，请结合自己的实际学习、工作、生活，思考如何“创造”问题？_
 
 [^注1]: [啥是阿里味？](https://zhuanlan.zhihu.com/p/165115628)
 [^注2]: [饿了么推出“多等 5 分钟”功能，看似人性化，实际上是甩锅给消费者](https://new.qq.com/omn/20200910/20200910A0O8PX00.html?pc)

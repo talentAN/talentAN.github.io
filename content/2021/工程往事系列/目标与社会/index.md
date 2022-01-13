@@ -9,7 +9,7 @@ hot: false
 recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/purpose-1'
-nextPage: 'blog/smart-engineering/art-of-trick'
+nextPage: 'blog/smart-engineering/move-now'
 totalCount: 13
 ---
 
@@ -79,8 +79,8 @@ totalCount: 13
 
 - 为啥左撇子也用右手写字？
 - 西晋为啥以“孝”治天下？因为自己欺人孤儿寡母，篡位起家，没脸提“忠”么？🤣
-- 记得之前有个“投机倒把罪”，现在为啥取消了？
-- 零几年那会儿“啃老”貌似还是个羞耻的事儿，现在为啥不提了？
+- 曾经的“投机倒把罪”，为啥被取消了？
+- 零几年那会儿“啃老”还是个羞人的事儿，现在为啥不提了？
 - ...
 
 **这些东西的形成有一定原因，其制订的过程和结果，有值得我们学习和关注的地方。**
