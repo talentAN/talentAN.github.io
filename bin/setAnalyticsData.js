@@ -2,11 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const process = require('process');
 const { google } = require('googleapis');
-const moment = require('moment');
+// const moment = require('moment');
 // 常量
 const IDS = 'ga:239799573';
 const startDate = '2021-03-01';
-const endDate = 'today';
+const today = 'today';
 const dimensions = {
   pagePath: 'ga:pagePath',
   date: 'ga:date',
@@ -21,17 +21,16 @@ const metrics = {
 const blog_page_params = {
   ids: IDS,
   'start-date': startDate,
-  'end-date': endDate,
+  'end-date': today,
   metrics: metrics.pageViews,
   dimensions: dimensions.pagePath,
 };
 
 // 统计数据截止到上一天
-const lastday = moment().subtract(1,'days').format('YYYY-MM-DD');
 const static_page_params = {
   ids: IDS,
-  'start-date': lastday,
-  'end-date': lastday,
+  'start-date': today,
+  'end-date': today,
   metrics: Object.values(metrics).join(','),
   dimensions: Object.values(dimensions).join(','),
 };
@@ -67,6 +66,7 @@ const setStaticPageData = rows => {
   console.info('开始 => 增量写入「统计页」访问数据');
   // 获取文件存储路径
   const pre = 'export const data = ';
+  // const path_all = path.join(__dirname, '../googleAnalytics/all.js');
   const path_all = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js');
   // 获取原始数据, 生成新数据
   const originData = fs.readFileSync(path_all, 'utf8');
@@ -77,6 +77,7 @@ const setStaticPageData = rows => {
   
   console.info('开始 => 增量计算「统计页」展示数据');
   // 计算好的派生数据
+  // const path_static = path.join(__dirname, '../googleAnalytics/static.js');
   const path_static = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/static.js');
   const static_data = JSON.parse(fs.readFileSync(path_static, 'utf8').split(pre)[1]);
   rows.forEach(row=>{
@@ -99,9 +100,6 @@ const setStaticPageData = rows => {
 
 const setAnalyticsData = async () => {
   const { client_email, private_key } = process.env;
-  // const client_email =  "github-action";
-  // const private_key = "-----BEGIN PRIVATE KEY-----";
-
   const jwtClient = new google.auth.JWT(
     client_email,
     null,
