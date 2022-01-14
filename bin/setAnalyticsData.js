@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const process = require('process');
 const { google } = require('googleapis');
-// const moment = require('moment');
+const moment = require('moment');
 // 常量
 const IDS = 'ga:239799573';
 const startDate = '2021-03-01';
@@ -27,10 +27,11 @@ const blog_page_params = {
 };
 
 // 统计数据截止到上一天
+const lastday = moment().format('YYYY-MM-DD');
 const static_page_params = {
   ids: IDS,
-  'start-date': today,
-  'end-date': today,
+  'start-date': lastday,
+  'end-date': lastday,
   metrics: Object.values(metrics).join(','),
   dimensions: Object.values(dimensions).join(','),
 };
