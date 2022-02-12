@@ -44,8 +44,8 @@ const AboutMe = () => {
           除了技术，对历史和教育较有兴趣。受媳妇儿影响，对法律亦略有涉猎。一路狂奔在成为新一代斜杠青年的路上。🤪🤪
         </p>
         <p>
-          网站统计数据，可以点击
-          <Link to={'/static'}>这里</Link>查看，
+          网站统计数据，可以
+          <Link to={'/static'}>点击这里</Link>查看，
           <Link to={'/tags/Personal%20Development%20for%20Smart%20People'}>
             《聪明人的个人成长》
           </Link>
