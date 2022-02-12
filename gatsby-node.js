@@ -56,7 +56,7 @@ exports.createPages = ({ actions, graphql }) => {
     const allTags = [];
     defaultPosts.forEach(({ node }) => {
       node.frontmatter.tags.forEach(tag => {
-        if (allTags.indexOf(tag) === -1) allTags.push(tag);
+        if (allTags.indexOf(tag) === -1 && tag !== '酝酿池') allTags.push(tag);
       });
     });
     allTags.forEach(tag => {
