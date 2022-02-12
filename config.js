@@ -45,11 +45,11 @@ module.exports = {
     //   description: '只要思想不滑坡，办法总比困难多🤔',
     //   color: '#04a9e8',
     // },
-    酝酿池: {
-      name: '酝酿池',
-      description: '不在博文中展示，一锅大杂烩，不定何时就从这里蹦出了灵感。',
-      color: '#fa541c',
-    },
+    // 酝酿池: {
+    //   name: '酝酿池',
+    //   description: '不在博文中展示，一锅大杂烩，不定何时就从这里蹦出了灵感。',
+    //   color: '#fa541c',
+    // },
     未归类: {
       name: '未归类',
       description: '',

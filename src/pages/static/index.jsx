@@ -57,7 +57,7 @@ const tables = [
 ];
 
 const Contact = () => {
-  const { filteredData,total,total_time } = data;
+  const { filteredData, total, total_time } = data;
   const layouts = {
     lg: [
       { i: 'total', x: 0, y: 0, w: 8, h: 3, static: false },
@@ -102,7 +102,7 @@ const Contact = () => {
             </div>
             <div key="total_article">
               <LayoutWrapper title="累计文章数">
-                <NumberChart data={27} />
+                <NumberChart data={28} />
               </LayoutWrapper>
             </div>
             <div key="last_year">
