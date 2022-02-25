@@ -9,7 +9,7 @@ hot: true
 isTranslated: false
 keywords: ['转行', '职业', '工作']
 prePage: 'blog/translation/pdfsp/afterword'
-nextPage: ''
+nextPage: 'blog/smart-engineering/summary'
 totalCount: 85
 ---
 
