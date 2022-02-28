@@ -4,7 +4,7 @@ path: blog/smart-engineering/purpose-2
 tags: [工程往事]
 cover: ./cover.jpeg
 date: 2021-10-13
-excerpt: '用目的视角看社会'
+excerpt: '社会上充满了别人的目的，希望我们不会被洗脑。'
 hot: false
 recommended: false
 keywords: ['工程往事']

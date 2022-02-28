@@ -4,7 +4,7 @@ path: blog/smart-engineering/summary
 tags: [工程往事]
 cover: ./cover.jpeg
 date: 2021-09-06
-excerpt: ''
+excerpt: '这个系列的由来，以及想达成的目标。'
 hot: false
 recommended: false
 keywords: ['工程往事']

@@ -4,7 +4,7 @@ path: blog/smart-engineering/purpose-1
 tags: [工程往事]
 cover: ./cover.jpeg
 date: 2021-09-15
-excerpt: '用目的视角看自己'
+excerpt: '如果把人生看成一个工程，它的目的是什么呢？'
 hot: false
 recommended: false
 keywords: ['工程往事']

@@ -4,7 +4,7 @@ path: blog/from-hr-to-developer
 tags: [人生]
 cover: ./cover.png
 date: 2021-08-24
-excerpt: 老夫曾为HR，后来转型搞研发。欲知此间有趣事，进来看看吧😝
+excerpt: 冲这个标题也得进来看看不是？
 hot: true
 isTranslated: false
 keywords: ['转行', '职业', '工作']
