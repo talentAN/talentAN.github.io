@@ -17,12 +17,12 @@ module.exports = {
   tags: {
     'Personal Development for Smart People': {
       name: 'Personal Development for Smart People',
-      description: '聪明人的个人成长，追谏认证 ✔️。',
+      description: '金玉其中，败絮其外。被标题耽误的书籍典型，追谏认证 ✔️。',
       color: '#142f83',
     },
     工程往事: {
       name: '工程往事',
-      description: '工程 <=> 生活 <=> 历史',
+      description: '以“工程”视角看生活，别有一番风味。',
       color: '#e89c45',
     },
     人生: {

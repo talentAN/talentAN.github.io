@@ -78,12 +78,8 @@ const Post = ({ data }) => {
               </div>
             )}
             <div className={style.announcement}>
-              <FeatherIcon
-                size="19"
-                icon="alert-triangle"
-                style={{ marginRight: '8px', color: '#fa8c16' }}
-              />
               <span className={style.label}>
+                <span style={{ marginRight: '8px', color: '#fa8c16', fontSize: '15px' }}>⚠️</span>
                 {isTranslated
                   ? `著作权归原作者所有，本译文仅供学习分享，禁做商用。`
                   : `著作权归作者所有。商业转载请联系作者获得授权；非商业转载请注明作者、出处。`}

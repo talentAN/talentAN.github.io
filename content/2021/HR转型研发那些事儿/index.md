@@ -6,6 +6,7 @@ cover: ./cover.png
 date: 2021-08-24
 excerpt: 冲这个标题也得进来看看不是？
 hot: true
+isTop: false
 isTranslated: false
 keywords: ['转行', '职业', '工作']
 prePage: 'blog/translation/pdfsp/afterword'

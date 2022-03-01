@@ -14,7 +14,8 @@ const PostCard = props => {
   } = props;
 
   const {
-    hot = false,
+    isTop = false, // 置顶
+    hot = false, // 热门
     recommended = false,
     isTranslated = false,
     title: _title,
@@ -52,6 +53,7 @@ const PostCard = props => {
             <span className={style.totalCount}>{label_viewed}</span>
           </p>
           <h3>
+            {isTop && <span style={{ marginRight: '4px' }}>📌</span>}
             {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
             {showRecommended && <span style={{ marginRight: '4px' }}>👍</span>}
             {title}
