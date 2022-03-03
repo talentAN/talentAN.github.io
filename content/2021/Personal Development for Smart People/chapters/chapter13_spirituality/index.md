@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter13 Spirituality
 path: blog/translation/pdfsp/chapter_13
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-08-06
 excerpt: 《聪明人的个人成长》 —— 第13章 精神

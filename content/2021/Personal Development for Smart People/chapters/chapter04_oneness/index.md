@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter4 Oneness
 path: blog/translation/pdfsp/chapter_4
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-06-16
 excerpt: 《聪明人的个人成长》 —— 第4章 一体性

@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter11 Health
 path: blog/translation/pdfsp/chapter_11
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-08-01
 excerpt: 《聪明人的个人成长》 —— 第11章 健康

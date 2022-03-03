@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter3 Power
 path: blog/translation/pdfsp/chapter_3
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-06-05
 excerpt: 《聪明人的个人成长》 —— 第3章 力量

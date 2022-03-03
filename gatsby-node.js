@@ -60,8 +60,10 @@ exports.createPages = ({ actions, graphql }) => {
       });
     });
     allTags.forEach(tag => {
+      // 想修改一下「聪明人的个人成长」标签名称，但为了避免有人收藏过页面导致无法访问，所以保持路径不变。特殊处理下。
+      const page_path = tag === '聪明人的个人成长' ? 'Personal Development for Smart People' : tag;
       createPage({
-        path: utils.resolvePageUrl(config.pages.tag, tag),
+        path: utils.resolvePageUrl(config.pages.tag, page_path),
         component: path.resolve('src/templates/tags/index.jsx'),
         context: {
           tag,

@@ -15,8 +15,8 @@ module.exports = {
   contactFormUrl: 'https://getform.io/f/6b5df9e9-cf7a-481d-a952-3b9a65c7210b', // 联系表单
   googleAnalyticTrackingId: 'UA-192824662-1', // google追踪
   tags: {
-    'Personal Development for Smart People': {
-      name: 'Personal Development for Smart People',
+    聪明人的个人成长: {
+      name: '聪明人的个人成长',
       description: '金玉其中，败絮其外。被标题耽误的书籍典型，追谏认证 ✔️。',
       color: '#142f83',
     },
@@ -40,16 +40,6 @@ module.exports = {
       description: '想改名叫全端 —。—',
       color: '#f0da50',
     },
-    // 策论: {
-    //   name: '策论',
-    //   description: '只要思想不滑坡，办法总比困难多🤔',
-    //   color: '#04a9e8',
-    // },
-    // 酝酿池: {
-    //   name: '酝酿池',
-    //   description: '不在博文中展示，一锅大杂烩，不定何时就从这里蹦出了灵感。',
-    //   color: '#fa541c',
-    // },
     未归类: {
       name: '未归类',
       description: '',
@@ -61,6 +51,7 @@ module.exports = {
     '追谏',
     '个人成长',
     'Personal Development for Smart People',
+    '工程往事',
     '前端',
     '转型',
     '工程往事',

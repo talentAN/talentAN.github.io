@@ -12,7 +12,10 @@ const TagCard = props => {
   return (
     <Link
       className={style.tagCard}
-      to={Utils.resolvePageUrl(tagPage, name)}
+      to={Utils.resolvePageUrl(
+        tagPage,
+        name === '聪明人的个人成长' ? 'Personal Development for Smart People' : name
+      )}
       onClick={() => trackTag(Utils.resolvePageUrl(tagPage, name))}
     >
       <div className={style.tagCard}>

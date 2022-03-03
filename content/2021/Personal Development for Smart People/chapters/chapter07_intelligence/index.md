@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter7 Intelligence
 path: blog/translation/pdfsp/chapter_7
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-07-16
 excerpt: 《聪明人的个人成长》 —— 第7章 智慧

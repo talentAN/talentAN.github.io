@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter10 Money
 path: blog/translation/pdfsp/chapter_10
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-07-29
 excerpt: 《聪明人的个人成长》 —— 第10章 金钱

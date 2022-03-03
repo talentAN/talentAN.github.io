@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Afterword
 path: blog/translation/pdfsp/afterword
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.jpg
 date: 2021-08-07
 excerpt: 《聪明人的个人成长》 —— 后记

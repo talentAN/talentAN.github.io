@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter6 Courage
 path: blog/translation/pdfsp/chapter_6
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-07-13
 excerpt: 《聪明人的个人成长》 —— 第6章 勇气

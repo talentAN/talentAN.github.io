@@ -1,7 +1,7 @@
 ---
 title: Personal Development for Smart People —— Chapter5 Authority
 path: blog/translation/pdfsp/chapter_5
-tags: ['Personal Development for Smart People']
+tags: ['聪明人的个人成长']
 cover: ./cover.png
 date: 2021-06-20
 excerpt: 《聪明人的个人成长》 —— 第5章 掌权
