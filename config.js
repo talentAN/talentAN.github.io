@@ -25,8 +25,8 @@ module.exports = {
       description: '以“工程”视角看生活，别有一番风味。',
       color: '#e89c45',
     },
-    人生: {
-      name: '人生',
+    职业: {
+      name: '职业',
       description: '后之视今，亦犹今之视昔。',
       color: '#000',
     },

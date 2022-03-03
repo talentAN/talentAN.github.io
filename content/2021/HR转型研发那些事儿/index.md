@@ -1,7 +1,7 @@
 ---
 title: HR转型研发那些事儿
 path: blog/from-hr-to-developer
-tags: ['聪明人的个人成长']
+tags: ['聪明人的个人成长', '职业']
 cover: ./cover.png
 date: 2021-08-24
 excerpt: 冲这个标题也得进来看看不是？

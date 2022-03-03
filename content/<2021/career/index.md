@@ -1,7 +1,7 @@
 ---
 title: 青年选择职业时的考虑
 path: blog/career-consider-for-young
-tags: [人生]
+tags: [职业]
 cover: ./cover.png
 date: 2017-05-19
 excerpt: 毕业三年对工作的反思，点燃了日后转型研发的小火苗。首发于「简书」
