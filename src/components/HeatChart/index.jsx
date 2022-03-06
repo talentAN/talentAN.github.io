@@ -142,12 +142,11 @@ const HeatChart = props => {
             })}
             {['Mon', 'Wed', 'Fri'].map((w, i) => {
               return (
-                <text text-anchor="start" className={style.axisLabel} dx="-10" dy={22 + i * 25}>
+                <text textAnchor="start" className={style.axisLabel} dx="-10" dy={22 + i * 25}>
                   {w}
                 </text>
               );
             })}
-            {}
           </g>
         </svg>
       </div>
@@ -156,7 +155,7 @@ const HeatChart = props => {
         {new Array(5).fill(1).map((item, i) => {
           const fill = colorCalculator(min + ((max - min) * i) / 4);
           return (
-            <svg width={10} height={10} style={{ marginRight: '4px' }}>
+            <svg width={10} height={10} style={{ marginRight: '4px' }} key={i}>
               <rect width={10} height={10} rx={2} ry={2} className={style.rect} style={{ fill }} />
             </svg>
           );
