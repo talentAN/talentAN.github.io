@@ -1,5 +1,5 @@
 ---
-title: 代码质量好一点，同事爱你多一点😚
+title: 代码质量好一点，同事爱你多一点
 path: blog/please-write-better-code
 tags: [前端]
 cover: ./cover.png

@@ -1,5 +1,5 @@
 ---
-title: 开张咯😇
+title: 开张咯
 path: blog/first-blog
 tags: [未归类]
 cover: ./talentan.jpg

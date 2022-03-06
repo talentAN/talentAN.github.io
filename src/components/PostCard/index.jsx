@@ -2,7 +2,7 @@ import React from 'react';
 import moment from 'moment';
 import { Link } from 'gatsby';
 import Utils from '../../utils/pageUtils';
-import { formatNumber } from '../../utils/tools';
+import { getPostSubtract } from '../../utils/tools';
 import { trackBlog } from '../../track';
 import style from './postCard.module.less';
 
@@ -13,25 +13,9 @@ const PostCard = props => {
     },
   } = props;
 
-  const {
-    isTop = false, // 置顶
-    hot = false, // 热门
-    recommended = false,
-    isTranslated = false,
-    title: _title,
-    excerpt = '',
-    tags = [],
-    date = '',
-    path,
-    totalCount,
-  } = frontmatter;
+  const { excerpt = '', tags = [], date = '' } = frontmatter;
 
-  const showHot = !!hot;
-  const showRecommended = !showHot && recommended;
-
-  const title = isTranslated ? `[译] ${_title}` : _title;
-  const contentUrl = Utils.resolvePageUrl(path);
-  const label_viewed = `${formatNumber(totalCount)}阅`;
+  const { title, contentUrl, label_viewed } = getPostSubtract(frontmatter);
 
   return (
     <div className={style.postCard} onClick={() => trackBlog(contentUrl)}>
@@ -52,12 +36,7 @@ const PostCard = props => {
             <span className={style.dateHolder}>{moment(date).format('MMM Do YYYY')}</span>
             <span className={style.totalCount}>{label_viewed}</span>
           </p>
-          <h3>
-            {isTop && <span style={{ marginRight: '4px' }}>📌</span>}
-            {showHot && <span style={{ marginRight: '4px' }}>🔥</span>}
-            {showRecommended && <span style={{ marginRight: '4px' }}>👍</span>}
-            {title}
-          </h3>
+          <h3>{title}</h3>
           <p>{excerpt}</p>
         </Link>
         <p>

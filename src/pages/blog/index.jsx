@@ -1,12 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { graphql } from 'gatsby';
-import { Layout, Row, Col } from 'antd';
+import { Layout, Row, Col, Timeline, Radio } from 'antd';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import PostCard from '../../components/PostCard';
+import TimeLineItem from '../../components/TimeLineItem';
 import SEO from '../../components/Seo';
 
 const Blog = ({ data }) => {
+  const [mode, setMode] = useState('card');
+  const posts = data.allMarkdownRemark.edges.filter(edge => {
+    const { tags, path } = edge.node.frontmatter;
+    return (
+      !tags.some(t => t === '酝酿池') && // 过滤酝酿池的内容
+      path.indexOf('blog/past-versions') !== 0 // 过滤历史版本内容
+    );
+  });
+
   return (
     <Layout className="outerPadding">
       <Layout className="container">
@@ -15,23 +25,33 @@ const Blog = ({ data }) => {
         <SidebarWrapper>
           <div className="marginTopTitle">
             <h1 className="titleSeparate">博文</h1>
+            <span>视图：</span>
+            <Radio.Group
+              name="展示方式"
+              defaultValue={'card'}
+              value={mode}
+              onChange={e => setMode(e.target.value)}
+            >
+              <Radio value={'card'}>卡片</Radio>
+              <Radio value={'timeline'}>时间轴</Radio>
+            </Radio.Group>
           </div>
-          <Row gutter={[20, 20]}>
-            {data.allMarkdownRemark &&
-              data.allMarkdownRemark.edges
-                .filter(edge => {
-                  const { tags, path } = edge.node.frontmatter;
-                  return (
-                    !tags.some(t => t === '酝酿池') && // 过滤酝酿池的内容
-                    path.indexOf('blog/past-versions') !== 0 // 过滤历史版本内容
-                  );
-                })
-                .map((val, key) => (
-                  <Col key={key} xs={24} sm={24} md={12} lg={8}>
-                    <PostCard data={val} />
-                  </Col>
-                ))}
-          </Row>
+          {mode === 'card' && (
+            <Row gutter={[20, 20]}>
+              {posts.map((val, key) => (
+                <Col key={key} xs={24} sm={24} md={12} lg={8}>
+                  <PostCard data={val} />
+                </Col>
+              ))}
+            </Row>
+          )}
+          {mode === 'timeline' && (
+            <Timeline mode={'left'} style={{ marginTop: '16px' }}>
+              {posts.map((val, key) => (
+                <TimeLineItem key={key} data={val} />
+              ))}
+            </Timeline>
+          )}
         </SidebarWrapper>
       </Layout>
     </Layout>
