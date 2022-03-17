@@ -8,7 +8,7 @@ excerpt: 科普文。介绍Babel出现的原因、功能、核心机制和概念
 keywords: ['前端', '工具', '面试', 'babel', 'f2e']
 prePage: ''
 nextPage: ''
-totalCount: 15
+totalCount: 16
 ---
 
 ## Why babel?
