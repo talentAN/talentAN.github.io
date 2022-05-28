@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Career', '职业']
 prePage: 'blog/translation/pdfsp/chapter_8'
 nextPage: 'blog/translation/pdfsp/chapter_10'
-totalCount: 114
+totalCount: 117
 ---
 
 > _“劳动就是有形可见的爱。” — KAHLIL GIBRAN_
