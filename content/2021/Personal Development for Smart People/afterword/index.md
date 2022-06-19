@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Afterword', '后记']
 prePage: 'blog/translation/pdfsp/chapter_13'
 nextPage: 'blog/from-hr-to-developer'
-totalCount: 146
+totalCount: 147
 ---
 
 聪明人的个人成长是使你与真实、爱和力量的核心原则（以及延伸的次要原则）更加一致的方法。当你的思想和行动是真实的、有爱的、强大的，你就会有意识地、聪明地生活。这是你作为一个人所能做的最好的事情。
