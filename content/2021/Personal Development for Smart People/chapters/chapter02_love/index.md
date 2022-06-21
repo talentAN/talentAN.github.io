@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'love', '爱']
 prePage: 'blog/translation/pdfsp/chapter_1'
 nextPage: 'blog/translation/pdfsp/chapter_3'
-totalCount: 457
+totalCount: 461
 ---
 
 > _任何东西都会向你敞开心扉，如果你足够爱它。 —— GEORGE WASHINGTON CARVER_
