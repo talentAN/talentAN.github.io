@@ -12,7 +12,6 @@ module.exports = {
     resume: 'resume',
     tag: 'tags',
   },
-  contactFormUrl: 'https://getform.io/f/6b5df9e9-cf7a-481d-a952-3b9a65c7210b', // 联系表单
   googleAnalyticTrackingId: 'UA-192824662-1', // google追踪
   tags: {
     聪明人的个人成长: {
