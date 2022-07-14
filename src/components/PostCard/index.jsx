@@ -3,7 +3,6 @@ import moment from 'moment';
 import { Link } from 'gatsby';
 import Utils from '../../utils/pageUtils';
 import { getPostSubtract } from '../../utils/tools';
-import { trackBlog } from '../../track';
 import style from './postCard.module.less';
 
 const PostCard = props => {
@@ -18,7 +17,7 @@ const PostCard = props => {
   const { title, contentUrl, label_viewed } = getPostSubtract(frontmatter);
 
   return (
-    <div className={style.postCard} onClick={() => trackBlog(contentUrl)}>
+    <div className={style.postCard}>
       <Link to={contentUrl}>
         <div
           className={style.postCardImg}

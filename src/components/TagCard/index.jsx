@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'gatsby';
-import { trackTag } from '../../track';
 import Config from '../../../config';
 import Utils from '../../utils/pageUtils';
 import style from './tags.module.less';
@@ -16,7 +15,6 @@ const TagCard = props => {
         tagPage,
         name === '聪明人的个人成长' ? 'Personal Development for Smart People' : name
       )}
-      onClick={() => trackTag(Utils.resolvePageUrl(tagPage, name))}
     >
       <div className={style.tagCard}>
         <div

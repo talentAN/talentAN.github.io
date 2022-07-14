@@ -12,7 +12,8 @@ module.exports = {
     resume: 'resume',
     tag: 'tags',
   },
-  googleAnalyticTrackingId: 'UA-192824662-1', // google追踪
+  googleAnalytic_UA_TrackingId: 'UA-192824662-1', // google追踪 => 老UA
+  googleAnalytic_GA4_TrackingId: 'G-7H1PN3Y9HY', // google追踪 => GA4
   tags: {
     聪明人的个人成长: {
       name: '聪明人的个人成长',
