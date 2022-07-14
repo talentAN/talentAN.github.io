@@ -3,7 +3,7 @@ import { Affix, Layout, Row, Col } from 'antd';
 import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
 import { globalHistory } from '@reach/router';
-import { OutboundLink } from 'gatsby-plugin-google-analytics';
+import { OutboundLink } from 'gatsby-plugin-google-gtag';
 import style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
 import { WIDTH_MOBILE } from '../../../configs/layout';

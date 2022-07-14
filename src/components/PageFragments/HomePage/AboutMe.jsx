@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col } from 'antd';
 import { Link } from 'gatsby';
-import { OutboundLink } from 'gatsby-plugin-google-analytics';
+import { OutboundLink } from 'gatsby-plugin-google-gtag';
 import AboutTile from '../../AbouTile';
 import SEO from '../../Seo';
 import QrCode from '../../../images/qr-code.jpg';

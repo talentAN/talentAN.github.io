@@ -12,8 +12,8 @@ module.exports = {
     resume: 'resume',
     tag: 'tags',
   },
-  contactFormUrl: 'https://getform.io/f/6b5df9e9-cf7a-481d-a952-3b9a65c7210b', // 联系表单
-  googleAnalyticTrackingId: 'UA-192824662-1', // google追踪
+  googleAnalytic_UA_TrackingId: 'UA-192824662-1', // google追踪 => 老UA
+  googleAnalytic_GA4_TrackingId: 'G-7H1PN3Y9HY', // google追踪 => GA4
   tags: {
     聪明人的个人成长: {
       name: '聪明人的个人成长',
