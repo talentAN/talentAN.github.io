@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Courage', '勇气']
 prePage: 'blog/translation/pdfsp/chapter_5'
 nextPage: 'blog/translation/pdfsp/chapter_7'
-totalCount: 224
+totalCount: 225
 ---
 
 > _“安全是一种迷信。它不存在于自然界中，人类幼崽们也没有体验过。从长远来看，避免危险并不比直接暴露在危险中更安全。生活要么是一次大胆的冒险，要么什么都不是。在命运面前，保持我们对变化的态度并表现出自由的精神，是不可战胜的力量。” — HELEN KELLER_
