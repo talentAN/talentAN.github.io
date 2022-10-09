@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Money', '金钱']
 prePage: 'blog/translation/pdfsp/chapter_9'
 nextPage: 'blog/translation/pdfsp/chapter_11'
-totalCount: 227
+totalCount: 228
 ---
 
 > _“品性因贫穷而受挫的人，要崛起并不容易。” — JUVENAL_
