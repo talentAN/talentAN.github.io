@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Spirituality', '精神']
 prePage: 'blog/translation/pdfsp/chapter_12'
 nextPage: 'blog/translation/pdfsp/afterword'
-totalCount: 179
+totalCount: 180
 ---
 
 > _历史上没有任何地方、任何时候，记录过有任何理性基础的宗教。宗教是人们的拐杖，他们不够强大，无法在没有帮助的情况下站起来面对未知的世界。但就像头皮屑一样，大多数人确实有一个宗教信仰，并在上面花费时间和金钱，似乎从摆弄它的过程中获得了相当大的乐趣。 — ROBERT HEINLEIN_
