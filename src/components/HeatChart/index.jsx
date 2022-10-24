@@ -43,14 +43,22 @@ const _genWeekGroup = startSunday => {
 const _getExtends = data => {
   let min = Infinity;
   let max = 0;
+  let silverWinner = 0;
   let total = 0;
   Object.values(data).forEach(val => {
+    let lastMax = max;
     total += val;
     min = Math.min(min, val);
     max = Math.max(max, val);
+    if(max >lastMax){
+      silverWinner = lastMax;
+    }else{
+      silverWinner = Math.max(val, silverWinner)
+    }
   });
   return {
     min,
+    silverWinner,
     max,
     total,
   };
@@ -77,8 +85,9 @@ const HeatChart = props => {
   const { data } = props;
   const startSunday = _getStartDate();
   const allDates = _getAllDate(startSunday);
-  const { min, max } = _getExtends(data);
-  const colorCalculator = _colorGenerator(min, max);
+  // 直接用最大值，一旦某天出现超高数据，展示效果不好。用次高值更好些。
+  const { min, max, silverWinner } = _getExtends(data);
+  const colorCalculator = _colorGenerator(min, silverWinner);
 
   return (
     <div className={style.root}>
@@ -153,7 +162,7 @@ const HeatChart = props => {
       <div className={style.tip}>
         <span className={style.label}>less</span>
         {new Array(5).fill(1).map((item, i) => {
-          const fill = colorCalculator(min + ((max - min) * i) / 4);
+          const fill = colorCalculator(min + ((silverWinner - min) * i) / 4);
           return (
             <svg width={10} height={10} style={{ marginRight: '4px' }} key={i}>
               <rect width={10} height={10} rx={2} ry={2} className={style.rect} style={{ fill }} />
