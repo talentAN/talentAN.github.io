@@ -1,6 +1,15 @@
 import React from 'react';
 import Utils from './pageUtils';
+
+const million = Math.pow(10,6);
+const thousand= Math.pow(10,3);
 export const formatNumber = num => {
+  if(num > million){
+    return `${Number(num / million).toFixed(2)}M`
+  }
+  if(num > thousand){
+    return `${Number(num / thousand).toFixed(2)}K`
+  }
   var str = Math.floor(num) === num ? num.toString() : Number(num).toFixed(2).toString();
   var reg = str.indexOf('.') > -1 ? /(\d)(?=(\d{3})+\.)/g : /(\d)(?=(?:\d{3})+$)/g;
   return str.replace(reg, '$1,');
