@@ -94,7 +94,7 @@ const setStaticPageData = rows => {
     console.info('无更新数据');
     return;
   }
-  console.info('fuck',rows)
+  console.info('static data=>',rows)
   console.info('开始 => 增量写入「统计页」访问数据');
   // 获取文件存储路径
   const pre = 'export const data = ';
@@ -130,8 +130,8 @@ const setAnalyticsData = async () => {
 // const ga4_private_key = "-----BEGIN PRIVATE KEY-----";
 // const ga4_client_email = ".com";
 
-// 生产环境用
-// const { ga4_private_key, ga4_client_email } = process.env;
+// TODO: 上线前别忘了改！！！ 生产环境用
+const { ga4_private_key, ga4_client_email } = process.env;
 
   const analyticsDataClient = new BetaAnalyticsDataClient({
     credentials:{
