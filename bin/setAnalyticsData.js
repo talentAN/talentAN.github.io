@@ -3,9 +3,34 @@ const path = require('path');
 const process = require('process');
 const { google } = require('googleapis');
 const moment = require('moment');
+
+// TODO: 上线前别忘了改！！！
+const mode = 'online'; // debug | online
+
+const getVariable = key => {
+  const CONSTS = {
+    debug:{
+      path_totalCount: path.join(__dirname, '../googleAnalytics/totalCount.json'),
+      path_all: path.join(__dirname, '../googleAnalytics/all.js'),
+      path_static: path.join(__dirname, '../googleAnalytics/static.js'),
+      client_email: "com",
+      private_key: "-----BEGIN PRIVATE KEY-----",
+    },
+    online:{
+      path_totalCount: path.join(process.env.GITHUB_WORKSPACE,'googleAnalytics/totalCount.json'),
+      path_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js'),
+      path_static: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/static.js'),
+      client_email: process.env.client_email,
+      private_key: process.env.private_key
+    }
+  }
+  return CONSTS[mode][key];
+}
+
 // 常量
 const IDS = 'ga:239799573';
 const startDate = '2021-03-01';
+const lastday = moment().format('YYYY-MM-DD'); // 受时区影响
 const today = 'today';
 const dimensions = {
   pagePath: 'ga:pagePath',
@@ -27,7 +52,6 @@ const blog_page_params = {
 };
 
 // 统计数据截止到上一天
-const lastday = moment().format('YYYY-MM-DD');
 const static_page_params = {
   ids: IDS,
   'start-date': lastday,
@@ -45,11 +69,7 @@ const setBlobPageData = rows => {
     totalCounts[title] = Number(count);
   });
   // 获取文件存储路径
-  const path_totalCount = path.join(
-    process.env.GITHUB_WORKSPACE,
-    'googleAnalytics/totalCount.json'
-  );
-
+  const path_totalCount = getVariable('path_totalCount')
   fs.writeFileSync(path_totalCount, JSON.stringify(totalCounts));
   console.info('完成 => 设置「博客页」访问数据');
 };
@@ -67,8 +87,7 @@ const setStaticPageData = rows => {
   console.info('开始 => 增量写入「统计页」访问数据');
   // 获取文件存储路径
   const pre = 'export const data = ';
-  // const path_all = path.join(__dirname, '../googleAnalytics/all.js');
-  const path_all = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js');
+  const path_all = getVariable('path_all');
   // 获取原始数据, 生成新数据
   const originData = fs.readFileSync(path_all, 'utf8');
   const oldData = originData.split(pre)[1];
@@ -78,8 +97,7 @@ const setStaticPageData = rows => {
   
   console.info('开始 => 增量计算「统计页」展示数据');
   // 计算好的派生数据
-  // const path_static = path.join(__dirname, '../googleAnalytics/static.js');
-  const path_static = path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/static.js');
+  const path_static = getVariable('path_static')
   const static_data = JSON.parse(fs.readFileSync(path_static, 'utf8').split(pre)[1]);
   rows.forEach(row=>{
     const [path_blog, date, pageViews, avgTimeOnPage] = row;
@@ -95,29 +113,22 @@ const setStaticPageData = rows => {
   console.info('完成 => 增量计算「统计页」展示数据');
 };
 
-// 本地调试用
-// const private_key ='-----BEGIN PRIVATE KEY-----';
-// const client_email = 'github-action';
-
 const setAnalyticsData = async () => {
-  const { client_email, private_key } = process.env;
+  const [ client_email, private_key]  = [getVariable('client_email'), getVariable('private_key')];
   const jwtClient = new google.auth.JWT(
     client_email,
     null,
     private_key.replace(/\\n/gm, '\n'),
-    // private_key,
     [
       'https://www.googleapis.com/auth/analytics',
       'https://www.googleapis.com/auth/analytics.readonly',
     ],
     null
   );
-
   const analytics = google.analytics({
     version: 'v3',
     auth: jwtClient,
   });
-
   // 获取「博客页」访问数据
   await analytics.data.ga.get(blog_page_params, (err, res) => {
     if (err) {

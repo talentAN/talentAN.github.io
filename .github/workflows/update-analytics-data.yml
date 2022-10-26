@@ -6,10 +6,10 @@ jobs:
   update-analytics-data:
     runs-on: ubuntu-latest
     env:
-      # 老UA使用，已废弃
-      # client_email: ${{secrets.GA_AUTH_CLIENT_EMAIL}}
-      # private_key: ${{secrets.GA_AUTH_PRIVATE_KEY}}
-      # 新GA4使用ing
+      # 老UA使用(使用中)
+      client_email: ${{secrets.GA_AUTH_CLIENT_EMAIL}}
+      private_key: ${{secrets.GA_AUTH_PRIVATE_KEY}}
+      # 新GA4(待启用)
       ga4_client_email: ${{secrets.GA4_AUTH_CLIENT_EMAIL}} 
       ga4_private_key: ${{secrets.GA4_AUTH_PRIVATE_KEY}}
       github_token: ${{secrets.GH_ACTION_DEPLOY_KEY}}
@@ -18,9 +18,12 @@ jobs:
       - uses: actions/setup-node@v1
         with:
           node-version: 14
-      # 获取GA数据
-      - run: npm install @google-analytics/data moment
-      - run: node bin/ga4/setAnalyticsData.js
+      # 获取UA数据(使用中)
+      - run: npm install googleapis moment
+      - run: node bin/setAnalyticsData.js
+      # 获取GA数据(待启用)
+      # - run: npm install @google-analytics/data moment
+      # - run: node bin/ga4/setAnalyticsData.js
       # 更新博客数据
       - run: node bin/updateContent.js
       # 合入master并发布
