@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/purpose-2'
 nextPage: 'blog/smart-engineering/art-of-trick'
-totalCount: 25
+totalCount: 27
 ---
 
 现在，
