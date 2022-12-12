@@ -1,0 +1,39 @@
+@import (reference) '../../../styles/index.less';
+
+.li_img {
+  position: absolute;
+  width: 100px;
+  height: 150px;
+}
+
+.li_shadow {
+  position: absolute;
+  width: 100px;
+  height: 150px;
+  left: 50px;
+  // top: 60px;
+  background-color: #999;
+  opacity: 0.3;
+}
+
+.li_animate {
+  animation: li_animate 8s linear 1;
+}
+
+@keyframes li_animate {
+  0% {
+    transform: rotateY(0) translate(30px, 0px);
+  }
+
+  33% {
+    transform: rotateY(120deg) translate(30px, 40vh);
+  }
+
+  66% {
+    transform: rotateY(240deg) translate(30px, 80vh);
+  }
+
+  100% {
+    transform: rotateY(360deg) translate(30px, 120vh);
+  }
+}

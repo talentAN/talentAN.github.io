@@ -11,6 +11,7 @@ module.exports = {
     static: 'static',
     resume: 'resume',
     tag: 'tags',
+    us:'us'
   },
   googleAnalytic_UA_TrackingId: 'UA-192824662-1', // google追踪 => 老UA
   googleAnalytic_GA4_TrackingId: 'G-7H1PN3Y9HY', // google追踪 => GA4
@@ -55,5 +56,7 @@ module.exports = {
     '前端',
     '转型',
     '工程往事',
+    '吴晨',
+    '法律'
   ],
 };

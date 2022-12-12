@@ -1,0 +1,12 @@
+一个卡片的基础属性: 
+  initPosition: // 初始降落点
+  layout: 300*500 // 图片尺寸
+  transform:  // 图片偏移角度
+  duration: // 动效时长
+
+功能: 
+  1: hover动效暂停，取消hover继续动效
+  2: 动效停止触发回调函数
+
+
+  
