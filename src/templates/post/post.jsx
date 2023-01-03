@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
-import FeatherIcon from 'feather-icons-react';
 import Valine from 'gatsby-plugin-valine';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
