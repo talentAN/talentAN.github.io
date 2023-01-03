@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { graphql } from 'gatsby';
 import { Layout, Row, Col, Timeline, Radio } from 'antd';
 import Header from '../../components/PageLayout/Header';
@@ -7,8 +7,18 @@ import PostCard from '../../components/PostCard';
 import TimeLineItem from '../../components/TimeLineItem';
 import SEO from '../../components/Seo';
 
+const blog_list_mode = 'blog_list_mode'
+
 const Blog = ({ data }) => {
   const [mode, setMode] = useState('card');
+  
+  useEffect(()=>{
+    const local_blog_list_mode = window && window.localStorage.getItem(blog_list_mode);
+    if(local_blog_list_mode){
+      setMode(local_blog_list_mode)
+    }
+  },[])
+  
   const posts = data.allMarkdownRemark.edges.filter(edge => {
     const { tags, path } = edge.node.frontmatter;
     return (
@@ -30,7 +40,13 @@ const Blog = ({ data }) => {
               name="展示方式"
               defaultValue={'card'}
               value={mode}
-              onChange={e => setMode(e.target.value)}
+              onChange={e => {
+                if(window){
+                  window.localStorage.setItem(blog_list_mode,e.target.value)
+                }
+                setMode(e.target.value)
+              }
+            }
             >
               <Radio value={'card'}>卡片</Radio>
               <Radio value={'timeline'}>时间轴</Radio>

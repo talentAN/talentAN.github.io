@@ -37,7 +37,7 @@ const AboutMe = () => {
           前端工程师。
         </p>
         <p>
-          详见这篇
+          此间经历，详见这篇
           <Link to={'/blog/from-hr-to-developer'}>《HR转型研发那些事儿》</Link>
         </p>
         <p>
