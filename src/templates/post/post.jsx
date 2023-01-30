@@ -63,8 +63,9 @@ const Post = ({ data }) => {
               path={path}
               placeholder="没启用验证码，相信你不会恶意留言🤓"
               highlight={false}
-              meta={['nick', 'mail']}
-              avatar={'mp'} // 头像
+              meta={['nick']}
+              avatar={'hide'} // 头像
+              requiredFields={['nick']}
             />
             {hasLinkPage && (
               <div className={style.links}>
