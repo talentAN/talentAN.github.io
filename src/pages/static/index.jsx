@@ -9,7 +9,7 @@ import LayoutWrapper from '../../components/LayoutWrapper';
 import HeatChart from '../../components/HeatChart';
 import NumberChart from '../../components/Charts/Number';
 import { WIDTH_MOBILE } from '../../configs/layout';
-import { data } from '../../../googleAnalytics/static';
+import { data } from '../../../googleAnalytics/ga4/static';
 import 'react-grid-layout/css/styles.css';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
