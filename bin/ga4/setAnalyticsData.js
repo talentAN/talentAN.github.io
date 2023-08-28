@@ -15,14 +15,18 @@ const mode = 'online'; // debug | online
 // 调试路径 和 线上路径
 const paths = {
   debug: {
-    path_static_all: path.join(__dirname, '../../googleAnalytics/all.js'),
-    path_static_detail: path.join(__dirname, '../../googleAnalytics/static.js'),
-    path_blog_data: path.join(__dirname, '../../googleAnalytics/ga/totalCount.json'),
+    path_static_all: path.join(__dirname, '../../googleAnalytics/ga4/all.js'),
+    path_static_detail: path.join(__dirname, '../../googleAnalytics/ga4/static.js'),
+    path_blog_data: path.join(__dirname, '../../googleAnalytics/ga4/totalCount.json'),
+    ga4_private_key: 'sdfg',
+    ga4_client_email: '.com',
   },
   online: {
-    path_static_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js'),
-    path_static_detail: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/static.js'),
-    path_blog_data: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga/totalCount.json'),
+    path_static_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/all.js'),
+    path_static_detail: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/static.js'),
+    path_blog_data: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/totalCount.json'),
+    ga4_private_key: process.env.ga4_private_key,
+    ga4_client_email: process.env.ga4_client_email,
   },
 };
 
@@ -125,12 +129,7 @@ const setStaticPageData = rows => {
 };
 
 const setAnalyticsData = async () => {
-  // 本地调试用
-  // const ga4_private_key = "-----BEGIN PRIVATE KEY-----";
-  // const ga4_client_email = ".com";
-
-  // TODO: 上线前别忘了改！！！ 生产环境用
-  const { ga4_private_key, ga4_client_email } = process.env;
+  const { ga4_private_key, ga4_client_email } = paths[mode];
 
   const analyticsDataClient = new BetaAnalyticsDataClient({
     credentials: {
@@ -152,6 +151,7 @@ const setAnalyticsData = async () => {
 
   // 获取「博客页」访问数据
   const [res_blog] = await analyticsDataClient.runReport(blog_page_params);
+
   setBlobPageData(
     res_blog.rows.map(row => [
       row.dimensionValues[0].value, // 路径
