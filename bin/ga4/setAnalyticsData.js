@@ -96,7 +96,6 @@ const setStaticPageData = rows => {
     console.info('无更新数据');
     return;
   }
-  console.info('static data=>', rows);
   console.info('开始 => 增量写入「统计页」访问数据');
   // 获取文件存储路径
   const pre = 'export const data = ';
