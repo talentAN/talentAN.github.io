@@ -25,8 +25,8 @@ const paths = {
     path_static_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/all.js'),
     path_static_detail: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/static.js'),
     path_blog_data: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/totalCount.json'),
-    ga4_private_key: process.env.ga4_private_key,
-    ga4_client_email: process.env.ga4_client_email,
+    ga4_private_key: process.env.private_key,
+    ga4_client_email: process.env.client_email,
   },
 };
 

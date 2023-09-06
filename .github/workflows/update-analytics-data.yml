@@ -6,9 +6,9 @@ jobs:
   update-analytics-data:
     runs-on: ubuntu-latest
     env:
-      # 老UA使用(已封存)
-      # client_email: ${{secrets.GA_AUTH_CLIENT_EMAIL}}
-      # private_key: ${{secrets.GA_AUTH_PRIVATE_KEY}}
+      # 老UA使用(再启用，UA的账号好像有问题)
+      client_email: ${{secrets.GA_AUTH_CLIENT_EMAIL}}
+      private_key: ${{secrets.GA_AUTH_PRIVATE_KEY}}
 
       # 新GA4(使用中)
       ga4_client_email: ${{secrets.GA4_AUTH_CLIENT_EMAIL}}
