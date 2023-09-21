@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/move-now'
 nextPage: ''
-totalCount: 178
+totalCount: 194
 ---
 
 解决了首要问题（**我的目的是啥？**）后，接下来就是想办法实现它。
