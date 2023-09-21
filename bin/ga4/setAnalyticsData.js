@@ -7,7 +7,7 @@ const moment = require('moment');
 // 常量
 const GA4_ID = '323022959';
 const today = 'today';
-const lastday = moment().format('2023-09-06'); // 根据CI执行时间决定的
+const lastday = moment().format('YYYY-MM-DD'); // 根据CI执行时间决定的
 
 // TODO: 上线前别忘了改！！！
 const mode = 'online'; // debug | online

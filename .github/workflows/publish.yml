@@ -2,7 +2,7 @@ name: release
 on:
   push:
     branches:
-      - fuckw
+      - master
 jobs:
   build-and-deploy-to-github:
     runs-on: ubuntu-latest
