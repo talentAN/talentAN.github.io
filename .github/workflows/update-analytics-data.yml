@@ -1,7 +1,10 @@
 name: 'Update Google Analytics Data'
 on:
-  schedule:
-    - cron: '0 21 * * *'
+  # schedule:
+  #   - cron: '0 21 * * *'
+  push:
+    branches:
+      - master
 jobs:
   update-analytics-data:
     runs-on: ubuntu-latest
