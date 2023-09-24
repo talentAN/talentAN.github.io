@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Intelligence', '智慧']
 prePage: 'blog/translation/pdfsp/chapter_6'
 nextPage: 'blog/translation/pdfsp/chapter_8'
-totalCount: 23718
+totalCount: 25840
 ---
 
 > _“许多大自然抛给我们的困难，都可以用智慧摆平。” — TITUS LIVIUS_
