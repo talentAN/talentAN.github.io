@@ -33,5 +33,5 @@ jobs:
       # 更新博客数据
       - run: node bin/updateContent.js
       # 合入master并发布
-      # - run: npm run install-action
+      - run: npm run install-action
       - run: node bin/commitToMaster.js

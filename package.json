@@ -12,7 +12,7 @@
     "lint": "eslint --ext .js src && stylelint \"src/**/*.{css,less}\"",
     "deploy": "gh-pages -d public -r $site",
     "push": "git add . && git commit -am 'update' &&  git push origin HEAD",
-    "install-action": "npm install @actions/core @actions/exec @actions/github @actions/io shelljs "
+    "install-action": "npm install @actions/core @actions/exec @actions/github @actions/io shelljs --legacy-peer-deps"
   },
   "dependencies": {
     "antd": "^4.0.1",
