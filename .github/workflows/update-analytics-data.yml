@@ -1,5 +1,9 @@
 name: 'Update Google Analytics Data'
 on:
+  # 先留着，CI 挂了调试还是用得到的
+  # push:
+  #   branches:
+  #     - github-action/test-flow
   schedule:
     - cron: '0 21 * * *'
 jobs:
@@ -18,13 +22,15 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
         with:
-          node-version: 14.21.3
+          node-version: 20.10.0
       # 获取UA数据(已封存)
       # - run: npm install googleapis moment
       # - run: node bin/setAnalyticsData.js
 
       # 获取GA数据(使用中)
-      - run: npm install @google-analytics/data moment
+      - run: rm package-lock.json yarn.lock
+      # 不用 legacy 不行，还是早点升级吧
+      - run: npm install @google-analytics/data moment --legacy-peer-deps
       - run: node bin/ga4/setAnalyticsData.js
       # 更新博客数据
       - run: node bin/updateContent.js
