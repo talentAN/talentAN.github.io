@@ -108,4 +108,5 @@ async function run() {
   }
 }
 
-run();
+console.info('github action work well');
+// run();
