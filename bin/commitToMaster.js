@@ -107,6 +107,6 @@ async function run() {
     throw new Error(e.message);
   }
 }
-await exec.exec('git', ['status']);
+exec.exec('git', ['status']);
 console.info('github action work well');
 // run();
