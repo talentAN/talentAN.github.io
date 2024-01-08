@@ -28,7 +28,7 @@ jobs:
 
       # 获取GA数据(使用中)
       - run: rm package-lock.json yarn.lock
-      - run: npm install @google-analytics/data moment
+      - run: npm install @google-analytics/data moment --legacy-peer-deps
       - run: node bin/ga4/setAnalyticsData.js
       # 更新博客数据
       - run: node bin/updateContent.js
