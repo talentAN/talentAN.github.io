@@ -4,13 +4,14 @@ const path = require('path');
 const process = require('process');
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const moment = require('moment');
+
+// FIXME: 上线前别忘了改！！！
+const isTest = true;
 // 常量
 const GA4_ID = '323022959';
 const today = 'today';
-const lastday = moment().format('YYYY-MM-DD'); // 根据CI执行时间决定的
-
-// TODO: 上线前别忘了改！！！
-const mode = 'online'; // debug | online
+const lastday = isTest ? '2024-01-07' : moment().format('YYYY-MM-DD'); // 根据CI执行时间决定的
+const mode = isTest ? 'debug' : 'online'; // debug | online
 
 // 调试路径 和 线上路径
 const paths = {
@@ -22,11 +23,11 @@ const paths = {
     ga4_client_email: '.com',
   },
   online: {
-    path_static_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/all.js'),
-    path_static_detail: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/static.js'),
-    path_blog_data: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/totalCount.json'),
-    ga4_private_key: process.env.ga4_private_key,
-    ga4_client_email: process.env.ga4_client_email,
+    // path_static_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/all.js'),
+    // path_static_detail: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/static.js'),
+    // path_blog_data: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/ga4/totalCount.json'),
+    // ga4_private_key: process.env.ga4_private_key,
+    // ga4_client_email: process.env.ga4_client_email,
   },
 };
 
