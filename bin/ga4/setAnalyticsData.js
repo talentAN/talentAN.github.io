@@ -57,8 +57,8 @@ const blog_page_params = {
   property: `properties/${GA4_ID}`,
   dateRanges: [
     {
-      startDate: '2023-08-28', // 2023-08-28之前用老的UA数据，从28号切换到GA4,
-      endDate: today,
+      startDate: lastday, // 2023-08-28之前用老的UA数据，从28号切换到GA4, 每日增量添加
+      endDate: lastday,
     },
   ],
   dimensions: [{ name: dimensions.pagePath }],
