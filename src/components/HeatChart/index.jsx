@@ -2,7 +2,7 @@ import React from 'react';
 import { Popover } from 'antd';
 import moment from 'moment';
 import { scaleLinear } from 'd3-scale';
-import style from './index.module.less';
+import * as style from './index.module.less';
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Des'];
 
@@ -50,10 +50,10 @@ const _getExtends = data => {
     total += val;
     min = Math.min(min, val);
     max = Math.max(max, val);
-    if(max >lastMax){
+    if (max > lastMax) {
       silverWinner = lastMax;
-    }else{
-      silverWinner = Math.max(val, silverWinner)
+    } else {
+      silverWinner = Math.max(val, silverWinner);
     }
   });
   return {

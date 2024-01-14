@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
-import Valine from 'gatsby-plugin-valine';
+// import Valine from 'gatsby-plugin-valine';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
@@ -10,7 +10,7 @@ import support from '../../images/support.jpg';
 
 import 'prismjs/themes/prism-solarizedlight.css';
 import './highlight-syntax.less';
-import style from './post.module.less';
+import * as style from './post.module.less';
 
 const Post = ({ data }) => {
   const [showSupport, setShowSupport] = useState(false);
@@ -57,16 +57,6 @@ const Post = ({ data }) => {
               <Img className={style.bannerImg} fluid={fluid} title={excerpt} alt={title} />
             </div>
             <article className={style.blogArticle} dangerouslySetInnerHTML={{ __html: html }} />
-            <Valine
-              appId="54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz"
-              appKey="aijtas9PQHTSFT9y53JTquND"
-              path={path}
-              placeholder="没启用验证码，相信你不会恶意留言🤓"
-              highlight={false}
-              meta={['nick']}
-              avatar={'hide'} // 头像
-              requiredFields={['nick']}
-            />
             {hasLinkPage && (
               <div className={style.links}>
                 <Button href={`/${prePage}`} type="link" disabled={!prePage}>

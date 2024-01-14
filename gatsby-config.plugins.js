@@ -6,14 +6,14 @@ module.exports = [
   'gatsby-plugin-sharp',
   'gatsby-plugin-less',
   'gatsby-plugin-offline',
-  {
-    resolve: `gatsby-plugin-valine`,
-    options: {
-      appId: `54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz`,
-      appKey: `aijtas9PQHTSFT9y53JTquND`,
-      avatar: `robohash`,
-    },
-  },
+  // {
+  //   resolve: `gatsby-plugin-valine`,
+  //   options: {
+  //     appId: `54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz`,
+  //     appKey: `aijtas9PQHTSFT9y53JTquND`,
+  //     avatar: `robohash`,
+  //   },
+  // },
   {
     resolve: 'gatsby-source-filesystem',
     options: {
@@ -77,18 +77,6 @@ module.exports = [
     resolve: 'gatsby-plugin-antd',
     options: {
       javascriptEnabled: true,
-    },
-  },
-  {
-    resolve: 'gatsby-plugin-eslint-v2',
-    options: {
-      test: /\.js$|\.jsx$/,
-      exclude: /(node_modules|.cache|public)/,
-      stages: ['develop'],
-      options: {
-        emitWarning: true,
-        failOnError: false,
-      },
     },
   },
   // 老UA数据统计

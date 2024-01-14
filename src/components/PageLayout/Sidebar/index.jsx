@@ -4,7 +4,7 @@ import FA from 'react-fontawesome';
 import FeatherIcon from 'feather-icons-react';
 import { globalHistory } from '@reach/router';
 import { OutboundLink } from 'gatsby-plugin-google-gtag';
-import style from './sidebar.module.less';
+import * as style from './sidebar.module.less';
 import { useWindowSize } from '../../../utils/hooks';
 import { WIDTH_MOBILE } from '../../../configs/layout';
 import ME from '../../../configs/me';
@@ -110,6 +110,7 @@ const Sidebar = props => {
       domContent = <DomContent />;
     }
   }
+  console.info('here final return');
   return (
     <>
       <Layout>

@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Link } from 'gatsby';
 import { Layout } from 'antd';
 import { header } from '../../../configs/page';
-import 'font-awesome/less/font-awesome.less';
-import style from './header.module.less';
-import '../../../styles/global.less';
+import * as style from './header.module.less';
 import { useWindowSize } from '../../../utils/hooks';
+import 'font-awesome/less/font-awesome.less';
+import '../../../styles/global.less';
 
 export default () => {
   const [menu, setMenu] = useState(false);
-
   const [width] = useWindowSize();
   const toggleMenu = () => {
     if (width !== 0 && width <= 768) {

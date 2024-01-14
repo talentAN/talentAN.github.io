@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { formatNumber } from '../../../utils/tools';
-import styles from './index.module.less';
+import * as styles from './index.module.less';
 
 const NumberChart = props => {
   const { data, formatter = formatNumber } = props;
