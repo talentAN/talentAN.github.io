@@ -15,6 +15,14 @@ module.exports = [
   //   },
   // },
   {
+    resolve: `gatsby-plugin-valine-comment`,
+    options: {
+      appId: `54IT3YbBjdv98afrYDGxAyhv-gzGzoHsz`,
+      appKey: `aijtas9PQHTSFT9y53JTquND`,
+      avatar: `robohash`,
+    },
+  },
+  {
     resolve: 'gatsby-source-filesystem',
     options: {
       name: 'images',

@@ -32,6 +32,7 @@
     "gatsby-plugin-robots-txt": "1.8.0",
     "gatsby-plugin-sharp": "^5.13.0",
     "gatsby-plugin-sitemap": "^6.13.0",
+    "gatsby-plugin-valine-comment": "^1.1.0",
     "gatsby-remark-external-links": "0.0.4",
     "gatsby-remark-images": "7.13.0",
     "gatsby-remark-prismjs": "^7.13.0",
