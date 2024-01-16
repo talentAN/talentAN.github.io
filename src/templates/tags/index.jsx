@@ -10,7 +10,7 @@ import PostCard from '../../components/PostCard';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import Config from '../../../config';
 import Utils from '../../utils/pageUtils';
-import style from './tags.module.less';
+import * as style from './tags.module.less';
 
 const TagPage = ({ data, pageContext }) => {
   const { tag } = pageContext;
@@ -54,7 +54,7 @@ export const pageQuery = graphql`
   query ($tag: String!) {
     allMarkdownRemark(
       filter: { frontmatter: { tags: { in: [$tag] } }, fileAbsolutePath: { regex: "/index.md$/" } }
-      sort: { fields: [frontmatter___date], order: DESC }
+      sort: { frontmatter: { date: DESC } }
     ) {
       edges {
         node {

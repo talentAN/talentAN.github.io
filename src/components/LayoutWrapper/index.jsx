@@ -1,5 +1,5 @@
 import React from 'react';
-import styles from './LayoutWrapper.module.less';
+import * as styles from './LayoutWrapper.module.less';
 
 const LayoutWrapper = props => {
   const { title, children } = props;

@@ -3,7 +3,7 @@ import moment from 'moment';
 import { Link } from 'gatsby';
 import Utils from '../../utils/pageUtils';
 import { getPostSubtract } from '../../utils/tools';
-import style from './postCard.module.less';
+import * as style from './postCard.module.less';
 
 const PostCard = props => {
   const {

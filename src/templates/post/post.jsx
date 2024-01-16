@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Button } from 'antd';
 import { graphql } from 'gatsby';
 import Img from 'gatsby-image';
-import Valine from 'gatsby-plugin-valine';
+// import Valine from 'gatsby-plugin-valine';
+import Valine from 'gatsby-plugin-valine-comment';
 import Header from '../../components/PageLayout/Header';
 import SidebarWrapper from '../../components/PageLayout/Sidebar';
 import SEO from '../../components/Seo';
@@ -10,7 +11,7 @@ import support from '../../images/support.jpg';
 
 import 'prismjs/themes/prism-solarizedlight.css';
 import './highlight-syntax.less';
-import style from './post.module.less';
+import * as style from './post.module.less';
 
 const Post = ({ data }) => {
   const [showSupport, setShowSupport] = useState(false);

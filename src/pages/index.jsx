@@ -3,7 +3,7 @@ import { Layout } from 'antd';
 import Header from '../components/PageLayout/Header';
 import SidebarWrapper from '../components/PageLayout/Sidebar';
 import AboutMe from '../components/PageFragments/HomePage/AboutMe';
-import Skills,{Recommends} from '../components/PageFragments/HomePage/SkillProgress';
+import Skills, { Recommends } from '../components/PageFragments/HomePage/SkillProgress';
 
 const HomePage = () => (
   <Layout className="outerPadding">

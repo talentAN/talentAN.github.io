@@ -7,18 +7,18 @@ import PostCard from '../../components/PostCard';
 import TimeLineItem from '../../components/TimeLineItem';
 import SEO from '../../components/Seo';
 
-const blog_list_mode = 'blog_list_mode'
+const blog_list_mode = 'blog_list_mode';
 
 const Blog = ({ data }) => {
   const [mode, setMode] = useState('card');
-  
-  useEffect(()=>{
+
+  useEffect(() => {
     const local_blog_list_mode = window && window.localStorage.getItem(blog_list_mode);
-    if(local_blog_list_mode){
-      setMode(local_blog_list_mode)
+    if (local_blog_list_mode) {
+      setMode(local_blog_list_mode);
     }
-  },[])
-  
+  }, []);
+
   const posts = data.allMarkdownRemark.edges.filter(edge => {
     const { tags, path } = edge.node.frontmatter;
     return (
@@ -41,12 +41,11 @@ const Blog = ({ data }) => {
               defaultValue={'card'}
               value={mode}
               onChange={e => {
-                if(window){
-                  window.localStorage.setItem(blog_list_mode,e.target.value)
+                if (window) {
+                  window.localStorage.setItem(blog_list_mode, e.target.value);
                 }
-                setMode(e.target.value)
-              }
-            }
+                setMode(e.target.value);
+              }}
             >
               <Radio value={'card'}>卡片</Radio>
               <Radio value={'timeline'}>时间轴</Radio>
@@ -77,7 +76,7 @@ const Blog = ({ data }) => {
 export const query = graphql`
   {
     allMarkdownRemark(
-      sort: { fields: [frontmatter___date], order: DESC }
+      sort: { frontmatter: { date: DESC } }
       filter: { fileAbsolutePath: { regex: "/index.md$/" } }
     ) {
       edges {
