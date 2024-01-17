@@ -28,7 +28,7 @@ jobs:
       # - run: node bin/setAnalyticsData.js
 
       # 获取GA数据(使用中)
-      - run: rm package-lock.json yarn.lock
+      - run: rm package-lock.json
       # 不用 legacy 不行，还是早点升级吧
       - run: npm install @google-analytics/data moment --legacy-peer-deps
       - run: node bin/ga4/setAnalyticsData.js
