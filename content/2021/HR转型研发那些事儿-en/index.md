@@ -1,7 +1,7 @@
 ---
 title: The story of a recruiter transformation engineer
 path: blog/from-hr-to-developer-en
-tags: ['Personal Development for Smart People', 'career']
+tags: []
 cover: ./cover.png
 date: 2024-04-26
 excerpt: interesting story you would not miss~
@@ -9,6 +9,8 @@ hot: true
 isTop: false
 isTranslated: false
 keywords: ['change', 'career']
+prePage: ''
+nextPage: ''
 totalCount: 1
 ---
 
