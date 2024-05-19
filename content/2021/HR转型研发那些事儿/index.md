@@ -11,7 +11,7 @@ isTranslated: false
 keywords: ['转行', '职业', '工作']
 prePage: 'blog/translation/pdfsp/afterword'
 nextPage: 'blog/smart-engineering/summary'
-totalCount: 29643
+totalCount: 29995
 ---
 
 刚入职场就选中了自己喜欢的行业无疑是幸运的，但并非每个人都能如此。
