@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/smart-engineering/purpose-1'
 nextPage: 'blog/smart-engineering/move-now'
-totalCount: 1998
+totalCount: 2111
 ---
 
 > _我想要知道的是上帝如何创造这个世界。我对于“这个”或者“那个”现象并不感兴趣。我想要知道上帝的想法。其他的都是细节。——爱因斯坦_
