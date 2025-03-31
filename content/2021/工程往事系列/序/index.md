@@ -10,7 +10,7 @@ recommended: false
 keywords: ['工程往事']
 prePage: 'blog/from-hr-to-developer'
 nextPage: 'blog/smart-engineering/purpose-1'
-totalCount: 464
+totalCount: 470
 ---
 
 ### 前情提要
