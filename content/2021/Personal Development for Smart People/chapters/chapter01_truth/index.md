@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'truth', '真实']
 prePage: 'blog/translation/pdfsp/summary'
 nextPage: 'blog/translation/pdfsp/chapter_2'
-totalCount: 211312
+totalCount: 211347
 ---
 
 > _如果我们能意识到就会明白：人生啊，除了毫无疑问地接受生活之外，没什么是必须遵循的。那些我们极力视而不见、逃避、否认、贬低或鄙视的一切最终会打败我们。若能敞开心扉，那些令人讨厌的、痛苦的、邪恶的事物却会成为美丽、喜悦和力量的源泉。以这个视角看世界的人，每一刻都是金色的。 —— HENRY MILLER_
