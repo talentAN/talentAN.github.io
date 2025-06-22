@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'Habits', '习惯']
 prePage: 'blog/translation/pdfsp/chapter_7'
 nextPage: 'blog/translation/pdfsp/chapter_9'
-totalCount: 13243
+totalCount: 13244
 ---
 
 > _“良好的习惯让食欲之类的本能受到自动控制、让我们的天性可以自由地探索更广阔的生活，” — RALPH W. SOCKMAN_
