@@ -47,7 +47,8 @@
     "react-fontawesome": "^1.7.1",
     "react-grid-layout": "^1.4.4",
     "react-helmet": "^6.1.0",
-    "react-pdf": "^7.7.0"
+    "react-pdf": "^7.7.0",
+    "recharts": "^3.2.1"
   },
   "devDependencies": {
     "gh-pages": "6.1.1",
