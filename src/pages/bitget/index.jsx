@@ -13,6 +13,8 @@ import {
   ReloadOutlined,
   SearchOutlined
 } from '@ant-design/icons';
+import StableTable from './components/stable'
+import {getTradingPairs} from './api'
 
 const { Search } = Input;
 const { Title, Text } = Typography;
@@ -58,6 +60,9 @@ const BitgetPage = () => {
   const [isConnected, setIsConnected] = useState(false); // 轮询状态
   const [updateInterval, setUpdateInterval] = useState(null); // 轮询定时器
 
+  // 新设置
+  const [mode, setMode] = useState('stable')
+
   const pairRef = useRef([])
 
   const setTradingPairs = (p)=>{
@@ -65,30 +70,18 @@ const BitgetPage = () => {
     pairRef.current = p
   }
 
+  const refresh = ()=>{
+    getTradingPairs().then(res=>{
+      setTradingPairs(res)
+    })
+  }
+
   // 获取交易对数据
   const fetchTradingPairs = useCallback(async () => {
     setLoading(true);
     try {
-      const exchange = EXCHANGE_APIS[selectedExchange];
-      if (!exchange) return;
-
-      let response;
-      let data;
-
-      // 获取Bitget合约数据
-      response = await fetch(`${exchange.baseUrl}${exchange.tickerUrl}?productType=USDT-FUTURES`);
-      data = await response.json();
-      console.log('API Response:', data);
-      
-      if (data.code === '00000') {
-        data = data.data;
-      } else {
-        console.error('API Error:', data);
-        throw new Error(data.msg || 'Failed to fetch data');
-      }
-
       // 处理Bitget数据格式
-      let processedPairs = data
+      let processedPairs = await getTradingPairs()
         .filter(item => item.symbol && item.symbol.endsWith('USDT'))
         .map(item => ({
           key: item.symbol,
@@ -280,32 +273,32 @@ const BitgetPage = () => {
       )
     }
   ];
-
+ 
   // 页面加载时获取数据
   useEffect(() => {
-    fetchTradingPairs();
-  }, [fetchTradingPairs]);
+    refresh()
+  }, []);
 
-  // 自动启动轮询
-  useEffect(() => {
-    if (tradingPairs.length > 0 && !isConnected) {
-      startPolling();
-    }
-  }, [tradingPairs.length, isConnected, startPolling]);
+  // // 自动启动轮询
+  // useEffect(() => {
+  //   if (tradingPairs.length > 0 && !isConnected) {
+  //     startPolling();
+  //   }
+  // }, [tradingPairs.length, isConnected, startPolling]);
 
-  // 页面卸载时清理定时器
-  useEffect(() => {
-    return () => {
-      if (updateInterval) {
-        clearInterval(updateInterval);
-      }
-    };
-  }, [updateInterval]);
+  // // 页面卸载时清理定时器
+  // useEffect(() => {
+  //   return () => {
+  //     if (updateInterval) {
+  //       clearInterval(updateInterval);
+  //     }
+  //   };
+  // }, [updateInterval]);
 
-  // 获取1小时前的价格数据来计算1h涨跌
-  useEffect(()=>{
-    fetch1HourData();
-  },[tradingPairs.length])
+  // // 获取1小时前的价格数据来计算1h涨跌
+  // useEffect(()=>{
+  //   fetch1HourData();
+  // },[tradingPairs.length])
 
   return (
     <div className="bitget-page">
@@ -317,59 +310,31 @@ const BitgetPage = () => {
       {/* 控制面板 */}
       <Card className="control-panel" style={{ marginBottom: 16 }}>
         <Row gutter={16} align="middle">
-          <Col span={8}>
-            <Text strong>搜索交易对：</Text>
-            <Search
-              placeholder="输入交易对名称，如 BTCUSDT"
-              onSearch={handleSearch}
-              style={{ marginTop: 8 }}
-              enterButton={<SearchOutlined />}
-            />
+          <Col span={3}>
+            <Button 
+              type={isConnected ? "default" : "primary"}
+              onClick={()=>setMode('stable')}
+            >
+              stable
+            </Button>
           </Col>
           <Col span={3}>
             <Button 
               type="primary" 
               icon={<ReloadOutlined />} 
-              onClick={fetchTradingPairs}
+              onClick={refresh}
               loading={loading}
-              style={{ marginTop: 24 }}
             >
               刷新数据
             </Button>
           </Col>
-          <Col span={3}>
-            <Button 
-              type={isConnected ? "default" : "primary"}
-              onClick={isConnected ? stopPolling : startPolling}
-              style={{ marginTop: 24 }}
-            >
-              {isConnected ? '停止轮询' : '开始轮询'}
-            </Button>
-          </Col>
-          <Col span={4}>
-            <div style={{ marginTop: 24, textAlign: 'center' }}>
-              <div 
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  backgroundColor: isConnected ? '#52c41a' : '#ff4d4f',
-                  display: 'inline-block',
-                  marginRight: 8
-                }}
-              />
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {isConnected ? '实时' : '离线'}
-              </Text>
-            </div>
-          </Col>
         </Row>
       </Card>
-
       <Row gutter={16}>
         <Col span={selectedPair ? 14 : 24}>
           <Card title="Bitget 合约交易对列表">
-            <Table
+            {mode === 'stable' ? <StableTable tradingPairs={tradingPairs}/>:null}
+            {mode === 'default' ?   <Table
               columns={columns}
               dataSource={tradingPairs}
               loading={loading}
@@ -380,7 +345,8 @@ const BitgetPage = () => {
                 showTotal: (total) => `共 ${total} 个交易对`
               }}
               scroll={{ x: 800 }}
-            />
+            />:null}
+          
           </Card>
         </Col>
       </Row>
