@@ -42,7 +42,7 @@ const BitgetPage = () => {
   const [spotTradingPairs, setSpotTradingPairs] = useState([]);
 
   // 模式设置
-  const [mode, _setMode] = useState(window && window.localStorage?.getItem('mode')||'stable')
+  const [mode, _setMode] = useState('stable')
 
   const setMode = v=>{
     localStorage.setItem('mode',v)
