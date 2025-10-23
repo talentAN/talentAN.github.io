@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import { 
   Card, 
   Row, 
@@ -11,9 +11,9 @@ import {
 import { 
   ReloadOutlined,
 } from '@ant-design/icons';
-import StableTable from './components/stable'
-import BurstTable from './components/burst'
-import {getTradingPairs,getSpotTradingPairs} from './api'
+import StableTable from '../../container/bitget/components/stable'
+import BurstTable from '../../container/bitget/components/burst'
+import {getTradingPairs,getSpotTradingPairs} from '../../container/bitget/api'
 
 const { Title, Text } = Typography;
 
