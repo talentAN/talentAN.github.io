@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Table, 
   Typography
@@ -8,11 +8,42 @@ import {useStableLine} from '../../hooks/stable-type'
 
 const {  Text } = Typography;
 
-const StableTable = ({tradingPairs}) => {
+const StableTable = ({futureSymbols,spotSymbols}) => {
     const  {
-      stablePairs,
-      checkedSymbolCount
-    } = useStableLine(tradingPairs)
+      stablePairs:stableFutureSymbols,
+      checkedSymbolCount:checkedFutureSymbolCount
+    } = useStableLine({
+      symbols: futureSymbols,
+      type: 'future'
+    })
+    const  {
+      stablePairs:stableSpotSymbols,
+      checkedSymbolCount:checkedSpotSymbolCount
+    } = useStableLine({
+      symbols: spotSymbols,
+      type: 'spot'
+    })
+  const data = useMemo(()=>{
+    const ret = stableFutureSymbols.map(f=>({
+      ...f,
+      isFutureOneWeekStable: f.isOneWeekStable,
+      isFutureOneMonStable:f.isOneMonStable
+
+    }));
+    stableSpotSymbols.forEach(item=>{
+      const target = ret.find(r=>r.symbol === item.symbol);
+      if(target){
+        target.isSpotOneWeekStable = item.isOneWeekStable
+        target.isSpotOneMonStable = item.isOneWeekStable
+      }else{
+        ret.push({...item,
+          isSpotOneWeekStable: item.isOneWeekStable,
+          isSpotOneMonStable:item.isOneMonStable
+        })
+      }
+    })
+    return ret;
+  },[stableSpotSymbols,stableFutureSymbols])
   // 表格列定义
   const columns = [
     {
@@ -22,15 +53,27 @@ const StableTable = ({tradingPairs}) => {
       render: (text) => <Text strong>{text}</Text>
     },
     {
-      title: '7日稳定',
-      dataIndex: 'isOneWeekStable',
-      key: 'isOneWeekStable',
+      title: '现货一周稳定',
+      dataIndex: 'isSpotOneWeekStable',
+      key: 'isSpotOneWeekStable',
       render: (text) => <Text strong>{text ? '✅':''}</Text>
     },
     {
-      title: '30日稳定',
-      dataIndex: 'isOneMonkStable',
-      key: 'isOneMonkStable',
+      title: '现货30日稳定',
+      dataIndex: 'isSpotOneMonStable',
+      key: 'isSpotOneMonStable',
+      render: (text) => <Text strong>{text ? '✅':''}</Text>
+    },
+    {
+      title: '合约一周稳定',
+      dataIndex: 'isFutureOneWeekStable',
+      key: 'isFutureOneWeekStable',
+      render: (text) => <Text strong>{text ? '✅':''}</Text>
+    },
+    {
+      title: '合约30日稳定',
+      dataIndex: 'isFutureOneMonStable',
+      key: 'isFutureOneMonStable',
       render: (text) => <Text strong>{text ? '✅':''}</Text>
     },
     {
@@ -46,14 +89,13 @@ const StableTable = ({tradingPairs}) => {
     }
   ];
 
-  
-
   return (
     <>
-    <div>{`共${tradingPairs.length}，已查看${checkedSymbolCount}，已筛选${stablePairs.length}`}</div>
+    <div>{`合约共${futureSymbols.length}，已查看${checkedFutureSymbolCount}，已筛选${stableFutureSymbols.length}`}</div>
+    <div>{`现货共${spotSymbols.length}，已查看${checkedSpotSymbolCount}，已筛选${stableSpotSymbols.length}`}</div>
       <Table
               columns={columns}
-              dataSource={stablePairs}
+              dataSource={data}
               pagination={{
                 pageSize: 20,
                 showSizeChanger: true,

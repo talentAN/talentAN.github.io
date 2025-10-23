@@ -1,31 +1,9 @@
 import  { useState, useEffect, useRef } from 'react';
-import {getKlineData} from '../api'
+import {getFutureKlineData, getSpotKlineData} from '../api'
 import moment from 'moment';
-import {minTradingUSDTValue} from '../constants/filter'
+import {minTradingUSDTValue,MAX_TRADING_DAYS,MIN_TRADING_DAYS} from '../constants/filter'
+import {getBatches,getPeriodMinMax} from '../utils'
 
-// 币对切片
-const getBatches = (arr)=>{
-    // 分批处理，每批最多8个币对
-    const batchSize = 8;
-    const batches = [];
-    for (let i = 0; i < arr.length; i += batchSize) {
-      const batch = arr.slice(i, i + batchSize);
-      batches.push([...batch.map(b=>b.symbol)]);
-    }
-    return batches
-}
-
-// 获取周期内的最高价、最低价
-const getPeriodMinMax = (data, count)=>{
-  let minRet = Infinity, maxRet = -Infinity
-  const arr = data.slice(0, count);
-  for(let i=0;i<arr.length;i++){
-    const [,,max,min] = arr[i];
-    maxRet = Math.max(max,maxRet)
-    minRet = Math.min(min,minRet)
-  }
-  return [minRet, maxRet]
-}
 
 const isStable = (data, count)=>{
   const [min, max] = getPeriodMinMax(data, count);
@@ -40,62 +18,69 @@ const getAverageTradeValueLastXDay = (data, days)=>{
   },0)/days 
 }
 
-const checkPair = async (symbol)=>{
-  const ret = await getKlineData({symbol,granularity:'1D',limit:60,
-    startTime: moment.utc().subtract(30, 'days').valueOf(),
+const checkPair = async (symbol, type)=>{
+  const isFuture = type === 'future'
+  const api =isFuture ? getFutureKlineData : getSpotKlineData
+  const ret = await api({symbol,granularity: isFuture ? '1D': '1day',limit:MAX_TRADING_DAYS,
+    startTime: moment.utc().subtract(MAX_TRADING_DAYS, 'days').valueOf(),
     endTime: moment.utc().valueOf(),
 })
   const data = (ret.data||[]).reverse()
 // 过滤上线超过2个月的老币对
-  if(!data || data.length<7 || data.length>=60){
+  if(!data || data.length<MIN_TRADING_DAYS || data.length>=MAX_TRADING_DAYS){
     return {
       symbol,
       isStable:false
     }
   }
-  const isOneWeekStable = isStable(data,7)
-  const isOneMonkStable = isStable(data,30)
-  const avsTradingValueLast7Days = getAverageTradeValueLastXDay(data,7)
+  const isOneWeekStable = isStable(data,MIN_TRADING_DAYS)
+  const isOneMonStable = isStable(data,MAX_TRADING_DAYS)
+
+  const avsTradingValueLast7Days = getAverageTradeValueLastXDay(data,MIN_TRADING_DAYS)
 
     // 过滤近7天日均成交小于5m的比对，先试试看，动态调整参数
-    if(symbol === 'CLOUSDT'){
-      data.forEach(item=>{
-        const [timestamp, openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT] = item
-        console.debug(
-          moment(timestamp*1).format('YYYY-MM-DD'),
-          openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT
-        )
-      })
-    }
+    // if(symbol === 'CLOUSDT'){
+    //   data.forEach(item=>{
+    //     const [timestamp, openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT] = item
+    //     console.debug(
+    //       moment(timestamp*1).format('YYYY-MM-DD'),
+    //       openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT
+    //     )
+    //   })
+    // }
   return {
     symbol,
-    isStable: (isOneWeekStable||isOneMonkStable) && avsTradingValueLast7Days>minTradingUSDTValue,
+    isStable: (isOneWeekStable||isOneMonStable) && avsTradingValueLast7Days>minTradingUSDTValue,
     isOneWeekStable,
-    isOneMonkStable,
+    isOneMonStable,
     avsTradingValueLast7Days,
   }
 }
 
 // 稳定形态
-export const useStableLine = (tradingPairs)=>{
+export const useStableLine = ({
+  symbols,
+  type
+})=>{
     const [stablePairs, setStablePairs] = useState([])
     const [checkedSymbolCount, setCheckedSymbolCount] = useState(0)
     const checkedSymbolCountRef = useRef(0)
     const stablePairsRef = useRef([])
     const timeoutRef = useRef(null)
+    console.debug('symbols',symbols)
   
     const getTargetPairs = ()=>{
         if(timeoutRef.current){
             clearTimeout(timeoutRef.current)
         }
-        if(!tradingPairs.length) return
-        const batches = getBatches(tradingPairs);
+        if(!symbols.length) return
+        const batches = getBatches(symbols);
         // 请求，过滤，设置
         for(let i=0; i<batches.length; i++){
           timeoutRef.current = setTimeout(async ()=>{
             const batch = batches[i];
             const batchPromises = batch.map(async (symbol) => {
-              const checkResult = await checkPair(symbol);
+              const checkResult = await checkPair(symbol,type);
               return checkResult
             });
             const batchResults = await Promise.all(batchPromises);
@@ -114,7 +99,7 @@ export const useStableLine = (tradingPairs)=>{
 
     useEffect(()=>{
       getTargetPairs()
-    },[tradingPairs])
+    },[symbols])
 
     return {
       stablePairs,

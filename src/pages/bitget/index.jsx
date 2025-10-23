@@ -4,33 +4,18 @@ import {
   Row, 
   Col, 
   Table, 
-  Input, 
   Button, 
   Tag,
   Typography
 } from 'antd';
 import { 
   ReloadOutlined,
-  SearchOutlined
 } from '@ant-design/icons';
 import StableTable from './components/stable'
-import {getTradingPairs} from './api'
+import BurstTable from './components/burst'
+import {getTradingPairs,getSpotTradingPairs} from './api'
 
-const { Search } = Input;
 const { Title, Text } = Typography;
-
-// 交易所API配置 - 合约数据
-const EXCHANGE_APIS = {
-  bitget: {
-    name: 'Bitget',
-    baseUrl: 'https://api.bitget.com',
-    tickerUrl: '/api/v2/mix/market/tickers',
-    klineUrl: '/api/v2/mix/market/candles'
-  }
-  // 可扩展其他交易所配置
-  // binance: { ... },
-  // okx: { ... }
-};
 
 // 按1h涨跌排序，相同则按24h涨跌排序
 const sortPair = (pairs)=>{
@@ -51,156 +36,27 @@ const sortPair = (pairs)=>{
 
 const BitgetPage = () => {
   const [loading, setLoading] = useState(false);
-  const selectedExchange = 'bitget'; // 固定使用Bitget
-  const [tradingPairs, _setTradingPairs] = useState([]);
-  const [filteredPairs, setFilteredPairs] = useState([]);
-  const [searchText, setSearchText] = useState('');
-  const [selectedPair, setSelectedPair] = useState(null);
-  const [marketStats, setMarketStats] = useState({});
-  const [isConnected, setIsConnected] = useState(false); // 轮询状态
-  const [updateInterval, setUpdateInterval] = useState(null); // 轮询定时器
+  // 合约
+  const [tradingPairs, setTradingPairs] = useState([]);
+  // 现货
+  const [spotTradingPairs, setSpotTradingPairs] = useState([]);
 
-  // 新设置
-  const [mode, setMode] = useState('stable')
+  // 模式设置
+  const [mode, _setMode] = useState(localStorage.getItem('mode')||'stable')
 
-  const pairRef = useRef([])
-
-  const setTradingPairs = (p)=>{
-    _setTradingPairs(p)
-    pairRef.current = p
+  const setMode = v=>{
+    localStorage.setItem('mode',v)
+    _setMode(v)
   }
 
   const refresh = ()=>{
     getTradingPairs().then(res=>{
       setTradingPairs(res)
     })
+    getSpotTradingPairs().then(res=>{
+      setSpotTradingPairs(res)
+    })
   }
-
-  // 获取交易对数据
-  const fetchTradingPairs = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 处理Bitget数据格式
-      let processedPairs = await getTradingPairs()
-        .filter(item => item.symbol && item.symbol.endsWith('USDT'))
-        .map(item => ({
-          key: item.symbol,
-          symbol: item.symbol,
-          price: parseFloat(item.lastPr || 0),
-          change: parseFloat(item.change24h || 0),
-          changePercent: parseFloat(item.change24h || 0) * 100,
-          volume: parseFloat(item.quoteVolume || 0),
-          high24h: parseFloat(item.high24h || 0),
-          low24h: parseFloat(item.low24h || 0),
-          change1h: 0,
-          changePercent1h: 0
-        }));
-
-      const sorted = sortPair(processedPairs)
-
-      setTradingPairs(sorted);
-      setFilteredPairs(sorted);
-      
-      // 计算市场统计
-      const totalVolume = processedPairs.reduce((sum, pair) => sum + pair.volume, 0);
-      const gainers = processedPairs.filter(pair => pair.changePercent > 0).length;
-      const losers = processedPairs.filter(pair => pair.changePercent < 0).length;
-      
-      setMarketStats({
-        totalPairs: processedPairs.length,
-        totalVolume,
-        gainers,
-        losers
-      });
-
-    } catch (error) {
-      console.error('Error fetching trading pairs:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedExchange]);
-
-  // 启动轮询更新
-  const startPolling = useCallback(() => {
-    if (updateInterval) {
-      clearInterval(updateInterval);
-    }
-    
-    setIsConnected(true);
-    const interval = setInterval(() => {
-      fetchTradingPairs();
-    }, 2*60*1000); // 5秒更新一次
-    
-    setUpdateInterval(interval);
-  }, [updateInterval, fetchTradingPairs]);
-
-  // 停止轮询更新
-  const stopPolling = useCallback(() => {
-    if (updateInterval) {
-      clearInterval(updateInterval);
-      setUpdateInterval(null);
-    }
-    setIsConnected(false);
-  }, [updateInterval]);
-
-  // 批量获取1小时前的价格数据
-  const fetch1HourData = async () => {
-    const pairs = pairRef.current
-    try {
-      const exchange = EXCHANGE_APIS[selectedExchange];
-      const symbols = pairRef.current.map(pair => pair.symbol);
-      
-      // 分批处理，每批最多10个币对
-      const batchSize = 8;
-      const batches = [];
-      
-      for (let i = 0; i < symbols.length; i += batchSize) {
-        const batch = symbols.slice(i, i + batchSize);
-        batches.push(batch);
-      }
-      for(let i=0; i<batches.length; i++){
-        setTimeout(async ()=>{
-          const batch = batches[i];
-          const batchPromises = batch.map(async (symbol) => {
-            const response1H = await fetch(`${exchange.baseUrl}/${exchange.klineUrl}?symbol=${symbol}&granularity=1H&limit=2&productType=USDT-FUTURES`);
-            const response1Min = await fetch(`${exchange.baseUrl}/${exchange.klineUrl}?symbol=${symbol}&granularity=1m&limit=2&productType=USDT-FUTURES`);
-            const klineData1H = await response1H.json();
-            const klineData1Min = await response1Min.json();
-
-            return [klineData1H?.data?.[0],klineData1Min?.data?.[0]];
-          });
-          const batchResults = await Promise.all(batchPromises);
-          batchResults.forEach((result,i) => {
-            const symbol = batch[i]
-            const pair = pairs.find(p => p.symbol === symbol);
-            if (pair ) {
-              const [, , highPrice1H, lowPrice1H] = result?.[0] ??[]
-              const [,,highPrice1Min, lowPrice1Min] = result?.[1] ??[]
-              const max = Math.max(highPrice1H,highPrice1Min,lowPrice1Min)
-              if(lowPrice1H){
-                const change1h = max - lowPrice1H
-                const changePercent1h = ((max- lowPrice1H) / lowPrice1H) * 100;
-                pair.change1h = change1h;
-                pair.changePercent1h = changePercent1h;
-
-              }
-            }
-          });
-          setTradingPairs(sortPair(pairs));
-        },i * 1000)
-      }
-    } catch (error) {
-      console.error('Error fetching 1h data:', error);
-    }
-  };
-  // 搜索过滤
-  const handleSearch = (value) => {
-    setSearchText(value);
-    const filtered = tradingPairs.filter(pair => 
-      pair.symbol.toLowerCase().includes(value.toLowerCase())
-    );
-    setFilteredPairs(filtered);
-  };
 
   // 表格列定义
   const columns = [
@@ -274,32 +130,6 @@ const BitgetPage = () => {
     }
   ];
  
-  // 页面加载时获取数据
-  useEffect(() => {
-    refresh()
-  }, []);
-
-  // // 自动启动轮询
-  // useEffect(() => {
-  //   if (tradingPairs.length > 0 && !isConnected) {
-  //     startPolling();
-  //   }
-  // }, [tradingPairs.length, isConnected, startPolling]);
-
-  // // 页面卸载时清理定时器
-  // useEffect(() => {
-  //   return () => {
-  //     if (updateInterval) {
-  //       clearInterval(updateInterval);
-  //     }
-  //   };
-  // }, [updateInterval]);
-
-  // // 获取1小时前的价格数据来计算1h涨跌
-  // useEffect(()=>{
-  //   fetch1HourData();
-  // },[tradingPairs.length])
-
   return (
     <div className="bitget-page">
       <div className="page-header">
@@ -312,10 +142,17 @@ const BitgetPage = () => {
         <Row gutter={16} align="middle">
           <Col span={3}>
             <Button 
-              type={isConnected ? "default" : "primary"}
+              type={"primary"}
               onClick={()=>setMode('stable')}
             >
               stable
+            </Button>
+          </Col>
+          <Col span={3}>
+            <Button 
+              onClick={()=>setMode('burst')}
+            >
+              burst
             </Button>
           </Col>
           <Col span={3}>
@@ -330,26 +167,23 @@ const BitgetPage = () => {
           </Col>
         </Row>
       </Card>
-      <Row gutter={16}>
-        <Col span={selectedPair ? 14 : 24}>
-          <Card title="Bitget 合约交易对列表">
-            {mode === 'stable' ? <StableTable tradingPairs={tradingPairs}/>:null}
-            {mode === 'default' ?   <Table
-              columns={columns}
-              dataSource={tradingPairs}
-              loading={loading}
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total) => `共 ${total} 个交易对`
-              }}
-              scroll={{ x: 800 }}
-            />:null}
-          
-          </Card>
-        </Col>
-      </Row>
+        <Card title="Bitget 合约交易对列表">
+          {mode === 'stable' ? <StableTable  futureSymbols={tradingPairs} spotSymbols={spotTradingPairs}/>:null}
+          {mode === 'burst' ? <BurstTable futureSymbols={tradingPairs} spotSymbols={spotTradingPairs}/>:null}
+          {mode === 'default' ?   <Table
+            columns={columns}
+            dataSource={tradingPairs}
+            loading={loading}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 个交易对`
+            }}
+            scroll={{ x: 800 }}
+          />:null}
+        
+      </Card>
     </div>
   );
 };
