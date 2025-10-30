@@ -17,25 +17,7 @@ import {getTradingPairs,getSpotTradingPairs} from '../../container/bitget/api'
 
 const { Title, Text } = Typography;
 
-// 按1h涨跌排序，相同则按24h涨跌排序
-const sortPair = (pairs)=>{
-  pairs.sort((a, b) => {
-    if(!b.changePercent1h && !a.changePercent1h){
-      return b.changePercent - a.changePercent;
-    }
-    if(!b.changePercent1h){
-      return -1
-    }
-    if(!a.changePercent1h){
-      return 1
-    }
-    return (b.changePercent1h) - (a.changePercent1h)
-  });
-  return [...pairs]
-}
-
 const BitgetPage = () => {
-  const [loading, setLoading] = useState(false);
   // 合约
   const [tradingPairs, setTradingPairs] = useState([]);
   // 现货
@@ -160,7 +142,6 @@ const BitgetPage = () => {
               type="primary" 
               icon={<ReloadOutlined />} 
               onClick={refresh}
-              loading={loading}
             >
               刷新数据
             </Button>
@@ -173,7 +154,6 @@ const BitgetPage = () => {
           {mode === 'default' ?   <Table
             columns={columns}
             dataSource={tradingPairs}
-            loading={loading}
             pagination={{
               pageSize: 20,
               showSizeChanger: true,

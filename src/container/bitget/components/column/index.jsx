@@ -8,7 +8,7 @@ export const Operation = ({record})=> <div>
     <Button 
       type="link" 
       onClick={() => {
-        window.open(`https://sjk2oahoo1.com/zh-CN/futures/usdt/${record.symbol}`, '_blank');
+        window.open(`https://www.sjk2oahoo1.com/zh-CN/futures/usdt/${record.symbol}`, '_blank');
       }}
     >
       sjk-合约
@@ -34,7 +34,7 @@ export const Operation = ({record})=> <div>
 <Button 
   type="link" 
   onClick={() => {
-    window.open(`https://sjk2oahoo1.com/zh-CN/spot/${record.symbol}`, '_blank');
+    window.open(`https://www.sjk2oahoo1.com/zh-CN/spot/${record.symbol}`, '_blank');
   }}
 >
   sjk-现货

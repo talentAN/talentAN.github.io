@@ -1,6 +1,6 @@
 import React,{ useState}  from 'react';
 import {Operation} from '../column'
-import {useButstLine} from '../../hooks/burst-type'
+import {useBurstLine} from '../../hooks/burst-type'
 import { 
   Table, 
   Typography,
@@ -9,14 +9,14 @@ import {
 
 const {  Text } = Typography;
 
-const BurstTable = ({tradingPairs}) => {
+const BurstTable = ({futureSymbols}) => {
   const [period, setPeriod] = useState(3)
   const [risePencent, setRisePencent] = useState(300)
     const {
       burstPairs,
       checkedSymbolCount
-    } = useButstLine({
-      tradingPairs,
+    } = useBurstLine({
+      futureSymbols,
       risePencent,
       period
     })
@@ -58,12 +58,14 @@ const BurstTable = ({tradingPairs}) => {
     <div>
       周期
     <InputNumber value={period} onChange={e=>setPeriod(e)} />
+    天
     </div>
     <div>
       涨幅
     <InputNumber value={risePencent} onChange={e=>setRisePencent(e)} />
+    %
     </div>
-    <div>{`共${tradingPairs?.length}，已查看${checkedSymbolCount}，已筛选${burstPairs.length}`}</div>
+    <div>{`共${futureSymbols?.length}，已查看${checkedSymbolCount}，已筛选${burstPairs.length}`}</div>
       <Table
               columns={columns}
               dataSource={burstPairs}

@@ -1,7 +1,7 @@
 import  { useState, useEffect, useRef } from 'react';
 import {getBatches,getPeriodMinMax} from '../utils'
 import moment from 'moment';
-import {getKlineData} from '../api'
+import {getFutureKlineData} from '../api'
 
 const isBurst = (data, period,risePencent)=>{
     let min, max;
@@ -14,8 +14,8 @@ const isBurst = (data, period,risePencent)=>{
     return max >min && (max-min)/min * 100 > risePencent
 }
 
-export const useButstLine = ({
-    tradingPairs,
+export const useBurstLine = ({
+    futureSymbols,
     risePencent,
     period
 })=>{
@@ -28,7 +28,10 @@ export const useButstLine = ({
     const timeoutRef = useRef(null)
 
     const checkPair = async (symbol)=>{
-        const ret = await getKlineData({symbol,granularity:'1D',limit:period,
+        const ret = await getFutureKlineData({
+          symbol,
+          granularity:'1D',
+          limit:period,
           startTime: moment.utc().subtract(period, 'days').valueOf(),
           endTime: moment.utc().valueOf(),
       })
@@ -44,20 +47,7 @@ export const useButstLine = ({
         const isTarget = isBurst(data,period,risePencent)
         const [bottomPrice, topPrice] = getPeriodMinMax(data,period)
         const currentPrice = data[0][4]
-        // if(isTarget){
-        //     console.debug(currentPrice,bottomPrice, topPrice)
-        // }
-      
-          // 过滤近7天日均成交小于5m的比对，先试试看，动态调整参数
-          // if(symbol === 'CLOUSDT'){
-          //   data.forEach(item=>{
-          //     const [timestamp, openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT] = item
-          //     console.debug(
-          //       moment(timestamp*1).format('YYYY-MM-DD'),
-          //       openPrice, highPrice, lowPrice, closePrice,valueBySymbol, valueByUSDT
-          //     )
-          //   })
-          // }
+     
         return {
           symbol,
           isTarget,
@@ -69,7 +59,7 @@ export const useButstLine = ({
 
     const getTargetPairs = ()=>{
         const order = orderRef.current;
-        const batches = getBatches(tradingPairs);
+        const batches = getBatches(futureSymbols);
         // 请求，过滤，设置
         for(let i=0; i<batches.length; i++){
             setTimeout(async ()=>{
@@ -95,7 +85,7 @@ export const useButstLine = ({
     useEffect(()=>{
         orderRef.current = orderRef.current+1
         getTargetPairs()
-      },[tradingPairs,risePencent,
+      },[futureSymbols,risePencent,
         period])  
 
     return {
