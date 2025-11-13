@@ -11,7 +11,7 @@ isTranslated: false
 keywords: ['change', 'career']
 prePage: ''
 nextPage: ''
-totalCount: 245
+totalCount: 248
 ---
 
 It's undoubtedly fortunate to choose the industry you like when first start your career, but not everyone can do this. The first reaction I often hear from people learning about my experience is "What the fuck?!". Let's talk about the story today. 😁
