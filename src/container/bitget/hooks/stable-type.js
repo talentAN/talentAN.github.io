@@ -26,7 +26,6 @@ const checkPair = async (symbol, type)=>{
     endTime: moment.utc().valueOf(),
 })
   const data = (ret.data||[]).reverse()
-// 过滤上线超过2个月的老币对
   if(!data || data.length<MIN_TRADING_DAYS || data.length>=MAX_TRADING_DAYS){
     return {
       symbol,
@@ -50,7 +49,7 @@ const checkPair = async (symbol, type)=>{
     // }
   return {
     symbol,
-    isStable: (isOneWeekStable||isOneMonStable) && avsTradingValueLast7Days>minTradingUSDTValue,
+    isStable: isOneMonStable && avsTradingValueLast7Days>minTradingUSDTValue,
     isOneWeekStable,
     isOneMonStable,
     avsTradingValueLast7Days,

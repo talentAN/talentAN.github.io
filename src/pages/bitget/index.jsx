@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import StableTable from '../../container/bitget/components/stable'
 import BurstTable from '../../container/bitget/components/burst'
+import StableRiseTable from '../../container/bitget/components/stable-rise'
 import {getTradingPairs,getSpotTradingPairs} from '../../container/bitget/api'
 
 const { Title, Text } = Typography;
@@ -124,7 +125,7 @@ const BitgetPage = () => {
         <Row gutter={16} align="middle">
           <Col span={3}>
             <Button 
-              type={"primary"}
+              type={mode === 'stable' ?"primary" : ''}
               onClick={()=>setMode('stable')}
             >
               stable
@@ -132,9 +133,18 @@ const BitgetPage = () => {
           </Col>
           <Col span={3}>
             <Button 
+            type={mode === 'burst' ?"primary" : ''}
               onClick={()=>setMode('burst')}
             >
               burst
+            </Button>
+          </Col>
+          <Col span={3}>
+            <Button 
+                          type={mode === 'stable-rise' ?"primary" : ''}
+              onClick={()=>setMode('stable-rise')}
+            >
+              stable-rise
             </Button>
           </Col>
           <Col span={3}>
@@ -151,17 +161,7 @@ const BitgetPage = () => {
         <Card title="Bitget 合约交易对列表">
           {mode === 'stable' ? <StableTable  futureSymbols={tradingPairs} spotSymbols={spotTradingPairs}/>:null}
           {mode === 'burst' ? <BurstTable futureSymbols={tradingPairs} spotSymbols={spotTradingPairs}/>:null}
-          {mode === 'default' ?   <Table
-            columns={columns}
-            dataSource={tradingPairs}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total) => `共 ${total} 个交易对`
-            }}
-            scroll={{ x: 800 }}
-          />:null}
+          {mode === 'stable-rise' ? <StableRiseTable futureSymbols={tradingPairs} spotSymbols={spotTradingPairs}/>:null}
         
       </Card>
     </div>

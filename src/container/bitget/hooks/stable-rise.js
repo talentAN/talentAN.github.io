@@ -3,23 +3,26 @@ import {getBatches,getPeriodMinMax} from '../utils'
 import moment from 'moment';
 import {getFutureKlineData} from '../api'
 
-const isBurst = (data, period,risePencent)=>{
-    let min, max;
-    if(period===1){
-        [min,max] = getPeriodMinMax(data, period)
-    }else{
-         min = getPeriodMinMax(data.slice(1, period))[0]
-         max = getPeriodMinMax(data, period-1)[1];
+const isStableRise = (data, period,risePencent)=>{
+    const min = getPeriodMinMax(data.slice(1, period))[0]
+    const max = getPeriodMinMax(data, period-1)[1];
+
+    const isPercentValid = max >min && (max-min)/min * 100 > risePencent
+    let isRiseValid = true;
+    for(let i=0; i<period.length-1;i++){
+      const [,,,,close_price] = arr[i];
+      const [,,max_next_day,,close_price_next] = arr[i+1];
+      isRiseValid = isRiseValid && close_price_next>=close_price
     }
-    return max >min && (max-min)/min * 100 > risePencent
+    return  isPercentValid && isRiseValid
 }
 
-export const useBurstLine = ({
+export const useStableRiseLine = ({
     futureSymbols,
     risePencent,
     period
 })=>{
-    const [burstPairs, setBurstPairs] = useState([])
+    const [symbols, setBurstPairs] = useState([])
     const [checkedSymbolCount, setCheckedSymbolCount] = useState(0)
     // 记录批次的
     const orderRef = useRef(0)
@@ -44,7 +47,10 @@ export const useBurstLine = ({
             isTarget:false
           }
         }
-        const isTarget = isBurst(data,period,risePencent)
+        const isTarget = isStableRise(data,period,risePencent)
+        // if(symbol==='PHBUSDT'){
+        //   debugger
+        // }
         const [bottomPrice, topPrice] = getPeriodMinMax(data,period)
         const currentPrice = data[0][4]
      
@@ -88,7 +94,7 @@ export const useBurstLine = ({
       },[futureSymbols])  
 
     return {
-        burstPairs,
+        symbols,
         checkedSymbolCount
     }
 }
