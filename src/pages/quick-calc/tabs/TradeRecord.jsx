@@ -257,7 +257,8 @@ const TradeRecord = () => {
       setRecords(mergedData);
       message.success(`合并成功，共 ${mergedData.length} 条记录`);
     } catch (error) {
-      message.error('获取失败：' + error.message);
+      // message.error('获取失败：' + error.message);
+      setRecords(localRecords);
     } finally {
       setLoading(false);
     }
