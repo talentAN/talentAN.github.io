@@ -4,28 +4,24 @@ const process = require('process');
 const { google } = require('googleapis');
 const moment = require('moment');
 
-// TODO: 上线前别忘了改！！！
-const mode = 'online'; // debug | online
+// 加载环境变量
+if (!process.env.CI) {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.development') });
+}
+
+const isCI = process.env.CI === 'true';
+const workspaceRoot = isCI ? process.env.GITHUB_WORKSPACE : path.join(__dirname, '..');
 
 const getVariable = key => {
   const CONSTS = {
-    debug:{
-      path_totalCount: path.join(__dirname, '../googleAnalytics/totalCount.json'),
-      path_all: path.join(__dirname, '../googleAnalytics/all.js'),
-      path_static: path.join(__dirname, '../googleAnalytics/static.js'),
-      client_email: "com",
-      private_key: "-----BEGIN PRIVATE KEY-----",
-    },
-    online:{
-      path_totalCount: path.join(process.env.GITHUB_WORKSPACE,'googleAnalytics/totalCount.json'),
-      path_all: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/all.js'),
-      path_static: path.join(process.env.GITHUB_WORKSPACE, 'googleAnalytics/static.js'),
-      client_email: process.env.client_email,
-      private_key: process.env.private_key
-    }
-  }
-  return CONSTS[mode][key];
-}
+    path_totalCount: path.join(workspaceRoot, 'googleAnalytics/totalCount.json'),
+    path_all: path.join(workspaceRoot, 'googleAnalytics/all.js'),
+    path_static: path.join(workspaceRoot, 'googleAnalytics/static.js'),
+    client_email: process.env.GA_CLIENT_EMAIL,
+    private_key: process.env.GA_PRIVATE_KEY,
+  };
+  return CONSTS[key];
+};
 
 // 常量
 const IDS = 'ga:239799573';
@@ -69,7 +65,7 @@ const setBlobPageData = rows => {
     totalCounts[title] = Number(count);
   });
   // 获取文件存储路径
-  const path_totalCount = getVariable('path_totalCount')
+  const path_totalCount = getVariable('path_totalCount');
   fs.writeFileSync(path_totalCount, JSON.stringify(totalCounts));
   console.info('完成 => 设置「博客页」访问数据');
 };
@@ -80,7 +76,7 @@ const setBlobPageData = rows => {
  *  - 后面做crossfilter, 增量操作也方面进行数据库查询啥的
  */
 const setStaticPageData = rows => {
-  if(!rows || rows.length === 0){
+  if (!rows || rows.length === 0) {
     console.info('无更新数据');
     return;
   }
@@ -91,30 +87,31 @@ const setStaticPageData = rows => {
   // 获取原始数据, 生成新数据
   const originData = fs.readFileSync(path_all, 'utf8');
   const oldData = originData.split(pre)[1];
-  const newData = oldData.substring(0, oldData.length -1) + ','+ JSON.stringify(rows).substring(1);
+  const newData =
+    oldData.substring(0, oldData.length - 1) + ',' + JSON.stringify(rows).substring(1);
   fs.writeFileSync(path_all, pre + newData);
   console.info('完成 => 增量写入「统计页」访问数据');
-  
+
   console.info('开始 => 增量计算「统计页」展示数据');
   // 计算好的派生数据
-  const path_static = getVariable('path_static')
+  const path_static = getVariable('path_static');
   const static_data = JSON.parse(fs.readFileSync(path_static, 'utf8').split(pre)[1]);
-  rows.forEach(row=>{
+  rows.forEach(row => {
     const [path_blog, date, pageViews, avgTimeOnPage] = row;
     // 当日访问量
     static_data.filteredData[date] = static_data.filteredData[date] || 0;
     static_data.filteredData[date] += pageViews * 1;
     // 累计访问量
-    static_data.total = static_data.total*1 + pageViews * 1;
+    static_data.total = static_data.total * 1 + pageViews * 1;
     // 累计阅读时长
     static_data.total_time = static_data.total_time + pageViews * avgTimeOnPage;
-  })
+  });
   fs.writeFileSync(path_static, pre + JSON.stringify(static_data));
   console.info('完成 => 增量计算「统计页」展示数据');
 };
 
 const setAnalyticsData = async () => {
-  const [ client_email, private_key]  = [getVariable('client_email'), getVariable('private_key')];
+  const [client_email, private_key] = [getVariable('client_email'), getVariable('private_key')];
   const jwtClient = new google.auth.JWT(
     client_email,
     null,

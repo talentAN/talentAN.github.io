@@ -12,6 +12,7 @@ jobs:
         with:
           node-version: 18.17.0
       - run: npm install
+      - run: npm run install-action
       - run: npm run build
         env:
           GATSBY_BITGET_API_KEY: ${{ secrets.GATSBY_BITGET_API_KEY }}
