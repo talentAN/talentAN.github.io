@@ -13,6 +13,10 @@ jobs:
           node-version: 18.17.0
       - run: npm install
       - run: npm run build
+        env:
+          GATSBY_BITGET_API_KEY: ${{ secrets.GATSBY_BITGET_API_KEY }}
+          GATSBY_BITGET_API_SECRET: ${{ secrets.GATSBY_BITGET_API_SECRET }}
+          GATSBY_BITGET_PASSPHRASE: ${{ secrets.GATSBY_BITGET_PASSPHRASE }}
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GH_ACTION_DEPLOY_KEY}}

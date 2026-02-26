@@ -66,14 +66,10 @@ const QuickCalc = () => {
   return (
     <Layout className="outerPadding">
       <Layout className="container">
-        <SEO title="快速计算" path="quick-calc" />
-        <Header />
-        <SidebarWrapper>
           <div className="marginTopTitle">
             <Title level={2}>快速计算</Title>
-            <Tabs items={items} />
+            <Tabs items={items} defaultActiveKey="2" />
           </div>
-        </SidebarWrapper>
       </Layout>
     </Layout>
   );

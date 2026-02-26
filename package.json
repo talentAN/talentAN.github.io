@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "antd": "^4.21.6",
+    "crypto-js": "^4.2.0",
     "d3-scale": "^4.0.2",
     "feather-icons-react": "^0.4.3",
     "font-awesome": "^4.7.0",
