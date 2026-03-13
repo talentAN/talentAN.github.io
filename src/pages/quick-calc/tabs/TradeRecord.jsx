@@ -52,7 +52,18 @@ const TradeRecord = () => {
       dataIndex: 'symbol',
       key: 'symbol',
       width: 100,
-      render: (_, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : _),
+      render: (symbol, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        return (
+          <a 
+            href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} 
+            target="_blank" 
+            rel="noopener noreferrer"
+          >
+            {symbol}
+          </a>
+        );
+      },
     },
     {
       title: '方向',
@@ -199,7 +210,7 @@ const TradeRecord = () => {
       key: 'entryReason',
       width: 120,
       fixed: 'right',
-      render: (_, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : '-'),
+      render: (_, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : _),
     },
     {
       title: '备注',
@@ -207,15 +218,17 @@ const TradeRecord = () => {
       key: 'remark',
       width: 300,
       fixed: 'right',
-      render: (text, record) =>
-        record.type === 'summery' ? { props: { colSpan: 0 } } : text || '-',
+      render: (text, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        return <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>;
+      },
     },
   ];
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const localData = localRecords || [];
+      const localData = (localRecords || []).filter(r => !r.ignore);
       console.log(`本地数据: ${localData.length} 条`);
 
       const response = await authenticatedRequest('GET', '/api/v2/mix/position/history-position', {
@@ -258,7 +271,7 @@ const TradeRecord = () => {
       message.success(`合并成功，共 ${mergedData.length} 条记录`);
     } catch (error) {
       // message.error('获取失败：' + error.message);
-      setRecords(localRecords);
+      setRecords(localRecords.filter(r => !r.ignore));
     } finally {
       setLoading(false);
     }

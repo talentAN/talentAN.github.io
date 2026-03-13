@@ -6,6 +6,7 @@ import SEO from '../../components/Seo';
 import LiquidationCalculator from './tabs/LiquidationCalculator';
 import TradeRecord from './tabs/TradeRecord';
 import BitgetMonitor from './tabs/BitgetMonitor';
+import Calculator4 from './tabs/Calculator4';
 
 const { Title, Text } = Typography;
 
@@ -28,8 +29,8 @@ const QuickCalc = () => {
     },
     {
       key: '4',
-      label: '计算器4',
-      children: <Card>功能开发中...</Card>,
+      label: 'K线分析',
+      children: <Calculator4 />,
     },
     {
       key: '5',
