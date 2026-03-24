@@ -3,7 +3,7 @@ import { Card, Table, Button, message, DatePicker, Tag } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
-import localRecords from '../../../../contract-record/all.json';
+import localRecords from '@root/contract-record/all.json';
 import moment from 'moment';
 
 const { RangePicker } = DatePicker;

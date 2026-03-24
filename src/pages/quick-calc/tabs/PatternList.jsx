@@ -1,13 +1,38 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Input, message, Popconfirm } from 'antd';
-import patternData from '../../../../contract-record/pattern.json';
-
-const { TextArea } = Input;
+import { Card, Table, Button, Input, message, Tag } from 'antd';
+import patternData from '@root/contract-record/pattern.json';
+import { symbolMatchPattern } from '@trade/utils/symbol-match-pattern';
 
 const PatternList = ({ onPatternMatch }) => {
-  const [dataSource, setDataSource] = useState(patternData);
-  const [newPattern, setNewPattern] = useState('');
-  const [newRemark, setNewRemark] = useState('');
+  const [dataSource] = useState(patternData);
+  const [symbol, setSymbol] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [matchedPatterns, setMatchedPatterns] = useState([]);
+
+  const checkPattern = async () => {
+    if (!symbol.trim()) {
+      message.warning('请输入币对名称');
+      return;
+    }
+
+    setChecking(true);
+    setMatchedPatterns([]);
+
+    try {
+      const matched = await symbolMatchPattern(symbol);
+      setMatchedPatterns(matched);
+
+      if (matched.length > 0) {
+        message.success(`匹配到 ${matched.length} 个模式`);
+      } else {
+        message.info('未匹配到任何模式');
+      }
+    } catch (error) {
+      message.error('检测失败：' + error.message);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const columns = [
     {
@@ -15,6 +40,11 @@ const PatternList = ({ onPatternMatch }) => {
       dataIndex: 'pattern',
       key: 'pattern',
       width: 200,
+      render: (text, record) => {
+        const income = record.income || 0;
+        const color = income > 0 ? 'green' : income < 0 ? 'red' : 'inherit';
+        return <span style={{ color, fontWeight: 'bold' }}>{text}</span>;
+      },
     },
     {
       title: '形态',
@@ -27,64 +57,44 @@ const PatternList = ({ onPatternMatch }) => {
       title: '操作',
       key: 'action',
       width: 400,
-      render: (_, record, index) => (
+      render: (_, record) => (
         <>
           {record.id && (
             <Button
               type="primary"
               size="small"
               onClick={() => onPatternMatch && onPatternMatch(record.id)}
-              style={{ marginRight: 8 }}
             >
-              模式匹配
+              搜索
             </Button>
           )}
         </>
       ),
     },
-    {
-      title: '备注',
-      dataIndex: 'remark',
-      key: 'remark',
-      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
-    },
   ];
-
-  const handleDelete = index => {
-    const newData = dataSource.filter((_, i) => i !== index);
-    setDataSource(newData);
-    message.success('删除成功');
-  };
-
-  const handleExport = () => {
-    const text = JSON.stringify(dataSource, null, 2);
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        message.success('已复制到剪贴板，请手动更新 pattern.json 文件');
-      })
-      .catch(() => {
-        message.error('复制失败');
-      });
-  };
 
   return (
     <Card>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
         <Input
-          placeholder="模式名称"
-          value={newPattern}
-          onChange={e => setNewPattern(e.target.value)}
-          style={{ width: 200, marginRight: 8 }}
+          placeholder="输入币对名称（如：BTCUSDT）"
+          value={symbol}
+          onChange={e => setSymbol(e.target.value)}
+          onPressEnter={checkPattern}
+          style={{ width: 300 }}
         />
-        <TextArea
-          placeholder="备注说明"
-          value={newRemark}
-          onChange={e => setNewRemark(e.target.value)}
-          style={{ width: 400, marginRight: 8 }}
-          rows={2}
-        />
-        <Button onClick={handleExport}>导出数据</Button>
+        <Button type="primary" onClick={checkPattern} loading={checking}>
+          检测模式
+        </Button>
+        {matchedPatterns.length > 0 && (
+          <div style={{ marginLeft: 16 }}>
+            {matchedPatterns.map((pattern, index) => (
+              <Tag color="green" key={index}>
+                匹配: {pattern}
+              </Tag>
+            ))}
+          </div>
+        )}
       </div>
       <Table
         columns={columns}

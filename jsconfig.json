@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@trade/*": ["src/pages/quick-calc/*"],
+      "@root/*": ["*"]
+    }
+  }
+}

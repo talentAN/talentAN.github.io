@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, Table, Button, Input, message, Popconfirm } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import moment from 'moment';
-import watchData from '../../../../contract-record/watch.json';
+import watchData from '@root/contract-record/watch.json';
 
 const WatchList = () => {
   const [dataSource, setDataSource] = useState(watchData);
