@@ -28,13 +28,13 @@ const QuickCalc = ({ children, location }) => {
       '/quick-calc/liquidation',
       '/quick-calc/system_1',
     ];
-    
+
     for (const route of routes) {
       if (cleanPath.startsWith(route)) {
         return route;
       }
     }
-    
+
     return '/quick-calc/trade-record';
   };
 

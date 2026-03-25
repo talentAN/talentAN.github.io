@@ -70,20 +70,24 @@ const PairSelector = () => {
       )}
       <Col span={showDetails ? 12 : 24}>
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Title level={3} style={{ margin: 0 }}>高点缩量横盘币对</Title>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 16,
+            }}
+          >
+            <Title level={3} style={{ margin: 0 }}>
+              高点缩量横盘币对
+            </Title>
             <Space>
-              <Button 
+              <Button
                 icon={<MenuOutlined />}
                 onClick={() => setShowDetails(!showDetails)}
                 title={showDetails ? '隐藏说明' : '显示说明'}
               />
-              <Button 
-                type="primary" 
-                icon={<ReloadOutlined />} 
-                onClick={loadData}
-                loading={loading}
-              >
+              <Button type="primary" icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
                 刷新
               </Button>
             </Space>
@@ -93,9 +97,7 @@ const PairSelector = () => {
               <RiseToFallTable futureSymbols={tradingPairs} />
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <Text type="secondary">
-                  {loading ? '加载中...' : '点击刷新获取数据'}
-                </Text>
+                <Text type="secondary">{loading ? '加载中...' : '点击刷新获取数据'}</Text>
               </div>
             )}
           </Spin>
