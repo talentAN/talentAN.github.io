@@ -7,6 +7,18 @@ import moment from 'moment';
 
 const { Text } = Typography;
 
+const formatVolume = (volume) => {
+  if (!volume) return '-';
+  const num = parseFloat(volume);
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(2)}M`;
+  }
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(2)}K`;
+  }
+  return num.toFixed(2);
+};
+
 const StableTable = ({ futureSymbols }) => {
   const [priceData, setPriceData] = useState({});
 
@@ -76,10 +88,10 @@ const StableTable = ({ futureSymbols }) => {
       render: text => <Text strong>{text}</Text>,
     },
     {
-      title: '7日平均成交额',
-      dataIndex: 'avsTradingValueLast7Days',
-      key: 'avsTradingValueLast7Days',
-      render: text => <Text strong>{text}</Text>,
+      title: '60日均成交额',
+      dataIndex: 'avgVolume',
+      key: 'avgVolume',
+      render: text => <Text strong>{formatVolume(text)}</Text>,
     },
     {
       title: '最低价(60天)',

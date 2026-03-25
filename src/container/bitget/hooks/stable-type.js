@@ -1,23 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { getFutureKlineData } from '../api';
 import moment from 'moment';
-import { minTradingUSDTValue, MAX_TRADING_DAYS, MIN_TRADING_DAYS } from '../constants/filter';
-import { getBatches, getPeriodMinMax } from '../utils';
-
-const isStable = (data, count) => {
-  const [min, max] = getPeriodMinMax(data, count);
-  return max <= min * 2;
-};
-
-// 一周内平均成交总额
-const getAverageTradeValueLastXDay = (data, days) => {
-  return (
-    data.slice(0, days).reduce((acc, cur) => {
-      const valueByUSDT = cur[cur.length - 1];
-      return acc + valueByUSDT * 1;
-    }, 0) / days
-  );
-};
+import { MAX_TRADING_DAYS, MIN_TRADING_DAYS } from '../constants/filter';
+import { getBatches } from '../utils';
+import { matchLongStable, parseKlineData } from '@trade/utils/symbol-match-pattern';
 
 const checkPair = async symbol => {
   try {
@@ -46,20 +32,18 @@ const checkPair = async symbol => {
       endTime: moment.utc().valueOf(),
     });
     const data = (ret.data || []).reverse();
+    // 上币小于30天的不看
     if (!data || data.length < MIN_TRADING_DAYS) {
       return {
         symbol,
         isStable: false,
       };
     }
-    const isOneMonStable = isStable(data, MAX_TRADING_DAYS);
-
-    const avsTradingValueLast7Days = getAverageTradeValueLastXDay(data, MIN_TRADING_DAYS);
-
+    const aggData = parseKlineData(data);
     return {
       symbol,
-      isStable: isOneMonStable && avsTradingValueLast7Days > minTradingUSDTValue,
-      avsTradingValueLast7Days,
+      isStable: matchLongStable(aggData),
+      avgVolume: aggData.avgVolume,
     };
   } catch (error) {
     console.error(`检查${symbol}失败:`, error);

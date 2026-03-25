@@ -6,12 +6,13 @@ const { Content } = Layout;
 
 const QuickCalc = ({ children, location }) => {
   const menuItems = [
-    { key: '/quick-calc/liquidation', label: '预估爆仓价' },
-    { key: '/quick-calc/trade-record', label: '交易复盘' },
+    { key: '/quick-calc/trade-record', label: '交易记录' },
     { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/kang-dan', label: '扛单分析' },
     { key: '/quick-calc/watch-list', label: '观测中' },
     { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
+    { key: '/quick-calc/liquidation', label: '预估爆仓价' },
+    { key: '/quick-calc/system_1', label: '系统1' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/trade-record';
@@ -27,15 +28,7 @@ const QuickCalc = ({ children, location }) => {
           onClick={({ key }) => navigate(key)}
           style={{ marginBottom: 16 }}
         />
-        <Content
-          style={{
-            padding: 24,
-            minHeight: 280,
-            background: '#fff',
-          }}
-        >
-          {children}
-        </Content>
+        <Content>{children}</Content>
       </Layout>
     </Layout>
   );
