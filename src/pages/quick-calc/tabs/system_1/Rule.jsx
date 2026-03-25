@@ -47,7 +47,11 @@ const Rule = () => {
   const phaseMeltdownData = [
     { key: '1', condition: '连续亏损 5 笔', action: '暂停交易 3 天，进行全面复盘' },
     { key: '2', condition: '账户从阶段高点回撤达 15%', action: '暂停交易 1 周，审视系统是否失效' },
-    { key: '3', condition: '账户从阶段高点回撤达 20%', action: '暂停交易 2 周，完整复盘后才能恢复' },
+    {
+      key: '3',
+      condition: '账户从阶段高点回撤达 20%',
+      action: '暂停交易 2 周，完整复盘后才能恢复',
+    },
   ];
 
   return (
@@ -55,10 +59,16 @@ const Rule = () => {
       <Typography>
         <Title level={2}>风控规则 v1.0</Title>
         <Paragraph type="secondary">
-          任务 1.1 产出<br />
-          创建日期：2026-03-25<br />
-          适用资金规模：500U<br />
-          状态：<Text strong style={{ color: '#52c41a' }}>生效中</Text>
+          任务 1.1 产出
+          <br />
+          创建日期：2026-03-25
+          <br />
+          适用资金规模：500U
+          <br />
+          状态：
+          <Text strong style={{ color: '#52c41a' }}>
+            生效中
+          </Text>
         </Paragraph>
 
         <Divider />
@@ -66,7 +76,8 @@ const Rule = () => {
         <Title level={3}>〇、核心理念</Title>
         <Paragraph>
           <blockquote style={{ borderLeft: '4px solid #1890ff', paddingLeft: 16, color: '#666' }}>
-            交易的第一目标不是赚钱，是活下来。<br />
+            交易的第一目标不是赚钱，是活下来。
+            <br />
             只有活着，才有机会等到大行情。
           </blockquote>
         </Paragraph>
@@ -74,14 +85,16 @@ const Rule = () => {
         <Divider />
 
         <Title level={3}>一、单笔风险控制（最重要的一条规则）</Title>
-        
+
         <Title level={4}>规则 R1：单笔最大亏损 ≤ 总资金的 2%</Title>
         <Paragraph>
           <Text code>单笔最大亏损 = 总资金 × 2%</Text>
         </Paragraph>
         <Paragraph>
-          <Text strong>示例（总资金 500U）：</Text><br />
-          单笔最大亏损 = 500 × 2% = 10U<br />
+          <Text strong>示例（总资金 500U）：</Text>
+          <br />
+          单笔最大亏损 = 500 × 2% = 10U
+          <br />
           无论这笔交易用多少杠杆、开多大仓位，如果触发止损，亏损不能超过 10U。
         </Paragraph>
         <Paragraph>
@@ -98,17 +111,24 @@ const Rule = () => {
           <Text code>仓位大小 = 单笔最大亏损 ÷ (止损幅度% × 杠杆倍数)</Text>
         </Paragraph>
         <Paragraph>
-          <Text strong>示例：</Text><br />
-          总资金 500U，单笔风险 2%（10U）<br />
-          计划止损幅度 5%，杠杆 3x<br />
+          <Text strong>示例：</Text>
           <br />
-          仓位保证金 = 10 ÷ (5% × 3) = 10 ÷ 0.15 = 66.7U<br />
+          总资金 500U，单笔风险 2%（10U）
           <br />
-          验证：66.7U × 3x杠杆 = 200U 名义头寸<br />
+          计划止损幅度 5%，杠杆 3x
+          <br />
+          <br />
+          仓位保证金 = 10 ÷ (5% × 3) = 10 ÷ 0.15 = 66.7U
+          <br />
+          <br />
+          验证：66.7U × 3x杠杆 = 200U 名义头寸
+          <br />
           亏损 5%：200 × 5% = 10U ✓ 等于最大风险
         </Paragraph>
         <Paragraph>
-          <Text strong type="danger">铁律：先定止损，再算仓位。永远不要反过来。</Text>
+          <Text strong type="danger">
+            铁律：先定止损，再算仓位。永远不要反过来。
+          </Text>
         </Paragraph>
 
         <Divider />
@@ -123,33 +143,42 @@ const Rule = () => {
         <Divider />
 
         <Title level={3}>三、熔断机制（强制休息）</Title>
-        
+
         <Title level={4}>规则 R4：单日熔断</Title>
-        <Table 
-          columns={meltdownColumns} 
-          dataSource={dailyMeltdownData} 
+        <Table
+          columns={meltdownColumns}
+          dataSource={dailyMeltdownData}
           pagination={false}
           size="small"
         />
 
-        <Title level={4} style={{ marginTop: 24 }}>规则 R5：阶段熔断</Title>
-        <Table 
-          columns={meltdownColumns} 
-          dataSource={phaseMeltdownData} 
+        <Title level={4} style={{ marginTop: 24 }}>
+          规则 R5：阶段熔断
+        </Title>
+        <Table
+          columns={meltdownColumns}
+          dataSource={phaseMeltdownData}
           pagination={false}
           size="small"
         />
         <Paragraph style={{ marginTop: 16 }}>
-          <Text strong>熔断的意义</Text>：不是惩罚，而是保护。连续亏损时，心态已经不正常了。继续交易大概率是"报复性交易"，只会加速亏损。
+          <Text strong>熔断的意义</Text>
+          ：不是惩罚，而是保护。连续亏损时，心态已经不正常了。继续交易大概率是"报复性交易"，只会加速亏损。
         </Paragraph>
 
         <Divider />
 
         <Title level={3}>四、加仓规则</Title>
-        
+
         <Title level={4}>规则 R6：只在盈利仓位上加仓</Title>
         <ul>
-          <li>浮亏的仓位<Text strong type="danger">永远不加仓</Text>（"摊低成本"是亏损交易者最常见的错误）</li>
+          <li>
+            浮亏的仓位
+            <Text strong type="danger">
+              永远不加仓
+            </Text>
+            （"摊低成本"是亏损交易者最常见的错误）
+          </li>
           <li>只有当仓位浮盈，且止损已上移至保本位以上时，才允许加仓</li>
           <li>加仓后的新止损仍需满足 R1（单笔2%风险）</li>
         </ul>
@@ -162,7 +191,7 @@ const Rule = () => {
         <Divider />
 
         <Title level={3}>五、特殊情况规则</Title>
-        
+
         <Title level={4}>规则 R8：不隔夜持有无止损的仓位</Title>
         <ul>
           <li>每一个持仓必须有止损单（限价或市价触发）</li>
@@ -184,7 +213,7 @@ const Rule = () => {
         <Paragraph>每次开仓前，过一遍这个清单：</Paragraph>
         <Paragraph>
           <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 4 }}>
-{`□ 1. 止损价格已确定
+            {`□ 1. 止损价格已确定
 □ 2. 仓位已按公式计算（不是拍脑袋）
 □ 3. 当前持仓数 < 3
 □ 4. 今日未触发熔断
@@ -202,9 +231,9 @@ const Rule = () => {
 
         <Title level={3}>七、快速参考表</Title>
         <Paragraph>以下是不同资金量下的关键数值速查：</Paragraph>
-        <Table 
-          columns={quickRefColumns} 
-          dataSource={quickRefData} 
+        <Table
+          columns={quickRefColumns}
+          dataSource={quickRefData}
           pagination={false}
           size="small"
         />
@@ -212,10 +241,12 @@ const Rule = () => {
         <Divider />
 
         <Title level={3}>八、仓位速算表</Title>
-        <Paragraph>单笔风险 2%，不同止损幅度和杠杆下的保证金（总资金 500U，最大亏损 10U）：</Paragraph>
-        <Table 
-          columns={positionColumns} 
-          dataSource={positionData} 
+        <Paragraph>
+          单笔风险 2%，不同止损幅度和杠杆下的保证金（总资金 500U，最大亏损 10U）：
+        </Paragraph>
+        <Table
+          columns={positionColumns}
+          dataSource={positionData}
           pagination={false}
           size="small"
         />
@@ -227,15 +258,15 @@ const Rule = () => {
 
         <Title level={3}>九、违规记录</Title>
         <Paragraph>每次违反以上规则时，在此记录（诚实面对自己）：</Paragraph>
-        <Table 
+        <Table
           columns={[
             { title: '日期', dataIndex: 'date', key: 'date' },
             { title: '违反规则', dataIndex: 'rule', key: 'rule' },
             { title: '具体情况', dataIndex: 'detail', key: 'detail' },
             { title: '后果', dataIndex: 'result', key: 'result' },
             { title: '反思', dataIndex: 'reflection', key: 'reflection' },
-          ]} 
-          dataSource={[]} 
+          ]}
+          dataSource={[]}
           pagination={false}
           size="small"
           locale={{ emptyText: '暂无违规记录' }}
@@ -244,7 +275,8 @@ const Rule = () => {
         <Divider />
 
         <Paragraph type="secondary" style={{ fontStyle: 'italic', marginTop: 32 }}>
-          本规则为 v1.0，随实盘经验积累可微调参数，但核心框架（单笔2%、必须止损、熔断机制）不可动摇。
+          本规则为
+          v1.0，随实盘经验积累可微调参数，但核心框架（单笔2%、必须止损、熔断机制）不可动摇。
         </Paragraph>
       </Typography>
     </Card>

@@ -3,18 +3,28 @@ import { Card, Menu } from 'antd';
 import { navigate } from 'gatsby';
 import Rule from './Rule';
 import PositionCalculator from './PositionCalculator';
+import PairSelector from './PairSelector';
 
 const System1 = ({ location }) => {
   const menuItems = [
     { key: '/quick-calc/system_1/rule', label: '风控规则' },
     { key: '/quick-calc/system_1/position-calculator', label: '仓位计算器' },
+    { key: '/quick-calc/system_1/pair-selector', label: '币对筛选' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/system_1/rule';
-  const selectedKey = currentPath.split('?')[0];
+  const cleanPath = currentPath.split('?')[0];
+  
+  const selectedKey = 
+    cleanPath.startsWith('/quick-calc/system_1/position-calculator') 
+      ? '/quick-calc/system_1/position-calculator'
+      : cleanPath.startsWith('/quick-calc/system_1/pair-selector')
+      ? '/quick-calc/system_1/pair-selector'
+      : '/quick-calc/system_1/rule';
 
   const showRule = currentPath.includes('/system_1/rule') || currentPath === '/quick-calc/system_1' || currentPath === '/quick-calc/system_1/';
   const showPositionCalculator = currentPath.includes('/system_1/position-calculator');
+  const showPairSelector = currentPath.includes('/system_1/pair-selector');
 
   return (
     <Card>
@@ -27,6 +37,7 @@ const System1 = ({ location }) => {
       />
       {showRule && <Rule />}
       {showPositionCalculator && <PositionCalculator />}
+      {showPairSelector && <PairSelector />}
     </Card>
   );
 };

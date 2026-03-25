@@ -16,7 +16,29 @@ const QuickCalc = ({ children, location }) => {
   ];
 
   const currentPath = location?.pathname || '/quick-calc/trade-record';
-  const selectedKey = currentPath.split('?')[0];
+  const cleanPath = currentPath.split('?')[0];
+
+  const getSelectedKey = () => {
+    const routes = [
+      '/quick-calc/trade-record',
+      '/quick-calc/pattern',
+      '/quick-calc/kang-dan',
+      '/quick-calc/watch-list',
+      '/quick-calc/bitget-monitor',
+      '/quick-calc/liquidation',
+      '/quick-calc/system_1',
+    ];
+    
+    for (const route of routes) {
+      if (cleanPath.startsWith(route)) {
+        return route;
+      }
+    }
+    
+    return '/quick-calc/trade-record';
+  };
+
+  const selectedKey = getSelectedKey();
 
   return (
     <Layout className="outerPadding">
