@@ -3,10 +3,47 @@ import { getFutureTicker } from '../../../container/bitget/api';
 import { isBullishEntrySignal, isBearishEntrySignal } from './kline-pattern';
 
 /**
- * 判断价格是否接近某水平位 ±2%
+ * 获取所有触发的水平位（可能有多个）±2%
  */
-const isNearPrice = (low, high, levels) => {
-  return levels.some(level => low <= level.price * 1.02 && high >= level.price * 0.98);
+const getTriggeredLevels = (low, high, levels) => {
+  if (!levels) return [];
+  return levels.filter(level => low <= level.price * 1.02 && high >= level.price * 0.98);
+};
+
+/**
+ * 对触发的关键位进行去重
+ * 同一方法的多个关键位，只保留强度最高的那个
+ * 不同方法的关键位都保留
+ */
+const deduplicateTriggeredLevels = levels => {
+  const groupedByMethod = {};
+
+  // 按方法分组
+  levels.forEach(level => {
+    const methods = level.methods || [];
+    methods.forEach(method => {
+      if (!groupedByMethod[method]) {
+        groupedByMethod[method] = [];
+      }
+      groupedByMethod[method].push(level);
+    });
+  });
+
+  // 每个方法组中只保留强度最高的
+  const dedupedLevels = [];
+  Object.keys(groupedByMethod).forEach(method => {
+    const methodLevels = groupedByMethod[method];
+    // 按强度排序，强度高的在前
+    const strongest = methodLevels.sort((a, b) => b.strength - a.strength)[0];
+    if (
+      strongest &&
+      !dedupedLevels.some(l => l.price === strongest.price && l.strength === strongest.strength)
+    ) {
+      dedupedLevels.push(strongest);
+    }
+  });
+
+  return dedupedLevels;
 };
 
 /**
@@ -22,17 +59,22 @@ export const checkBullishEntry = async (symbol, klineData) => {
   const lastKline = klineData[klineData.length - 1];
   const [, , highLastDay, lowLastDay] = lastKline;
 
-  // 检测价格是否进入支撑位 ±2%
-  const _isNearSupport =
-    isNearPrice(low24h, high24h, support) || isNearPrice(lowLastDay, highLastDay, support);
+  // 获取所有触发的支撑位（可能有多个不同价格）
+  let triggeredLevels = getTriggeredLevels(low24h, high24h, support);
+  if (triggeredLevels.length === 0) {
+    triggeredLevels = getTriggeredLevels(lowLastDay, highLastDay, support);
+  }
 
-  if (!_isNearSupport) {
+  if (triggeredLevels.length === 0) {
     return {
       shouldEntry: false,
       reason: '价格未进入支撑位',
       type: 'bullish',
     };
   }
+
+  // 同类型的关键位去重（同一识别方法只保留强度最高的）
+  triggeredLevels = deduplicateTriggeredLevels(triggeredLevels);
 
   // 检查是否出现看涨K线信号
   const bullishSignal = isBullishEntrySignal([...klineData.slice(-2), lastKline]);
@@ -43,6 +85,7 @@ export const checkBullishEntry = async (symbol, klineData) => {
       reason: '未出现看涨K线信号',
       matchKeyPoint: true,
       type: 'bullish',
+      triggeredLevels, // 记录所有触发的支撑位
     };
   }
 
@@ -50,7 +93,7 @@ export const checkBullishEntry = async (symbol, klineData) => {
     shouldEntry: true,
     matchKeyPoint: true,
     signal: bullishSignal,
-    keyLevels: { support },
+    triggeredLevels, // 返回所有触发的支撑位
     type: 'bullish',
   };
 };
@@ -68,17 +111,22 @@ export const checkBearishEntry = async (symbol, klineData) => {
   const lastKline = klineData[klineData.length - 1];
   const [, , highLastDay, lowLastDay] = lastKline;
 
-  // 检测价格是否进入阻力位 ±2%
-  const _isNearResistance =
-    isNearPrice(low24h, high24h, resistance) || isNearPrice(lowLastDay, highLastDay, resistance);
+  // 检测价格是否进入阻力位 ±2%，并获取触发的具体阻力位
+  let triggeredLevels = getTriggeredLevels(low24h, high24h, resistance);
+  if (triggeredLevels.length === 0) {
+    triggeredLevels = getTriggeredLevels(lowLastDay, highLastDay, resistance);
+  }
 
-  if (!_isNearResistance) {
+  if (triggeredLevels.length === 0) {
     return {
       shouldEntry: false,
       reason: '价格未进入阻力位',
       type: 'bearish',
     };
   }
+
+  // 同类型的关键位去重（同一识别方法只保留强度最高的）
+  triggeredLevels = deduplicateTriggeredLevels(triggeredLevels);
 
   // 检查是否出现看跌K线信号
   const bearishSignal = isBearishEntrySignal([...klineData.slice(-2), lastKline]);
@@ -89,6 +137,7 @@ export const checkBearishEntry = async (symbol, klineData) => {
       reason: '未出现看跌K线信号',
       matchKeyPoint: true,
       type: 'bearish',
+      triggeredLevels, // 记录所有触发的阻力位
     };
   }
 
@@ -96,7 +145,7 @@ export const checkBearishEntry = async (symbol, klineData) => {
     shouldEntry: true,
     matchKeyPoint: true,
     signal: bearishSignal,
-    keyLevels: { resistance },
+    triggeredLevels, // 返回所有触发的阻力位
     type: 'bearish',
   };
 };

@@ -130,7 +130,7 @@ export const findKeyLevels = (swingPoints, tolerance = 1.5, minInterval = 5) => 
 
       if (!existingLevel) {
         keyLevels.push({
-          price: parseFloat(avgPrice.toFixed(2)),
+          price: parseFloat(avgPrice.toFixed(4)),
           points: allPoints.sort((a, b) => a.index - b.index),
           strength: allPoints.length, // 强度由相关摆动点数量决定
         });
@@ -273,12 +273,12 @@ export const findConsolidationZones = (klineData, minDays = 10, maxAmplitude = 8
               endIndex: endIdx,
               startTime: klineData[startIdx][0],
               endTime: klineData[endIdx][0],
-              high: parseFloat(currentHigh.toFixed(2)),
-              low: parseFloat(currentLow.toFixed(2)),
+              high: parseFloat(currentHigh.toFixed(4)),
+              low: parseFloat(currentLow.toFixed(4)),
               amplitude: parseFloat(amplitude.toFixed(2)),
               duration,
-              resistancePrice: parseFloat(currentHigh.toFixed(2)),
-              supportPrice: parseFloat(currentLow.toFixed(2)),
+              resistancePrice: parseFloat(currentHigh.toFixed(4)),
+              supportPrice: parseFloat(currentLow.toFixed(4)),
             });
           }
         }
@@ -391,7 +391,7 @@ export const findAllSupportResistanceLevels = klineData => {
 
   // 添加摆动点识别的阻力位
   for (const level of resistanceFromSwing) {
-    const key = level.price.toFixed(2);
+    const key = level.price.toFixed(4);
     if (!resistanceLevelMap.has(key)) {
       resistanceLevelMap.set(key, {
         price: level.price,
@@ -413,7 +413,7 @@ export const findAllSupportResistanceLevels = klineData => {
 
   // 添加密集区识别的阻力位
   for (const zone of consolidationZones) {
-    const key = zone.resistancePrice.toFixed(2);
+    const key = zone.resistancePrice.toFixed(4);
     const tolerance = zone.high * 0.015; // 1.5% 容差
 
     let found = false;
@@ -449,7 +449,7 @@ export const findAllSupportResistanceLevels = klineData => {
 
   // 添加摆动点识别的支撑位
   for (const level of supportFromSwing) {
-    const key = level.price.toFixed(2);
+    const key = level.price.toFixed(4);
     if (!supportLevelMap.has(key)) {
       supportLevelMap.set(key, {
         price: level.price,
@@ -471,7 +471,7 @@ export const findAllSupportResistanceLevels = klineData => {
 
   // 添加密集区识别的支撑位
   for (const zone of consolidationZones) {
-    const key = zone.supportPrice.toFixed(2);
+    const key = zone.supportPrice.toFixed(4);
     const tolerance = zone.low * 0.015; // 1.5% 容差
 
     let found = false;

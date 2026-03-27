@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getBatches } from '../utils';
 import moment from 'moment';
 import { getFutureKlineData } from '../api';
-import { matchRiseToFall } from '../../../pages/quick-calc/utils/symbol-match-pattern';
+import { shouldEntry } from '@trade/utils/should-entry';
 
 export const useRiseToFallLine = ({ futureSymbols }) => {
   const [symbols, setSymbols] = useState([]);
@@ -15,7 +15,7 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
   const checkPair = async symbol => {
     const ret = await getFutureKlineData({
       symbol,
-      granularity: '1D',
+      granularity: '1Dutc',
       limit: 90,
       startTime: moment.utc().subtract(90, 'days').valueOf(),
       endTime: moment.utc().valueOf(),
@@ -29,15 +29,17 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
       };
     }
 
-    const isTarget = matchRiseToFall(data);
+    // 使用 shouldEntry 检查是否满足入场条件
+    const entryResult = await shouldEntry(symbol, data);
     const currentPrice = parseFloat(data[data.length - 1][4]);
     const resistancePrice = Math.max(...data.slice(0, 80).map(k => parseFloat(k[2])));
 
     return {
       symbol,
-      isTarget,
+      isTarget: entryResult.shouldEntry,
       currentPrice: currentPrice.toFixed(4),
       resistancePrice: resistancePrice.toFixed(4),
+      entrySignal: entryResult.shouldEntry ? entryResult : null,
     };
   };
 

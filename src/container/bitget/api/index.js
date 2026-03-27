@@ -74,10 +74,11 @@ export const getSpotKlineData = async ({ symbol, granularity, limit = 2, startTi
 // 获取单个合约交易对行情
 export const getFutureTicker = async symbol => {
   try {
-    const ret = await fetch(
+    const response = await fetch(
       `${exchange.baseUrl}/api/v2/mix/market/ticker?productType=USDT-FUTURES&symbol=${symbol}`
     );
-    return ret.json()?.data?.[0];
+    const data = await response.json();
+    return data?.data?.[0];
   } catch (e) {
     console.error('Get future ticker error:', e);
     return {};
