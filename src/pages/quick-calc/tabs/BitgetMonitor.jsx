@@ -6,7 +6,7 @@ import BurstTable from '../../../container/bitget/components/burst';
 import StableRiseTable from '../../../container/bitget/components/stable-rise';
 import RiseToFallTable from '../../../container/bitget/components/rise-to-fall';
 import { getTradingPairs, getSpotTradingPairs } from '../../../container/bitget/api';
-import { PATTERN } from '@trade/constant';
+import { PATTERN } from '@root/src/consts';
 
 const BitgetMonitor = ({ mode: externalMode }) => {
   const [tradingPairs, setTradingPairs] = useState([]);

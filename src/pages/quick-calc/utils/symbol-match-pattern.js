@@ -1,5 +1,5 @@
 import { getFutureKlineData } from '../../../container/bitget/api';
-import { PATTERN } from '@trade/constant';
+import { PATTERN } from '@root/src/consts';
 import moment from 'moment';
 
 // 工具方法
