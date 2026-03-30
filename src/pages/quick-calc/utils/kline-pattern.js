@@ -91,7 +91,7 @@ function isSmallBody(kline, referenceBodyLength) {
  *   2. 下影线长度 ≥ 实体长度的 2 倍
  *   3. 上影线 ≤ 实体长度
  */
-export function isHammer(kline) {
+function isHammer(kline) {
   const bodyLength = getBodyLength(kline);
   const lowerShadow = getLowerShadow(kline);
   const upperShadow = getUpperShadow(kline);
@@ -116,7 +116,7 @@ export function isHammer(kline) {
  *   3. 当前K线的实体完全覆盖前一根的实体：C > 前O 且 O < 前C
  *   4. 当前K线实体长度 > 前一根实体长度
  */
-export function isBullishEngulfing(prevKline, currKline) {
+function isBullishEngulfing(prevKline, currKline) {
   const prev = normalizeKline(prevKline);
   const curr = normalizeKline(currKline);
 
@@ -145,7 +145,7 @@ export function isBullishEngulfing(prevKline, currKline) {
  *   4. K3 是阳线：K3.C > K3.O
  *   5. K3 收盘价至少进入 K1 实体的 50% 以上：K3.C > (K1.O + K1.C) / 2
  */
-export function isMorningStar(k1, k2, k3) {
+function isMorningStar(k1, k2, k3) {
   const kl1 = normalizeKline(k1);
   const kl2 = normalizeKline(k2);
   const kl3 = normalizeKline(k3);
@@ -178,7 +178,7 @@ export function isMorningStar(k1, k2, k3) {
  *   2. 上影线 ≥ 实体的 2 倍：(H - max(O,C)) ≥ 2 × |C - O|
  *   3. 下影线 ≤ 实体：(min(O,C) - L) ≤ |C - O|
  */
-export function isShootingStar(kline) {
+function isShootingStar(kline) {
   const bodyLength = getBodyLength(kline);
   const upperShadow = getUpperShadow(kline);
   const lowerShadow = getLowerShadow(kline);
@@ -203,7 +203,7 @@ export function isShootingStar(kline) {
  *   3. O > 前C 且 C < 前O（当前实体完全覆盖前一根）
  *   4. |C - O| > |前C - 前O|
  */
-export function isBearishEngulfing(prevKline, currKline) {
+function isBearishEngulfing(prevKline, currKline) {
   const prev = normalizeKline(prevKline);
   const curr = normalizeKline(currKline);
 
@@ -227,7 +227,7 @@ export function isBearishEngulfing(prevKline, currKline) {
  * ③ 黄昏之星（早晨之星的镜像）
  * K1阳线 → K2小实体(在K1上方) → K3阴线(收盘深入K1实体50%以下)
  */
-export function isEveningStar(k1, k2, k3) {
+function isEveningStar(k1, k2, k3) {
   const kl1 = normalizeKline(k1);
   const kl2 = normalizeKline(k2);
   const kl3 = normalizeKline(k3);
@@ -268,7 +268,7 @@ function isBullishConfirm(kline) {
  * @param {Array} klines - K线数据数组
  * @param {number} depth - 使用多少根K线判断（1/2/3）
  */
-export function isBullishEntrySignal(klines, depth = 3) {
+function isBullishEntrySignal(klines, depth = 3) {
   if (!klines || klines.length === 0) return null;
 
   // 三根K线判断（优先级最高，信号最强）
@@ -296,7 +296,7 @@ export function isBullishEntrySignal(klines, depth = 3) {
  * @param {Array} klines - K线数据数组
  * @param {number} depth - 使用多少根K线判断（1/2/3）
  */
-export function isBearishEntrySignal(klines, depth = 3) {
+function isBearishEntrySignal(klines, depth = 3) {
   if (!klines || klines.length === 0) return null;
 
   // 三根K线判断
@@ -326,7 +326,7 @@ export function isBearishEntrySignal(klines, depth = 3) {
 /**
  * 获取完整的进场信号分析
  */
-export function getEntrySignals(klines) {
+function getEntrySignals(klines) {
   return {
     bullish: isBullishEntrySignal(klines, 3),
     bearish: isBearishEntrySignal(klines, 3),
@@ -335,7 +335,7 @@ export function getEntrySignals(klines) {
 
 // ============ 导出所有工具函数（用于测试） ============
 
-export const KlinePatternUtils = {
+const KlinePatternUtils = {
   normalizeKline,
   getBodyLength,
   getTotalAmplitude,
@@ -355,4 +355,30 @@ export const KlinePatternUtils = {
   getEntrySignals,
 };
 
-export default KlinePatternUtils;
+// export default KlinePatternUtils; // 注释掉不必要的 ES6 export
+
+// ============ CommonJS 导出（用于 Node.js 脚本） ============
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    normalizeKline,
+    getBodyLength,
+    getTotalAmplitude,
+    getLowerShadow,
+    getUpperShadow,
+    isBullish,
+    isBearish,
+    isCrossStar,
+    isSmallBody,
+    isHammer,
+    isBullishEngulfing,
+    isMorningStar,
+    isShootingStar,
+    isBearishEngulfing,
+    isEveningStar,
+    isBullishConfirm,
+    isBullishEntrySignal,
+    isBearishEntrySignal,
+    getEntrySignals,
+    KlinePatternUtils,
+  };
+}

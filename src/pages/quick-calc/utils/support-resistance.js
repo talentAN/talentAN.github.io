@@ -9,7 +9,7 @@
  * @param {Array} klineData K线数据数组，每条k线格式：[time, open, high, low, close, volume, ...]
  * @returns {Array} [{index, price, timestamp}, ...]
  */
-export const findSwingHighs = klineData => {
+const findSwingHighs = klineData => {
   const swingHighs = [];
 
   if (!klineData || klineData.length < 5) {
@@ -47,7 +47,7 @@ export const findSwingHighs = klineData => {
  * @param {Array} klineData K线数据数组，每条k线格式：[time, open, high, low, close, volume, ...]
  * @returns {Array} [{index, price, timestamp}, ...]
  */
-export const findSwingLows = klineData => {
+const findSwingLows = klineData => {
   const swingLows = [];
 
   if (!klineData || klineData.length < 5) {
@@ -87,7 +87,7 @@ export const findSwingLows = klineData => {
  * @param {number} minInterval 最小间隔K线数，默认5
  * @returns {Array} 关键位数组 [{price, points: [...], strength}, ...]
  */
-export const findKeyLevels = (swingPoints, tolerance = 1.5, minInterval = 5) => {
+const findKeyLevels = (swingPoints, tolerance = 1.5, minInterval = 5) => {
   const keyLevels = [];
 
   if (!swingPoints || swingPoints.length < 2) {
@@ -149,7 +149,7 @@ export const findKeyLevels = (swingPoints, tolerance = 1.5, minInterval = 5) => 
  * @param {number} minInterval 最小间隔K线数，默认5
  * @returns {Array} 阻力位数组
  */
-export const findResistanceLevels = (klineData, tolerance = 1.5, minInterval = 5) => {
+const findResistanceLevels = (klineData, tolerance = 1.5, minInterval = 5) => {
   const swingHighs = findSwingHighs(klineData);
   return findKeyLevels(swingHighs, tolerance, minInterval);
 };
@@ -161,13 +161,13 @@ export const findResistanceLevels = (klineData, tolerance = 1.5, minInterval = 5
  * @param {number} minInterval 最小间隔K线数，默认5
  * @returns {Array} 支撑位数组
  */
-export const findSupportLevels = (klineData, tolerance = 1.5, minInterval = 5) => {
+const findSupportLevels = (klineData, tolerance = 1.5, minInterval = 5) => {
   const swingLows = findSwingLows(klineData);
   return findKeyLevels(swingLows, tolerance, minInterval);
 };
 
 // 综合识别支撑位和阻力位
-export const findSupportResistanceLevels = klineData => {
+const findSupportResistanceLevels = klineData => {
   return {
     resistanceLevels: findResistanceLevels(klineData),
     supportLevels: findSupportLevels(klineData),
@@ -180,7 +180,7 @@ export const findSupportResistanceLevels = klineData => {
  * @param {number} keyLevel 关键位价格
  * @returns {string} 距离百分比字符串
  */
-export const getPriceDistanceToLevel = (currentPrice, keyLevel) => {
+const getPriceDistanceToLevel = (currentPrice, keyLevel) => {
   if (!currentPrice || !keyLevel) return '—';
   const distance = (((currentPrice - keyLevel) / keyLevel) * 100).toFixed(2);
   return distance;
@@ -192,7 +192,7 @@ export const getPriceDistanceToLevel = (currentPrice, keyLevel) => {
  * @param {Array} levels 关键位数组
  * @returns {Object} 最近的阻力位和支撑位
  */
-export const getNearestLevels = (currentPrice, levels) => {
+const getNearestLevels = (currentPrice, levels) => {
   if (!currentPrice || !levels || levels.length === 0) {
     return { nearestResistance: null, nearestSupport: null };
   }
@@ -226,7 +226,7 @@ export const getNearestLevels = (currentPrice, levels) => {
   supportPrice                     // 支撑位（区间下沿）
 } 
  */
-export const findConsolidationZones = (klineData, minDays = 10, maxAmplitude = 8) => {
+const findConsolidationZones = (klineData, minDays = 10, maxAmplitude = 8) => {
   const zones = [];
 
   if (!klineData || klineData.length < minDays) {
@@ -322,7 +322,7 @@ export const findConsolidationZones = (klineData, minDays = 10, maxAmplitude = 8
  * @param {Object} zone 密集区对象
  * @returns {boolean} 是否在密集区内
  */
-export const isPriceInConsolidationZone = (currentPrice, zone) => {
+const isPriceInConsolidationZone = (currentPrice, zone) => {
   if (!currentPrice || !zone) return false;
   return currentPrice >= zone.low && currentPrice <= zone.high;
 };
@@ -333,7 +333,7 @@ export const isPriceInConsolidationZone = (currentPrice, zone) => {
  * @param {Object} zone 密集区对象
  * @returns {string} 位置描述：'above' | 'below' | 'inside' | 'unknown'
  */
-export const getPricePositionInZone = (currentPrice, zone) => {
+const getPricePositionInZone = (currentPrice, zone) => {
   if (!currentPrice || !zone) return 'unknown';
 
   if (currentPrice > zone.high) return 'above';
@@ -348,7 +348,7 @@ export const getPricePositionInZone = (currentPrice, zone) => {
  * @param {Array} zones 密集区数组
  * @returns {Object|null} 最强的密集区或null
  */
-export const getStrongestConsolidationZone = zones => {
+const getStrongestConsolidationZone = zones => {
   if (!zones || zones.length === 0) return null;
 
   // 按持续时间和振幅计算强度分数
@@ -369,7 +369,7 @@ export const getStrongestConsolidationZone = zones => {
  * @returns {Object} {resistance: [...], support: [...]}
  *   每个项包含：{price, type, strength, methods: ['swing'|'consolidation', ...]}
  */
-export const findAllSupportResistanceLevels = klineData => {
+const findAllSupportResistanceLevels = klineData => {
   const result = {
     resistance: [],
     support: [],
@@ -517,8 +517,28 @@ export const findAllSupportResistanceLevels = klineData => {
  * @param {Array} klineData K线数据
  * @returns {Array} 所有支撑和阻力位的平铺数组，按强度排序
  */
-export const getAllSupportResistanceLevelsList = klineData => {
+const getAllSupportResistanceLevelsList = klineData => {
   const levels = findAllSupportResistanceLevels(klineData);
   const combined = [...levels.resistance, ...levels.support];
   return combined.sort((a, b) => b.strength - a.strength);
 };
+
+// ============ CommonJS 导出（用于 Node.js 脚本） ============
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    findSwingHighs,
+    findSwingLows,
+    findKeyLevels,
+    findResistanceLevels,
+    findSupportLevels,
+    findSupportResistanceLevels,
+    getPriceDistanceToLevel,
+    getNearestLevels,
+    findConsolidationZones,
+    isPriceInConsolidationZone,
+    getPricePositionInZone,
+    getStrongestConsolidationZone,
+    findAllSupportResistanceLevels,
+    getAllSupportResistanceLevelsList,
+  };
+}

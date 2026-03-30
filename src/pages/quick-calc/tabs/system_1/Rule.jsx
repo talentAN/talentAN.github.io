@@ -59,8 +59,6 @@ const Rule = () => {
       <Typography>
         <Title level={2}>风控规则 v1.0</Title>
         <Paragraph type="secondary">
-          任务 1.1 产出
-          <br />
           创建日期：2026-03-25
           <br />
           适用资金规模：500U
@@ -170,7 +168,7 @@ const Rule = () => {
 
         <Title level={3}>四、加仓规则</Title>
 
-        <Title level={4}>规则 R6：只在盈利仓位上加仓</Title>
+        <Title level={4}>规则 R6：只在盈利仓位上加仓(只适用于当前系统)</Title>
         <ul>
           <li>
             浮亏的仓位
@@ -228,34 +226,6 @@ const Rule = () => {
         </Paragraph>
 
         <Divider />
-
-        <Title level={3}>七、快速参考表</Title>
-        <Paragraph>以下是不同资金量下的关键数值速查：</Paragraph>
-        <Table
-          columns={quickRefColumns}
-          dataSource={quickRefData}
-          pagination={false}
-          size="small"
-        />
-
-        <Divider />
-
-        <Title level={3}>八、仓位速算表</Title>
-        <Paragraph>
-          单笔风险 2%，不同止损幅度和杠杆下的保证金（总资金 500U，最大亏损 10U）：
-        </Paragraph>
-        <Table
-          columns={positionColumns}
-          dataSource={positionData}
-          pagination={false}
-          size="small"
-        />
-        <Paragraph style={{ marginTop: 16 }}>
-          <Text strong>读法</Text>：止损幅度 5%、杠杆 3x → 投入保证金 67U，亏损时最多亏 10U。
-        </Paragraph>
-
-        <Divider />
-
         <Title level={3}>九、违规记录</Title>
         <Paragraph>每次违反以上规则时，在此记录（诚实面对自己）：</Paragraph>
         <Table

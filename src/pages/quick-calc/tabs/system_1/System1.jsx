@@ -12,21 +12,21 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/pair-selector', label: '币对筛选' },
   ];
 
-  const currentPath = location?.pathname || '/quick-calc/system_1/rule';
+  const currentPath = location?.pathname || '/quick-calc/system_1/pair-selector';
   const cleanPath = currentPath.split('?')[0];
 
   const selectedKey = cleanPath.startsWith('/quick-calc/system_1/position-calculator')
     ? '/quick-calc/system_1/position-calculator'
     : cleanPath.startsWith('/quick-calc/system_1/pair-selector')
       ? '/quick-calc/system_1/pair-selector'
-      : '/quick-calc/system_1/rule';
+      : '/quick-calc/system_1/pair-selector';
 
-  const showRule =
-    currentPath.includes('/system_1/rule') ||
+  const showRule = currentPath.includes('/system_1/rule');
+  const showPositionCalculator = currentPath.includes('/system_1/position-calculator');
+  const showPairSelector =
+    currentPath.includes('/system_1/pair-selector') ||
     currentPath === '/quick-calc/system_1' ||
     currentPath === '/quick-calc/system_1/';
-  const showPositionCalculator = currentPath.includes('/system_1/position-calculator');
-  const showPairSelector = currentPath.includes('/system_1/pair-selector');
 
   return (
     <Card>
