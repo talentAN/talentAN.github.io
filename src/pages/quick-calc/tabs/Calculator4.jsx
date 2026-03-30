@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, message, Progress } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getFutureKlineData } from '../../../container/bitget/api';
-import localRecords from '../../../../contract-record/all.json';
+import localRecords from '@root/contract-record/all.json';
 import moment from 'moment';
 
 const Calculator4 = () => {

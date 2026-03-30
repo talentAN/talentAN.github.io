@@ -4,6 +4,17 @@ const path = require('path');
 const config = require('./config');
 const utils = require('./src/utils/pageUtils');
 
+exports.onCreateWebpackConfig = ({ actions }) => {
+  actions.setWebpackConfig({
+    resolve: {
+      alias: {
+        '@trade': path.resolve(__dirname, 'src/pages/quick-calc'),
+        '@root': __dirname,
+      },
+    },
+  });
+};
+
 exports.createPages = ({ actions, graphql }) => {
   const { createPage } = actions;
 

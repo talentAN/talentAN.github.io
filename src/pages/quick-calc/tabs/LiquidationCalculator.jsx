@@ -67,20 +67,20 @@ const LiquidationCalculator = () => {
           <InputNumber style={{ width: '100%' }} min={0} max={1} step={0.0001} />
         </Form.Item>
 
-        <Form.Item>
-          <Button type="primary" htmlType="submit">
-            计算爆仓价
-          </Button>
-        </Form.Item>
-
         {liquidationPrice && (
-          <Space direction="vertical" style={{ marginTop: 16 }}>
+          <Space direction="vertical" style={{ marginBottom: 16 }}>
             <Text strong>爆仓价格：</Text>
             <Title level={3} type="danger">
               {liquidationPrice}
             </Title>
           </Space>
         )}
+
+        <Form.Item>
+          <Button type="primary" htmlType="submit">
+            计算爆仓价
+          </Button>
+        </Form.Item>
       </Form>
     </Card>
   );

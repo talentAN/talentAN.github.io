@@ -1,76 +1,56 @@
 import React from 'react';
-import { Layout, Tabs, Typography,Card } from 'antd';
-import Header from '../../components/PageLayout/Header';
-import SidebarWrapper from '../../components/PageLayout/Sidebar';
-import SEO from '../../components/Seo';
-import LiquidationCalculator from './tabs/LiquidationCalculator';
-import TradeRecord from './tabs/TradeRecord';
-import BitgetMonitor from './tabs/BitgetMonitor';
-import Calculator4 from './tabs/Calculator4';
+import { Layout, Menu } from 'antd';
+import { navigate } from 'gatsby';
 
-const { Title, Text } = Typography;
+const { Content } = Layout;
 
-const QuickCalc = () => {
-  const items = [
-    {
-      key: '1',
-      label: '逐仓保证金 => 爆仓价',
-      children: <LiquidationCalculator />,
-    },
-    {
-      key: '2',
-      label: '交易记录',
-      children: <TradeRecord />,
-    },
-    {
-      key: '3',
-      label: 'Bitget监控',
-      children: <BitgetMonitor />,
-    },
-    {
-      key: '4',
-      label: 'K线分析',
-      children: <Calculator4 />,
-    },
-    {
-      key: '5',
-      label: '计算器5',
-      children: <Card>功能开发中...</Card>,
-    },
-    {
-      key: '6',
-      label: '计算器6',
-      children: <Card>功能开发中...</Card>,
-    },
-    {
-      key: '7',
-      label: '计算器7',
-      children: <Card>功能开发中...</Card>,
-    },
-    {
-      key: '8',
-      label: '计算器8',
-      children: <Card>功能开发中...</Card>,
-    },
-    {
-      key: '9',
-      label: '计算器9',
-      children: <Card>功能开发中...</Card>,
-    },
-    {
-      key: '10',
-      label: '计算器10',
-      children: <Card>功能开发中...</Card>,
-    },
+const QuickCalc = ({ children, location }) => {
+  const menuItems = [
+    { key: '/quick-calc/trade-record', label: '交易记录' },
+    { key: '/quick-calc/pattern', label: '模式' },
+    { key: '/quick-calc/kang-dan', label: '扛单分析' },
+    { key: '/quick-calc/watch-list', label: '观测中' },
+    { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
+    { key: '/quick-calc/liquidation', label: '预估爆仓价' },
+    { key: '/quick-calc/system_1', label: '系统1' },
   ];
+
+  const currentPath = location?.pathname || '/quick-calc/trade-record';
+  const cleanPath = currentPath.split('?')[0];
+
+  const getSelectedKey = () => {
+    const routes = [
+      '/quick-calc/trade-record',
+      '/quick-calc/pattern',
+      '/quick-calc/kang-dan',
+      '/quick-calc/watch-list',
+      '/quick-calc/bitget-monitor',
+      '/quick-calc/liquidation',
+      '/quick-calc/system_1',
+    ];
+
+    for (const route of routes) {
+      if (cleanPath.startsWith(route)) {
+        return route;
+      }
+    }
+
+    return '/quick-calc/trade-record';
+  };
+
+  const selectedKey = getSelectedKey();
 
   return (
     <Layout className="outerPadding">
       <Layout className="container">
-          <div className="marginTopTitle">
-            <Title level={2}>快速计算</Title>
-            <Tabs items={items} defaultActiveKey="2" />
-          </div>
+        <Menu
+          mode="horizontal"
+          selectedKeys={[selectedKey]}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
+          style={{ marginBottom: 16 }}
+        />
+        <Content>{children}</Content>
       </Layout>
     </Layout>
   );

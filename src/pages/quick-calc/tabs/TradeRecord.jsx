@@ -3,7 +3,7 @@ import { Card, Table, Button, message, DatePicker, Tag } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
-import localRecords from '../../../../contract-record/all.json';
+import localRecords from '@root/contract-record/all.json';
 import moment from 'moment';
 
 const { RangePicker } = DatePicker;
@@ -28,12 +28,11 @@ const TradeRecord = () => {
 
   const columns = [
     {
-      title: '开仓时间',
-      dataIndex: 'ctime',
-      key: 'ctime',
+      title: '平/开仓日期',
+      key: 'time',
       width: 120,
       fixed: 'left',
-      render: (time, record) => {
+      render: (_, record) => {
         if (record.type === 'summery') {
           return {
             children: (
@@ -41,23 +40,29 @@ const TradeRecord = () => {
                 {record.content}
               </div>
             ),
-            props: { colSpan: 17 },
+            props: { colSpan: 14 },
           };
         }
-        return moment(time * 1).format('YYYY-MM-DD');
+        return (
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {moment(record.utime * 1).format('YYYY-MM-DD')}
+            {'\n'}
+            {moment(record.ctime * 1).format('YYYY-MM-DD')}
+          </div>
+        );
       },
     },
     {
       title: '合约',
       dataIndex: 'symbol',
       key: 'symbol',
-      width: 100,
+      width: 80,
       render: (symbol, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <a 
-            href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} 
-            target="_blank" 
+          <a
+            href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
+            target="_blank"
             rel="noopener noreferrer"
           >
             {symbol}
@@ -88,87 +93,66 @@ const TradeRecord = () => {
       title: '杠杆',
       dataIndex: 'leverage',
       key: 'leverage',
-      width: 60,
+      width: 80,
       render: (lev, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return lev ? `${lev}x` : '-';
       },
     },
     {
-      title: '开仓价',
-      dataIndex: 'openAvgPrice',
-      key: 'openAvgPrice',
-      width: 90,
-      render: (price, record) =>
-        record.type === 'summery' ? { props: { colSpan: 0 } } : parseFloat(price).toFixed(4),
-    },
-    {
-      title: '3日开仓最优',
-      dataIndex: 'openBestPrice3d',
-      key: 'openBestPrice3d',
-      width: 120,
-      render: (price, record) =>
-        record.type === 'summery'
-          ? { props: { colSpan: 0 } }
-          : price
-            ? parseFloat(price).toFixed(4)
-            : '-',
-    },
-    {
-      title: '开仓最优差',
-      dataIndex: 'openPriceDiff',
-      key: 'openPriceDiff',
+      title: '平/开仓价',
+      key: 'price',
       width: 100,
-      render: (diff, record) => {
+      render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return diff ? (
-          <span style={{ color: getDiffColor(diff) }}>{parseFloat(diff).toFixed(2)}%</span>
-        ) : (
-          '-'
+        return (
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {parseFloat(record.closeAvgPrice).toFixed(4)}
+            {'\n'}
+            {parseFloat(record.openAvgPrice).toFixed(4)}
+          </div>
         );
       },
     },
     {
-      title: '平仓时间',
-      dataIndex: 'utime',
-      key: 'utime',
+      title: '3日最优价',
+      key: 'bestPrice',
       width: 120,
-      render: (time, record) =>
-        record.type === 'summery'
-          ? { props: { colSpan: 0 } }
-          : moment(time * 1).format('YYYY-MM-DD'),
-    },
-    {
-      title: '平仓价',
-      dataIndex: 'closeAvgPrice',
-      key: 'closeAvgPrice',
-      width: 90,
-      render: (price, record) =>
-        record.type === 'summery' ? { props: { colSpan: 0 } } : parseFloat(price).toFixed(4),
-    },
-    {
-      title: '3日平仓最优',
-      dataIndex: 'closeBestPrice3d',
-      key: 'closeBestPrice3d',
-      width: 120,
-      render: (price, record) =>
-        record.type === 'summery'
-          ? { props: { colSpan: 0 } }
-          : price
-            ? parseFloat(price).toFixed(4)
-            : '-',
-    },
-    {
-      title: '平仓最优差',
-      dataIndex: 'closePriceDiff',
-      key: 'closePriceDiff',
-      width: 100,
-      render: (diff, record) => {
+      render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return diff ? (
-          <span style={{ color: getDiffColor(diff) }}>{parseFloat(diff).toFixed(2)}%</span>
-        ) : (
-          '-'
+        return (
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {record.closeBestPrice3d ? parseFloat(record.closeBestPrice3d).toFixed(4) : '-'}
+            {'\n'}
+            {record.openBestPrice3d ? parseFloat(record.openBestPrice3d).toFixed(4) : '-'}
+          </div>
+        );
+      },
+    },
+    {
+      title: '最优差',
+      key: 'priceDiff',
+      width: 100,
+      render: (_, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        return (
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {record.closePriceDiff ? (
+              <span style={{ color: getDiffColor(record.closePriceDiff) }}>
+                {parseFloat(record.closePriceDiff).toFixed(2)}%
+              </span>
+            ) : (
+              '-'
+            )}
+            {'\n'}
+            {record.openPriceDiff ? (
+              <span style={{ color: getDiffColor(record.openPriceDiff) }}>
+                {parseFloat(record.openPriceDiff).toFixed(2)}%
+              </span>
+            ) : (
+              '-'
+            )}
+          </div>
         );
       },
     },
