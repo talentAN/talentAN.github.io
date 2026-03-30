@@ -1,5 +1,5 @@
 import { findAllSupportResistanceLevels } from './support-resistance';
-import { getFutureTicker } from '../../../container/bitget/api';
+import { getFutureTicker } from '../../api';
 import { isBullishEntrySignal, isBearishEntrySignal } from './kline-pattern';
 
 /**

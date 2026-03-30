@@ -3,7 +3,10 @@ import { getFutureKlineData } from '../api';
 import moment from 'moment';
 import { MAX_TRADING_DAYS, MIN_TRADING_DAYS } from '../constants/filter';
 import { getBatches } from '../utils';
-import { matchLongStable, parseKlineData } from '@trade/utils/symbol-match-pattern';
+import {
+  matchLongStable,
+  parseKlineData,
+} from '@root/src/container/bitget/utils/trade-record/symbol-match-pattern';
 
 const checkPair = async symbol => {
   try {

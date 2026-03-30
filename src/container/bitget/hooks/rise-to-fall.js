@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getBatches } from '../utils';
 import moment from 'moment';
 import { getFutureKlineData } from '../api';
-import { shouldEntry } from '@trade/utils/should-entry';
+import { shouldEntry } from '@root/src/container/bitget/utils/trade-record/should-entry';
 
 export const useRiseToFallLine = ({ futureSymbols }) => {
   const [symbols, setSymbols] = useState([]);

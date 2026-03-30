@@ -12,7 +12,7 @@ const {
   findSwingHighs,
   findSwingLows,
   findConsolidationZones,
-} = require('../src/pages/quick-calc/utils/support-resistance');
+} = require('../src/container/bitget/utils/trade-record/support-resistance');
 
 const {
   isBullishEntrySignal,
@@ -23,7 +23,7 @@ const {
   isShootingStar,
   isBearishEngulfing,
   isEveningStar,
-} = require('../src/pages/quick-calc/utils/kline-pattern');
+} = require('../src/container/bitget/utils/trade-record/kline-pattern');
 
 // 读取 klines.json
 const klineFile = path.join(__dirname, 'klines.json');

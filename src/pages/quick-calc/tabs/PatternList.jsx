@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Input, message, Tag, Row, Col, Statistic, Spin } from 'antd';
 import patternData from '@root/contract-record/pattern.json';
-import { symbolMatchPattern } from '@trade/utils/symbol-match-pattern';
+import { symbolMatchPattern } from '@root/src/container/bitget/utils/trade-record/symbol-match-pattern';
 import { getFutureKlineData } from '../../../container/bitget/api';
 import moment from 'moment';
 
@@ -147,7 +147,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="3日"
                       value={marketData.BTC.day3}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.BTC.day3) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.BTC.day3) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                   <Col span={8}>
@@ -155,7 +157,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="7日"
                       value={marketData.BTC.day7}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.BTC.day7) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.BTC.day7) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                   <Col span={8}>
@@ -163,7 +167,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="15日"
                       value={marketData.BTC.day15}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.BTC.day15) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.BTC.day15) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                 </Row>
@@ -177,7 +183,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="3日"
                       value={marketData.ETH.day3}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.ETH.day3) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.ETH.day3) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                   <Col span={8}>
@@ -185,7 +193,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="7日"
                       value={marketData.ETH.day7}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.ETH.day7) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.ETH.day7) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                   <Col span={8}>
@@ -193,7 +203,9 @@ const PatternList = ({ onPatternMatch }) => {
                       title="15日"
                       value={marketData.ETH.day15}
                       suffix="%"
-                      valueStyle={{ color: parseFloat(marketData.ETH.day15) >= 0 ? '#3f8600' : '#cf1322' }}
+                      valueStyle={{
+                        color: parseFloat(marketData.ETH.day15) >= 0 ? '#3f8600' : '#cf1322',
+                      }}
                     />
                   </Col>
                 </Row>

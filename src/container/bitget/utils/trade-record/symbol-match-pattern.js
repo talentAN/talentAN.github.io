@@ -1,4 +1,4 @@
-import { getFutureKlineData } from '../../../container/bitget/api';
+import { getFutureKlineData } from '../../api';
 import { PATTERN } from '@root/src/consts';
 import moment from 'moment';
 
