@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Input, message, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Table, Button, message, Input } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
 
@@ -15,10 +15,10 @@ const WatchList = () => {
       dataIndex: 'symbol',
       key: 'symbol',
       width: 150,
-      render: (symbol) => (
-        <a 
-          href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} 
-          target="_blank" 
+      render: symbol => (
+        <a
+          href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
+          target="_blank"
           rel="noopener noreferrer"
         >
           {symbol}
@@ -30,30 +30,19 @@ const WatchList = () => {
       dataIndex: 'addTime',
       key: 'addTime',
       width: 120,
-      render: (time) => time || '-',
+      render: time => time || '-',
     },
     {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
-      render: (text) => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
+      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_, record, index) => (
-        <Popconfirm
-          title="确定删除？"
-          onConfirm={() => handleDelete(index)}
-          okText="确定"
-          cancelText="取消"
-        >
-          <Button type="link" danger icon={<DeleteOutlined />} size="small">
-            删除
-          </Button>
-        </Popconfirm>
-      ),
+      title: '后续',
+      dataIndex: 'followUp',
+      key: 'followUp',
+      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
     },
   ];
 
@@ -62,23 +51,18 @@ const WatchList = () => {
       message.warning('请输入币对名称');
       return;
     }
-    
+
     const newRecord = {
       symbol: newSymbol.trim().toUpperCase(),
       addTime: moment().format('YYYY-MM-DD HH:mm:ss'),
       reason: newReason.trim(),
+      followUp: '',
     };
-    
-    setDataSource([...dataSource, newRecord]);
+
+    setDataSource([newRecord, ...dataSource]);
     setNewSymbol('');
     setNewReason('');
     message.success('添加成功');
-  };
-
-  const handleDelete = (index) => {
-    const newData = dataSource.filter((_, i) => i !== index);
-    setDataSource(newData);
-    message.success('删除成功');
   };
 
   const handleExport = () => {
@@ -99,13 +83,13 @@ const WatchList = () => {
         <Input
           placeholder="币对名称（如：BTCUSDT）"
           value={newSymbol}
-          onChange={(e) => setNewSymbol(e.target.value)}
+          onChange={e => setNewSymbol(e.target.value)}
           style={{ width: 200, marginRight: 8 }}
         />
         <Input
           placeholder="关注理由"
           value={newReason}
-          onChange={(e) => setNewReason(e.target.value)}
+          onChange={e => setNewReason(e.target.value)}
           style={{ width: 300, marginRight: 8 }}
         />
         <Button
@@ -116,9 +100,7 @@ const WatchList = () => {
         >
           添加
         </Button>
-        <Button onClick={handleExport}>
-          导出数据
-        </Button>
+        <Button onClick={handleExport}>导出数据</Button>
       </div>
       <Table
         columns={columns}

@@ -201,7 +201,7 @@ const RiseToFallTable = ({ futureSymbols }) => {
       />
 
       <Card style={{ marginTop: 16 }}>
-        <Title level={4}>成交量爆炸币对 (倒数第3/4天成交量 {'>'}过去20天平均的2倍)</Title>
+        <Title level={4}>成交量爆炸币对 (倒数第3/4天成交量 {'>'}过去20天平均的6倍)</Title>
         <Table
           columns={[
             {
