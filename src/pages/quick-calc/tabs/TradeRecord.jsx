@@ -231,11 +231,24 @@ const TradeRecord = () => {
       const enrichedRemote = await enrichRecordsWithBestPrices(remoteList);
 
       const localMap = new Map(localData.map(r => [r.positionId, r]));
+      const remoteMap = new Map(enrichedRemote.map(r => [r.positionId, r]));
       const mergedData = [];
 
+      // 第一步：加入 enrichedRemote 中不在 localMap 里的新数据（优先展示在前面）
       enrichedRemote.forEach(remote => {
-        if (localMap.has(remote.positionId)) {
-          const local = localMap.get(remote.positionId);
+        if (!localMap.has(remote.positionId)) {
+          mergedData.push({
+            ...remote,
+            entryReason: remote.entryReason || '',
+            remark: remote.remark || '',
+          });
+        }
+      });
+
+      // 第二步：按 localData 的原始顺序遍历，如果 enrichedRemote 有对应数据就替换，否则保持原样
+      localData.forEach(local => {
+        if (remoteMap.has(local.positionId)) {
+          const remote = remoteMap.get(local.positionId);
           mergedData.push({
             ...local,
             openBestPrice3d: remote.openBestPrice3d,
@@ -243,13 +256,10 @@ const TradeRecord = () => {
             closeBestPrice3d: remote.closeBestPrice3d,
             closePriceDiff: remote.closePriceDiff,
           });
-          localMap.delete(remote.positionId);
         } else {
-          mergedData.push(remote);
+          mergedData.push(local);
         }
       });
-
-      localMap.forEach(local => mergedData.push(local));
 
       setRecords(mergedData);
       message.success(`合并成功，共 ${mergedData.length} 条记录`);
