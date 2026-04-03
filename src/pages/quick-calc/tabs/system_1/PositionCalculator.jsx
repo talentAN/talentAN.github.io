@@ -13,6 +13,7 @@ import {
   Segmented,
   Progress,
   Alert,
+  message,
 } from 'antd';
 
 const { Title, Text } = Typography;
@@ -28,7 +29,7 @@ const PositionCalculator = () => {
     const { capital, riskPct, entry, stopLoss, target, leverage } = values;
 
     if (!capital || !riskPct || !entry || !stopLoss || !leverage) {
-      console.log('缺少必要参数', { capital, riskPct, entry, stopLoss, leverage });
+      message.error('请填写所有必填项');
       return;
     }
 
@@ -37,7 +38,9 @@ const PositionCalculator = () => {
     const isShortValid = direction === 'short' && stopLoss > entry;
 
     if (!isLongValid && !isShortValid) {
-      console.warn('方向和止损价格不匹配', { direction, entry, stopLoss });
+      const directionText = direction === 'long' ? '做多' : '做空';
+      const expectedText = direction === 'long' ? '止损价应该小于入场价' : '止损价应该大于入场价';
+      message.error(`${directionText}方向与止损价不匹配，${expectedText}`);
       return;
     }
 

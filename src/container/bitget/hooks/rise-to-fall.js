@@ -14,7 +14,7 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
   const volumeSpikeRef = useRef([]);
   const timeoutRef = useRef(null);
 
-  // 检查成交量爆炸条件: 倒数第3天或第4天的成交量 > 2倍过去20天平均
+  // 检查成交量爆炸条件: 倒数第3天或第4天的成交量 > 6倍过去20天平均
   const checkVolumeSpike = (symbol, data) => {
     try {
       if (!data || data.length < 4) {
@@ -36,8 +36,8 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
       }
       const avgVolume = totalVolume / volumeCount;
 
-      // 检查是否满足条件：成交量 > 2倍平均值
-      if (spikeVolume > avgVolume * 2) {
+      // 检查是否满足条件：成交量 > 6倍平均值
+      if (spikeVolume > avgVolume * 6) {
         return {
           symbol,
           yesterdayVolume: day2Volume.toFixed(0),
