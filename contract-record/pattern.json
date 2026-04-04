@@ -6,8 +6,8 @@
     "income": 1
   },
   {
-    "id": "switch_to_decrease",
-    "pattern": "假突破",
+    "id": "high_volume_breakout_shrink_stall",
+    "pattern": "放量冲关缩量滞涨",
     "gesture": "1. 突破阻力点或高点；\n2. 回落，前高之下缩量横盘>3D，缩量标准为交易额不足突破日50%；\n3.冲高3次均回落；",
     "income": 1,
     "remark": "缩量横盘第二天的确很难忍住不入，但交易嘛，就是要和自己对着干，不要担心错过。"

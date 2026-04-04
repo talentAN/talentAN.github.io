@@ -132,7 +132,19 @@ const PairSelector = () => {
       ) : (
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={12}>
-            <Card size="small" title="BTC 涨跌幅">
+            <Card
+              size="small"
+              title={
+                <a
+                  href="https://www.bitget.com/zh-CN/futures/usdt/BTCUSDT"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'inherit' }}
+                >
+                  BTC 涨跌幅
+                </a>
+              }
+            >
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic
@@ -168,7 +180,19 @@ const PairSelector = () => {
             </Card>
           </Col>
           <Col span={12}>
-            <Card size="small" title="ETH 涨跌幅">
+            <Card
+              size="small"
+              title={
+                <a
+                  href="https://www.bitget.com/zh-CN/futures/usdt/ETHUSDT"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'inherit' }}
+                >
+                  ETH 涨跌幅
+                </a>
+              }
+            >
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic

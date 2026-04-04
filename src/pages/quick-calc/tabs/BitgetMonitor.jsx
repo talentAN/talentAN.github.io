@@ -52,8 +52,8 @@ const BitgetMonitor = ({ mode: externalMode }) => {
           <Col span={3}>
             <Button
               block
-              type={mode === PATTERN.SWITCH_TO_DECREASE ? 'primary' : ''}
-              onClick={() => setMode(PATTERN.SWITCH_TO_DECREASE)}
+              type={mode === PATTERN.high_volume_breakout_shrink_stall ? 'primary' : ''}
+              onClick={() => setMode(PATTERN.high_volume_breakout_shrink_stall)}
             >
               高点缩量横盘
             </Button>
@@ -82,7 +82,7 @@ const BitgetMonitor = ({ mode: externalMode }) => {
 
       <Card title="Bitget 合约交易对列表">
         {mode === PATTERN.LONG_STABLE ? <StableTable futureSymbols={tradingPairs} /> : null}
-        {mode === PATTERN.SWITCH_TO_DECREASE ? (
+        {mode === PATTERN.high_volume_breakout_shrink_stall ? (
           <RiseToFallTable futureSymbols={tradingPairs} />
         ) : null}
         {mode === 'burst' ? <BurstTable futureSymbols={tradingPairs} /> : null}

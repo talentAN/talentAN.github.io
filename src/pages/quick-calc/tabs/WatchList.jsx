@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, message, Input } from 'antd';
+import { Card, Table, Button, message, Input, Switch } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
@@ -8,6 +8,7 @@ const WatchList = () => {
   const [dataSource, setDataSource] = useState(watchData);
   const [newSymbol, setNewSymbol] = useState('');
   const [newReason, setNewReason] = useState('');
+  const [showOnlyWatching, setShowOnlyWatching] = useState(true);
 
   const columns = [
     {
@@ -125,10 +126,20 @@ const WatchList = () => {
           添加
         </Button>
         <Button onClick={handleExport}>导出数据</Button>
+        <Switch
+          checked={showOnlyWatching}
+          onChange={setShowOnlyWatching}
+          style={{ marginLeft: 16 }}
+        />
+        <span style={{ marginLeft: 8 }}>观察中</span>
       </div>
       <Table
         columns={columns}
-        dataSource={dataSource}
+        dataSource={
+          showOnlyWatching
+            ? dataSource.filter(item => item.achieved !== true)
+            : dataSource.filter(item => item.achieved === true)
+        }
         rowKey={(record, index) => `${record.symbol}_${index}`}
         pagination={false}
         scroll={{ x: 'max-content' }}

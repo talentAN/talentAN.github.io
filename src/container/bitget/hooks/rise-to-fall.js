@@ -21,23 +21,23 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
         return null;
       }
 
-      // 获取倒数第3天（index: length-3）和倒数第4天（index: length-4）的成交量
-      const day2Volume = parseFloat(data[data.length - 2][5]); // 昨日（倒数第2天）
-      const day3Volume = parseFloat(data[data.length - 3][5]); // 倒数第3天
-      const day4Volume = parseFloat(data[data.length - 4][5]); // 倒数第4天
+      // 获取倒数第3天（index: length-3）和倒数第4天（index: length-4）的成交量（以USDT计）
+      const day2Volume = parseFloat(data[data.length - 2][6]); // 昨日（倒数第2天）交易额
+      const day3Volume = parseFloat(data[data.length - 3][6]); // 倒数第3天交易额
+      const day4Volume = parseFloat(data[data.length - 4][6]); // 倒数第4天交易额
       const spikeVolume = Math.max(day3Volume, day4Volume);
 
-      // 计算过去20天的平均成交量（去掉最后4天，确保比较的是更早期的数据）
+      // 计算过去20天的平均成交量（以USDT计，去掉最后4天，确保比较的是更早期的数据）
       let totalVolume = 0;
       let volumeCount = 0;
       for (let i = 0; i < data.length - 4; i++) {
-        totalVolume += parseFloat(data[i][5]);
+        totalVolume += parseFloat(data[i][6]);
         volumeCount++;
       }
       const avgVolume = totalVolume / volumeCount;
 
-      // 检查是否满足条件：成交量 > 6倍平均值
-      if (spikeVolume > avgVolume * 6) {
+      // 检查是否满足条件：成交量 > 6倍平均值 AND 爆炸成交量 > 200万USDT
+      if (spikeVolume > avgVolume * 6 && spikeVolume > 2000000) {
         return {
           symbol,
           yesterdayVolume: day2Volume.toFixed(0),

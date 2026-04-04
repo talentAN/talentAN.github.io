@@ -1,4 +1,4 @@
 export const PATTERN = {
   LONG_STABLE: 'LONG_STABLE',
-  SWITCH_TO_DECREASE: 'SWITCH_TO_DECREASE',
+  high_volume_breakout_shrink_stall: 'high_volume_breakout_shrink_stall',
 };
