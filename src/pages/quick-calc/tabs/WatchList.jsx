@@ -36,13 +36,37 @@ const WatchList = () => {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
-      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
+      render: text => (
+        <div
+          style={{
+            whiteSpace: 'pre-wrap',
+            maxHeight: '150px',
+            overflowY: 'auto',
+            maxWidth: '400px',
+            wordBreak: 'break-word',
+          }}
+        >
+          {text || '-'}
+        </div>
+      ),
     },
     {
       title: '后续',
       dataIndex: 'followUp',
       key: 'followUp',
-      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
+      render: text => (
+        <div
+          style={{
+            whiteSpace: 'pre-wrap',
+            maxHeight: '150px',
+            overflowY: 'auto',
+            maxWidth: '400px',
+            wordBreak: 'break-word',
+          }}
+        >
+          {text || '-'}
+        </div>
+      ),
     },
   ];
 
