@@ -3,19 +3,19 @@
     "symbol": "KERNELUSDT",
     "addTime": "2026-04-04 15:35:53",
     "reason": "横盘突然大阳，观察",
-    "followUp": ""
+    "followUp": "260404: 缩量第三天了，但还在小幅上涨，不能开空。有可能是向上突破，但上影线很长，观察。"
   },
   {
     "symbol": "TAGUSDT",
     "addTime": "2026-04-04 15:35:25",
     "reason": "暴涨、锤子、缩量，可以观察",
-    "followUp": ""
+    "followUp": "260404：两根粗壮的红线把涨幅吃的差不多了，看是假突破还是真突破吧；可能双顶看空，也可能破前高rush一波；先观察"
   },
   {
     "symbol": "XPLUSDT",
     "addTime": "2026-04-04 15:34:36",
     "reason": "看不懂，ai帮我分析下一会儿",
-    "followUp": ""
+    "followUp": "260404：我看不懂，ai不喜欢这个图。"
   },
   {
     "symbol": "DRIFTUSDT",
@@ -33,13 +33,13 @@
     "symbol": "ALGOUSDT",
     "addTime": "2026-04-04 15:17:50",
     "reason": "下降途中放量反弹4根阳了，后续缩量可以看看",
-    "followUp": ""
+    "followUp": "260404：md，拿尺子划线么？前高完美匹配。。等缩量了再说。ai也建议观察，还不到入场时间"
   },
   {
     "symbol": "CTSIUSDT",
     "addTime": "2026-04-04 15:16:28",
     "reason": "两根大阳要缩量，可以看一波儿",
-    "followUp": ""
+    "followUp": "260404：还不到前高位置，价格逐步上涨但上影线长，吃不准；ai说，长期下跌 + 底部无量 + 突然爆拉 = 典型的庄家行为，不玩儿"
   },
   {
     "symbol": "SKYUSDT",
@@ -83,11 +83,13 @@
     "symbol": "ASTERUSDT",
     "addTime": "2025-03-23 23:20:00",
     "reason": "横盘很久了，交易量也不少，观察下",
+    "achieved": true,
     "followUp": "260404：看能否蹲到一个起飞的信号。"
   },
   {
     "symbol": "NAORISUSDT",
     "addTime": "2025-03-24 23:20:00",
+    "achieved": true,
     "reason": "抽风大师，观察下",
     "followUp": "260404： 这哥们很喜欢插针啊"
   }
