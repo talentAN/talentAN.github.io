@@ -3,6 +3,13 @@ import { getBatches } from '../utils';
 import moment from 'moment';
 import { getFutureKlineData } from '../api';
 import { shouldEntry } from '@root/src/container/bitget/utils/trade-record/should-entry';
+import watchData from '@root/contract-record/watch.json';
+
+const LOG = '[rise-to-fall watch-filter]';
+
+const WATCH_ACHIEVED_SYMBOLS = new Set(
+  watchData.filter(entry => !entry.achieved).map(entry => entry.symbol)
+);
 
 export const useRiseToFallLine = ({ futureSymbols }) => {
   const [symbols, setSymbols] = useState([]);
@@ -80,10 +87,28 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
     // 同时检查成交量爆炸（使用相同的K线数据）
     const volumeSpike = checkVolumeSpike(symbol, data);
     if (volumeSpike) {
-      // 为成交量爆炸数据添加操作所需的信息
-      volumeSpike.currentPrice = currentPrice.toFixed(4);
-      volumeSpike.entrySignal = entryResult.shouldEntry ? entryResult : null;
-      volumeSpikeRef.current.push(volumeSpike);
+      const inWatchAchieved = WATCH_ACHIEVED_SYMBOLS.has(symbol);
+      console.log(LOG, 'volumeSpike candidate', {
+        symbol,
+        symbolType: typeof symbol,
+        symbolLen: symbol != null ? String(symbol).length : null,
+        inWatchAchieved,
+        strictEqSample: watchData.find(w => w.symbol === symbol && w.achieved === true) != null,
+      });
+      if (!inWatchAchieved) {
+        volumeSpike.currentPrice = currentPrice.toFixed(4);
+        volumeSpike.entrySignal = entryResult.shouldEntry ? entryResult : null;
+        volumeSpikeRef.current.push(volumeSpike);
+        console.log(
+          LOG,
+          'pushed to volumeSpikeData',
+          symbol,
+          'refLen',
+          volumeSpikeRef.current.length
+        );
+      } else {
+        console.log(LOG, 'skipped (watch achieved)', symbol);
+      }
     }
 
     return {
@@ -129,6 +154,7 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
     setCheckedSymbolCount(0);
     setSymbols([]);
     setVolumeSpikeData([]);
+    console.log(LOG, 'effect reset, futureSymbols length', futureSymbols?.length);
     getTargetPairs();
   }, [futureSymbols]);
 
