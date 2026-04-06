@@ -1,5 +1,23 @@
 [
   {
+    "symbol": "VETUSDT",
+    "addTime": "2026-04-06 21:50:10",
+    "reason": "下降通道，高点缩量，明早看下，可以考虑开空",
+    "followUp": ""
+  },
+  {
+    "symbol": "JCTUSDT",
+    "addTime": "2026-04-06 21:20:26",
+    "reason": "蹲缩量反弹，看3天",
+    "followUp": ""
+  },
+  {
+    "symbol": "ARIAUSDT",
+    "addTime": "2026-04-06 21:19:41",
+    "reason": "多头很强势，蹲一个时间",
+    "followUp": ""
+  },
+  {
     "symbol": "KERNELUSDT",
     "addTime": "2026-04-04 15:35:53",
     "reason": "横盘突然大阳，观察",
