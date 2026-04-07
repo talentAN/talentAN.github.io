@@ -6,8 +6,6 @@ import { shouldEntry } from '@root/src/container/bitget/utils/trade-record/shoul
 import watchData from '@root/contract-record/watch.json';
 import ignoreList from '@root/contract-record/ignore.json';
 
-const LOG = '[rise-to-fall watch-filter]';
-
 const WATCH_ACHIEVED_SYMBOLS = new Set(
   watchData.filter(entry => !entry.achieved).map(entry => entry.symbol)
 );

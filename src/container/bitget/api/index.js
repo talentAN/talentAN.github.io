@@ -50,9 +50,11 @@ export const getFutureKlineData = async ({
   endTime,
 }) => {
   try {
-    const ret = await fetch(
-      `${exchange.baseUrl}/${exchange.klineUrl}?symbol=${symbol}&granularity=${granularity}&limit=${limit}&startTime=${startTime}&endTime=${endTime}&productType=USDT-FUTURES`
-    );
+    let url = `${exchange.baseUrl}${exchange.klineUrl}?symbol=${symbol}&granularity=${granularity}&limit=${limit}&productType=USDT-FUTURES`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+
+    const ret = await fetch(url);
     return ret.json();
   } catch (e) {
     return {};
