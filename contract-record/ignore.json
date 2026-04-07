@@ -1,0 +1,44 @@
+[
+  {
+    "symbol": "MCDUSDT",
+    "ignoreBefore": "2029-04-07 21:20:26",
+    "reason": "股票"
+  },
+  {
+    "symbol": "STOUSDT",
+    "ignoreBefore": "2026-07-15",
+    "reason": "抽风狗"
+  },
+  {
+    "symbol": "SIRENUSDT",
+    "ignoreBefore": "2027-04-15",
+    "reason": "操盘明显"
+  },
+  {
+    "symbol": "DRIFUSDT",
+    "ignoreBefore": "2026-04-15",
+    "reason": "不符合我们模式，横盘放量下跌"
+  },
+  {
+    "symbol": "GASUSDT",
+    "ignoreBefore": "2026-04-10",
+    "reason": "太弱"
+  },
+  {
+    "symbol": "MASKUSDT",
+    "ignoreBefore": "2026-04-08",
+    "reason": "没搞头"
+  },
+  {
+    "symbol": "CHRUSDT",
+    "ignoreBefore": "2026-04-09"
+  },
+  {
+    "symbol": "PUFFERUSDT",
+    "ignoreBefore": "2026-04-09"
+  },
+  {
+    "symbol": "POLYXUSDT",
+    "ignoreBefore": "2026-04-10"
+  }
+]

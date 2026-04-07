@@ -16,9 +16,7 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/trade-record', label: '交易记录' },
     { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/kang-dan', label: '扛单分析' },
-    { key: '/quick-calc/watch-list', label: '观测中' },
     { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
-    { key: '/quick-calc/liquidation', label: '预估爆仓价' },
     { key: '/quick-calc/system_1', label: '放量冲关缩量滞涨' },
   ];
 
@@ -30,9 +28,7 @@ const QuickCalc = ({ children, location }) => {
       '/quick-calc/trade-record',
       '/quick-calc/pattern',
       '/quick-calc/kang-dan',
-      '/quick-calc/watch-list',
       '/quick-calc/bitget-monitor',
-      '/quick-calc/liquidation',
       '/quick-calc/system_1',
     ];
 

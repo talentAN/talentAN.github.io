@@ -103,7 +103,7 @@ const WatchList = () => {
   };
 
   return (
-    <Card>
+    <div>
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="币对名称（如：BTCUSDT）"
@@ -144,7 +144,7 @@ const WatchList = () => {
         pagination={false}
         scroll={{ x: 'max-content' }}
       />
-    </Card>
+    </div>
   );
 };
 
