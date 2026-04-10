@@ -104,6 +104,12 @@ const WatchList = () => {
 
   return (
     <div>
+      <div style={{ marginBottom: 16, padding: 12, background: '#f0f2f5', borderRadius: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 500 }}>
+          累计观测<span style={{ color: '#1890ff', marginLeft: 4, marginRight: 4 }}>{dataSource.length}</span>条，
+          观测中<span style={{ color: '#52c41a', marginLeft: 4, marginRight: 4 }}>{dataSource.filter(item => item.achieved !== true).length}</span>条
+        </span>
+      </div>
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="币对名称（如：BTCUSDT）"

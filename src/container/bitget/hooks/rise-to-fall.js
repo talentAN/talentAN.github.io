@@ -30,6 +30,31 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
   const volumeSpikeRef = useRef([]);
   const timeoutRef = useRef(null);
 
+  // 检查近3天的平均成交量
+  const checkAvgVolume3Days = (data, minVolume = 1500000) => {
+    try {
+      if (!data || data.length < 3) {
+        return null;
+      }
+
+      // 获取最后3天的成交量（以USDT计）
+      const day1Volume = parseFloat(data[data.length - 1][6]); // 今天
+      const day2Volume = parseFloat(data[data.length - 2][6]); // 昨天
+      const day3Volume = parseFloat(data[data.length - 3][6]); // 前天
+
+      const avgVolume = (day1Volume + day2Volume + day3Volume) / 3;
+      const isQualified = avgVolume >= minVolume;
+
+      return {
+        avgVolume: avgVolume.toFixed(0),
+        isQualified,
+      };
+    } catch (error) {
+      console.error(`检查近3天平均成交量失败:`, error);
+      return null;
+    }
+  };
+
   // 检查成交量爆炸条件: 倒数第3天或第4天的成交量 > 6倍过去20天平均
   const checkVolumeSpike = (symbol, data) => {
     try {
@@ -93,6 +118,10 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
     const currentPrice = parseFloat(data[data.length - 1][4]);
     const resistancePrice = Math.max(...data.slice(0, 80).map(k => parseFloat(k[2])));
 
+    // 检查近3天的平均成交量（高点缩量横盘币对需要成交量 >= 150万）
+    const volumeCheck = checkAvgVolume3Days(data, 1500000);
+    let isQualified = entryResult.shouldEntry && volumeCheck?.isQualified;
+
     // 同时检查成交量爆炸（使用相同的K线数据）
     const volumeSpike = checkVolumeSpike(symbol, data);
     if (volumeSpike) {
@@ -106,10 +135,11 @@ export const useRiseToFallLine = ({ futureSymbols }) => {
 
     return {
       symbol,
-      isTarget: entryResult.shouldEntry,
+      isTarget: isQualified,
       currentPrice: currentPrice.toFixed(4),
       resistancePrice: resistancePrice.toFixed(4),
-      entrySignal: entryResult.shouldEntry ? entryResult : null,
+      entrySignal: isQualified ? entryResult : null,
+      avgVolume3Days: volumeCheck?.avgVolume,
     };
   };
 
