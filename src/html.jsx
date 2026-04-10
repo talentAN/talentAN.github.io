@@ -22,8 +22,11 @@ const Home = props => {
         {preBodyComponents}
         <div key="body" id="___gatsby" dangerouslySetInnerHTML={{ __html: body }} />
         {postBodyComponents}
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4960355918807996"
-     crossorigin="anonymous"></script>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4960355918807996"
+          crossOrigin="anonymous"
+        ></script>
       </body>
     </html>
   );
