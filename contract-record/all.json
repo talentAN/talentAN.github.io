@@ -1,9 +1,31 @@
 [
   {
-    "positionId": "summery-current",
-    "type": "summery",
-    "content": "目标：30笔订单内，大于25笔严格按照系统执行"
+    "positionId": "1423467873081896963",
+    "symbol": "STGUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "0.272",
+    "closeAvgPrice": "0.211",
+    "marginMode": "isolated",
+    "openTotalPos": "308",
+    "closeTotalPos": "308",
+    "pnl": "18.8167",
+    "leverage": 5,
+    "netProfit": "18.81799768",
+    "totalFunding": "0.04068556",
+    "openFee": "-0.01340416",
+    "closeFee": "-0.02598372",
+    "posMode": "hedge_mode",
+    "ctime": "1775107108373",
+    "utime": "1775531163322",
+    "openBestPrice3d": 0.2796,
+    "openPriceDiff": 2.7181688125894117,
+    "closeBestPrice3d": 0.2005,
+    "closePriceDiff": 5.236907730673307,
+    "entryReason": "暴涨后缩量横盘+微涨，且未破前高持续6天",
+    "remark": "目前看算是比较成功的一笔交易，入场和出场的时间都可以"
   },
+
   {
     "positionId": "1415605365671342083",
     "symbol": "HYPEUSDT",
@@ -54,6 +76,11 @@
     "openPriceDiff": 77.57251303252738,
     "closeBestPrice3d": 0.10795,
     "closePriceDiff": 520.5094951366373
+  },
+  {
+    "positionId": "summery-current",
+    "type": "summery",
+    "content": "目标：30笔订单内，大于25笔严格按照系统执行"
   },
   {
     "positionId": "summeryInfinity",
@@ -110,7 +137,6 @@
     "closeBestPrice3d": 29.437,
     "closePriceDiff": 5.7886333525834734
   },
-
   {
     "positionId": "1398775920792842240",
     "leverage": "4",
