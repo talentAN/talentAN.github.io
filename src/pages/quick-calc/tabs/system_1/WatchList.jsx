@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, message, Input, Switch } from 'antd';
+import { Card, Table, Button, message, Input, Switch, Checkbox, Space } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
@@ -9,6 +9,99 @@ const WatchList = () => {
   const [newSymbol, setNewSymbol] = useState('');
   const [newReason, setNewReason] = useState('');
   const [showOnlyWatching, setShowOnlyWatching] = useState(true);
+
+  const MIN_DATE = moment('2026-04-14 00:00:00');
+
+  const isNewFormat = addTime => {
+    if (!addTime) return false;
+    return moment(addTime).isSameOrAfter(MIN_DATE);
+  };
+
+  const getRenderReason = record => {
+    if (!isNewFormat(record.addTime)) {
+      return record.reason;
+    }
+
+    // 新格式逻辑
+    const reason = typeof record.reason === 'string' ? { isNewFormat: false } : record.reason || {};
+    if (!reason.isNewFormat) return record.reason;
+
+    const checks = reason.checks || {};
+
+    const handleCheckChange = (checkKey, checked) => {
+      const newDataSource = dataSource.map(item => {
+        if (item.symbol === record.symbol && item.addTime === record.addTime) {
+          return {
+            ...item,
+            reason: {
+              ...reason,
+              checks: {
+                ...checks,
+                [checkKey]: checked,
+              },
+            },
+          };
+        }
+        return item;
+      });
+      setDataSource(newDataSource);
+    };
+
+    const handleSignalTypeChange = newSignalType => {
+      const newDataSource = dataSource.map(item => {
+        if (item.symbol === record.symbol && item.addTime === record.addTime) {
+          return {
+            ...item,
+            reason: {
+              ...reason,
+              signalType: newSignalType,
+            },
+          };
+        }
+        return item;
+      });
+      setDataSource(newDataSource);
+    };
+
+    const items = [
+      { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨', checked: checks.btcEthNotStrong },
+      { key: 'volumeJustSpike', label: '币对刚放量暴涨', checked: checks.volumeJustSpike },
+      {
+        key: 'volumeReducedOver2Days',
+        label: '已经缩量大于2天',
+        checked: checks.volumeReducedOver2Days,
+      },
+      { key: 'profitLossRatioGood', label: '盈亏比合适', checked: checks.profitLossRatioGood },
+    ];
+
+    return (
+      <div style={{ fontSize: 12 }}>
+        {items.map(item => (
+          <div key={item.key} style={{ marginBottom: 4 }}>
+            <Checkbox
+              checked={item.checked}
+              onChange={e => handleCheckChange(item.key, e.target.checked)}
+            >
+              {item.label}
+            </Checkbox>
+          </div>
+        ))}
+        <div style={{ marginBottom: 4 }}>
+          <span style={{ marginRight: 8 }}>信号类型:</span>
+          <Input
+            placeholder="如：射击之星"
+            value={reason.signalType || ''}
+            onChange={e => handleSignalTypeChange(e.target.value)}
+            style={{ width: 120, fontSize: 12 }}
+            size="small"
+          />
+        </div>
+        {reason.signalType && (
+          <div style={{ marginTop: 4, color: '#666' }}>✓ {reason.signalType} 信号已出现</div>
+        )}
+      </div>
+    );
+  };
 
   const columns = [
     {
@@ -37,19 +130,7 @@ const WatchList = () => {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
-      render: text => (
-        <div
-          style={{
-            whiteSpace: 'pre-wrap',
-            maxHeight: '150px',
-            overflowY: 'auto',
-            maxWidth: '400px',
-            wordBreak: 'break-word',
-          }}
-        >
-          {text || '-'}
-        </div>
-      ),
+      render: (_, record) => <div>{getRenderReason(record)}</div>,
     },
     {
       title: '后续',
@@ -80,7 +161,18 @@ const WatchList = () => {
     const newRecord = {
       symbol: newSymbol.trim().toUpperCase(),
       addTime: moment().format('YYYY-MM-DD HH:mm:ss'),
-      reason: newReason.trim(),
+      reason: isNewFormat(moment().format('YYYY-MM-DD HH:mm:ss'))
+        ? {
+            isNewFormat: true,
+            checks: {
+              btcEthNotStrong: false,
+              volumeJustSpike: false,
+              volumeReducedOver2Days: false,
+              profitLossRatioGood: false,
+            },
+            signalType: '',
+          }
+        : newReason.trim(),
       followUp: '',
     };
 

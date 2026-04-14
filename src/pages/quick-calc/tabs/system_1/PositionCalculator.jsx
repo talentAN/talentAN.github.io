@@ -15,6 +15,7 @@ import {
   Alert,
   message,
 } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -167,6 +168,29 @@ const PositionCalculator = () => {
     );
   };
 
+  const handleCopyOrderInfo = () => {
+    if (!result) {
+      message.warning('请先计算仓位');
+      return;
+    }
+
+    const entry = form.getFieldValue('entry');
+    const stopLoss = form.getFieldValue('stopLoss');
+    const target = form.getFieldValue('target');
+    const rrText = rrResult ? `，盈亏比：1:${rrResult.rr.toFixed(2)}` : '';
+
+    const copyText = `开仓价：${entry}，止损：${stopLoss}，止盈：${target || '待定'}${rrText}`;
+
+    navigator.clipboard
+      .writeText(copyText)
+      .then(() => {
+        message.success('已复制');
+      })
+      .catch(() => {
+        message.error('复制失败');
+      });
+  };
+
   const isAllChecked = checkedItems.length === 8;
 
   return (
@@ -313,9 +337,23 @@ const PositionCalculator = () => {
               </Row>
 
               <Form.Item style={{ marginBottom: 0 }}>
-                <Button type="primary" htmlType="submit" block style={{ fontSize: 12 }}>
-                  计算仓位
-                </Button>
+                <Space style={{ width: '100%' }} size={8}>
+                  <Button 
+                    type="primary" 
+                    htmlType="submit" 
+                    size="large"
+                    style={{ fontSize: 14, flex: 8, height: 40 }}
+                  >
+                    计算仓位
+                  </Button>
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={handleCopyOrderInfo}
+                    size="large"
+                    style={{ fontSize: 12, flex: 1, height: 40 }}
+                    title="复制: 开仓价、止损、止盈、盈亏比"
+                  />
+                </Space>
               </Form.Item>
             </Form>
           </Card>
