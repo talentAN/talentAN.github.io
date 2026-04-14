@@ -4,6 +4,13 @@ import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
 
+const CHECKS_CONFIG = [
+  { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨' },
+  { key: 'volumeJustSpike', label: '币对刚放量暴涨' },
+  { key: 'volumeReducedOver2Days', label: '已经缩量大于2天' },
+  { key: 'profitLossRatioGood', label: '盈亏比合适' },
+];
+
 const SIGNALS_CONFIG = [
   {
     category: '高优',
@@ -58,18 +65,7 @@ const WatchList = () => {
   const [newReason, setNewReason] = useState('');
   const [showOnlyWatching, setShowOnlyWatching] = useState(true);
 
-  const MIN_DATE = moment('2026-04-14 00:00:00');
-
-  const isNewFormat = addTime => {
-    if (!addTime) return false;
-    return moment(addTime).isSameOrAfter(MIN_DATE);
-  };
-
   const getRenderReason = record => {
-    if (!isNewFormat(record.addTime)) {
-      return record.reason;
-    }
-
     // 新格式逻辑
     const reason = typeof record.reason === 'string' ? { isNewFormat: false } : record.reason || {};
     if (!reason.isNewFormat) return record.reason;
@@ -144,14 +140,7 @@ const WatchList = () => {
 
     return (
       <div style={{ fontSize: 12 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '8px 16px',
-            marginBottom: 8,
-          }}
-        >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
           {items.map(item => (
             <div key={item.key}>
               <Checkbox
@@ -160,40 +149,6 @@ const WatchList = () => {
               >
                 {item.label}
               </Checkbox>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #e8e8e8' }}>
-          {SIGNALS_CONFIG.map(category => (
-            <div key={category.category} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: '#666', marginBottom: 6, fontWeight: 500 }}>
-                {category.category}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-                {category.items.map(signal => {
-                  const signals = reason.signals || {};
-                  const isChecked = signals[signal.key] || false;
-                  return (
-                    <div key={signal.key}>
-                      <Checkbox
-                        checked={isChecked}
-                        onChange={e => handleSignalChange(signal.key, e.target.checked)}
-                      >
-                        <Tooltip
-                          title={signal.desc}
-                          color="#2f54eb"
-                          overlayStyle={{ maxWidth: 350 }}
-                        >
-                          <span style={{ cursor: 'help' }}>
-                            {signal.label}
-                            <span style={{ marginLeft: 4, color: '#1890ff' }}>(?)</span>
-                          </span>
-                        </Tooltip>
-                      </Checkbox>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           ))}
         </div>
@@ -259,20 +214,7 @@ const WatchList = () => {
     const newRecord = {
       symbol: newSymbol.trim().toUpperCase(),
       addTime: moment().format('YYYY-MM-DD HH:mm:ss'),
-      reason: isNewFormat(moment().format('YYYY-MM-DD HH:mm:ss'))
-        ? {
-            isNewFormat: true,
-            checks: {
-              btcEthNotStrong: false,
-              volumeJustSpike: false,
-              volumeReducedOver2Days: false,
-              profitLossRatioGood: false,
-            },
-            signals: {},
-            signalType: '',
-          }
-        : newReason.trim(),
-      followUp: newReason.trim(),
+      reason: newReason.trim(),
     };
 
     setDataSource([newRecord, ...dataSource]);
@@ -295,18 +237,71 @@ const WatchList = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16, padding: 12, background: '#f0f2f5', borderRadius: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 500 }}>
-          累计观测
-          <span style={{ color: '#1890ff', marginLeft: 4, marginRight: 4 }}>
-            {dataSource.length}
+      <div
+        style={{
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '24px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ padding: '4px 10px', background: '#f0f2f5', borderRadius: 4 }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>
+            <span style={{ color: '#52c41a' }}>
+              {dataSource.filter(item => item.achieved !== true).length}
+            </span>
+            <span style={{ color: '#666', margin: '0 4px' }}>/</span>
+            <span style={{ color: '#1890ff' }}>
+              {dataSource.length}
+            </span>
           </span>
-          条， 观测中
-          <span style={{ color: '#52c41a', marginLeft: 4, marginRight: 4 }}>
-            {dataSource.filter(item => item.achieved !== true).length}
-          </span>
-          条
-        </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 'bold', minWidth: 'fit-content' }}>入选条件</span>
+          {CHECKS_CONFIG.map(check => (
+            <span
+              key={check.key}
+              style={{
+                padding: '4px 10px',
+                background: '#f0f2f5',
+                borderRadius: '4px',
+                fontSize: 12,
+                color: '#666',
+                display: 'inline-block',
+              }}
+            >
+              {check.label}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 'bold', minWidth: 'fit-content' }}>信号</span>
+          {SIGNALS_CONFIG.flatMap(category =>
+            category.items.map(signal => (
+              <Tooltip
+                key={signal.key}
+                title={signal.desc}
+                color="#2f54eb"
+                overlayStyle={{ maxWidth: 350 }}
+              >
+                <span
+                  style={{
+                    padding: '4px 10px',
+                    background: '#f0f2f5',
+                    borderRadius: '4px',
+                    fontSize: 12,
+                    cursor: 'help',
+                    color: '#1890ff',
+                    display: 'inline-block',
+                  }}
+                >
+                  {signal.label}
+                </span>
+              </Tooltip>
+            ))
+          )}
+        </div>
       </div>
       <div style={{ marginBottom: 16 }}>
         <Input
