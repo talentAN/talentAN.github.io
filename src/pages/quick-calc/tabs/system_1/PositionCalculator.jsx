@@ -179,7 +179,7 @@ const PositionCalculator = () => {
     const target = form.getFieldValue('target');
     const rrText = rrResult ? `，盈亏比：1:${rrResult.rr.toFixed(2)}` : '';
 
-    const copyText = `开仓价：${entry}，止损：${stopLoss}，止盈：${target || '待定'}${rrText}`;
+    const copyText = `计划开仓价：${entry}，止损：${stopLoss}，止盈：${target || '待定'}${rrText}`;
 
     navigator.clipboard
       .writeText(copyText)
@@ -338,9 +338,9 @@ const PositionCalculator = () => {
 
               <Form.Item style={{ marginBottom: 0 }}>
                 <Space style={{ width: '100%' }} size={8}>
-                  <Button 
-                    type="primary" 
-                    htmlType="submit" 
+                  <Button
+                    type="primary"
+                    htmlType="submit"
                     size="large"
                     style={{ fontSize: 14, flex: 8, height: 40 }}
                   >

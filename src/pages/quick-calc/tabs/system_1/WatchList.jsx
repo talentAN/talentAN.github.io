@@ -144,78 +144,56 @@ const WatchList = () => {
 
     return (
       <div style={{ fontSize: 12 }}>
-        {items.map(item => (
-          <div key={item.key} style={{ marginBottom: 4 }}>
-            <Checkbox
-              checked={item.checked}
-              onChange={e => handleCheckChange(item.key, e.target.checked)}
-            >
-              {item.label}
-            </Checkbox>
-          </div>
-        ))}
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8e8e8' }}>
-          <div style={{ marginBottom: 6, fontWeight: 500 }}>
-            信号出现
-            <Tooltip
-              title={
-                <div style={{ whiteSpace: 'pre-wrap', maxWidth: 400 }}>
-                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>高优</div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ marginBottom: 4 }}>
-                      <strong>看跌吞没：</strong>
-                      前一天小阳线，第二天一根大阴线把前一天的实体完全包住。
-                    </div>
-                    <div>
-                      <strong>流星线：</strong>
-                      上影线很长（至少是实体的 2 倍），实体小，在下方，下影线很短或没有。
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>第二梯队</div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ marginBottom: 4 }}>
-                      <strong>黄昏星：</strong>
-                      第一根大阳线 → 第二根小实体（十字星更好）→ 第三根大阴线。
-                    </div>
-                    <div>
-                      <strong>墓碑十字：</strong>
-                      开盘价 = 收盘价 = 最低价，有长上影线。形态上像没有实体的流星线。
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>辅助信号</div>
-                  <div>
-                    <div style={{ marginBottom: 4 }}>
-                      <strong>长上影线 + 关键阻力位：</strong>
-                      不管实体是阳还是阴，只要上影线明显很长，就说明上方卖压重。
-                    </div>
-                    <div>
-                      <strong>十字星：</strong>
-                      开盘 ≈ 收盘，上下影线都有。需要等下一根 K 线确认方向。
-                    </div>
-                  </div>
-                </div>
-              }
-              color="#2f54eb"
-            >
-              <span style={{ marginLeft: 6, cursor: 'help', color: '#1890ff' }}>(?)</span>
-            </Tooltip>
-          </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px 16px',
+            marginBottom: 8,
+          }}
+        >
+          {items.map(item => (
+            <div key={item.key}>
+              <Checkbox
+                checked={item.checked}
+                onChange={e => handleCheckChange(item.key, e.target.checked)}
+              >
+                {item.label}
+              </Checkbox>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #e8e8e8' }}>
           {SIGNALS_CONFIG.map(category => (
-            <div key={category.category} style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 500 }}>
+            <div key={category.category} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: '#666', marginBottom: 6, fontWeight: 500 }}>
                 {category.category}
               </div>
-              {category.items.map(signal => {
-                const signals = reason.signals || {};
-                const isChecked = signals[signal.key] || false;
-                return (
-                  <div key={signal.key} style={{ marginLeft: 8, marginBottom: 3 }}>
-                    <Checkbox checked={isChecked} onChange={e => handleSignalChange(signal.key, e.target.checked)}>
-                      {signal.label}
-                    </Checkbox>
-                  </div>
-                );
-              })}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                {category.items.map(signal => {
+                  const signals = reason.signals || {};
+                  const isChecked = signals[signal.key] || false;
+                  return (
+                    <div key={signal.key}>
+                      <Checkbox
+                        checked={isChecked}
+                        onChange={e => handleSignalChange(signal.key, e.target.checked)}
+                      >
+                        <Tooltip
+                          title={signal.desc}
+                          color="#2f54eb"
+                          overlayStyle={{ maxWidth: 350 }}
+                        >
+                          <span style={{ cursor: 'help' }}>
+                            {signal.label}
+                            <span style={{ marginLeft: 4, color: '#1890ff' }}>(?)</span>
+                          </span>
+                        </Tooltip>
+                      </Checkbox>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
@@ -294,7 +272,7 @@ const WatchList = () => {
             signalType: '',
           }
         : newReason.trim(),
-      followUp: '',
+      followUp: newReason.trim(),
     };
 
     setDataSource([newRecord, ...dataSource]);
