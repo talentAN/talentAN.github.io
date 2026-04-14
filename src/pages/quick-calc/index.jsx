@@ -18,6 +18,7 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/kang-dan', label: '扛单分析' },
     { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
     { key: '/quick-calc/system_1', label: '放量冲关缩量滞涨' },
+    { key: '/quick-calc/system_2', label: '开多探索' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/trade-record';
@@ -30,6 +31,7 @@ const QuickCalc = ({ children, location }) => {
       '/quick-calc/kang-dan',
       '/quick-calc/bitget-monitor',
       '/quick-calc/system_1',
+      '/quick-calc/system_2',
     ];
 
     for (const route of routes) {
