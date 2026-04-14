@@ -1,8 +1,56 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, message, Input, Switch, Checkbox, Space } from 'antd';
+import { Card, Table, Button, message, Input, Switch, Checkbox, Space, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
+
+const SIGNALS_CONFIG = [
+  {
+    category: '高优',
+    items: [
+      {
+        key: 'bearishEngulfing',
+        label: '看跌吞没',
+        desc: '前一天小阳线，第二天一根大阴线把前一天的实体完全包住。',
+      },
+      {
+        key: 'shootingStar',
+        label: '流星线',
+        desc: '上影线很长（至少是实体的 2 倍），实体小，在下方，下影线很短或没有。',
+      },
+    ],
+  },
+  {
+    category: '第二梯队',
+    items: [
+      {
+        key: 'eveningStar',
+        label: '黄昏星',
+        desc: '第一根大阳线 → 第二根小实体（十字星更好）→ 第三根大阴线。',
+      },
+      {
+        key: 'tombstoneDoji',
+        label: '墓碑十字',
+        desc: '开盘价 = 收盘价 = 最低价，有长上影线。形态上像没有实体的流星线。',
+      },
+    ],
+  },
+  {
+    category: '辅助信号',
+    items: [
+      {
+        key: 'longUpperShadow',
+        label: '长上影线 + 关键阻力位',
+        desc: '不管实体是阳还是阴，只要上影线明显很长，就说明上方卖压重。',
+      },
+      {
+        key: 'crossoverDoji',
+        label: '十字星',
+        desc: '开盘 ≈ 收盘，上下影线都有。需要等下一根 K 线确认方向。',
+      },
+    ],
+  },
+];
 
 const WatchList = () => {
   const [dataSource, setDataSource] = useState(watchData);
@@ -63,6 +111,26 @@ const WatchList = () => {
       setDataSource(newDataSource);
     };
 
+    const handleSignalChange = (signalKey, checked) => {
+      const signals = reason.signals || {};
+      const newDataSource = dataSource.map(item => {
+        if (item.symbol === record.symbol && item.addTime === record.addTime) {
+          return {
+            ...item,
+            reason: {
+              ...reason,
+              signals: {
+                ...signals,
+                [signalKey]: checked,
+              },
+            },
+          };
+        }
+        return item;
+      });
+      setDataSource(newDataSource);
+    };
+
     const items = [
       { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨', checked: checks.btcEthNotStrong },
       { key: 'volumeJustSpike', label: '币对刚放量暴涨', checked: checks.volumeJustSpike },
@@ -86,19 +154,71 @@ const WatchList = () => {
             </Checkbox>
           </div>
         ))}
-        <div style={{ marginBottom: 4 }}>
-          <span style={{ marginRight: 8 }}>信号类型:</span>
-          <Input
-            placeholder="如：射击之星"
-            value={reason.signalType || ''}
-            onChange={e => handleSignalTypeChange(e.target.value)}
-            style={{ width: 120, fontSize: 12 }}
-            size="small"
-          />
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8e8e8' }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>
+            信号出现
+            <Tooltip
+              title={
+                <div style={{ whiteSpace: 'pre-wrap', maxWidth: 400 }}>
+                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>高优</div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      <strong>看跌吞没：</strong>
+                      前一天小阳线，第二天一根大阴线把前一天的实体完全包住。
+                    </div>
+                    <div>
+                      <strong>流星线：</strong>
+                      上影线很长（至少是实体的 2 倍），实体小，在下方，下影线很短或没有。
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>第二梯队</div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      <strong>黄昏星：</strong>
+                      第一根大阳线 → 第二根小实体（十字星更好）→ 第三根大阴线。
+                    </div>
+                    <div>
+                      <strong>墓碑十字：</strong>
+                      开盘价 = 收盘价 = 最低价，有长上影线。形态上像没有实体的流星线。
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>辅助信号</div>
+                  <div>
+                    <div style={{ marginBottom: 4 }}>
+                      <strong>长上影线 + 关键阻力位：</strong>
+                      不管实体是阳还是阴，只要上影线明显很长，就说明上方卖压重。
+                    </div>
+                    <div>
+                      <strong>十字星：</strong>
+                      开盘 ≈ 收盘，上下影线都有。需要等下一根 K 线确认方向。
+                    </div>
+                  </div>
+                </div>
+              }
+              color="#2f54eb"
+            >
+              <span style={{ marginLeft: 6, cursor: 'help', color: '#1890ff' }}>(?)</span>
+            </Tooltip>
+          </div>
+          {SIGNALS_CONFIG.map(category => (
+            <div key={category.category} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#666', marginBottom: 4, fontWeight: 500 }}>
+                {category.category}
+              </div>
+              {category.items.map(signal => {
+                const signals = reason.signals || {};
+                const isChecked = signals[signal.key] || false;
+                return (
+                  <div key={signal.key} style={{ marginLeft: 8, marginBottom: 3 }}>
+                    <Checkbox checked={isChecked} onChange={e => handleSignalChange(signal.key, e.target.checked)}>
+                      {signal.label}
+                    </Checkbox>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
-        {reason.signalType && (
-          <div style={{ marginTop: 4, color: '#666' }}>✓ {reason.signalType} 信号已出现</div>
-        )}
       </div>
     );
   };
@@ -170,6 +290,7 @@ const WatchList = () => {
               volumeReducedOver2Days: false,
               profitLossRatioGood: false,
             },
+            signals: {},
             signalType: '',
           }
         : newReason.trim(),
