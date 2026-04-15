@@ -33,6 +33,14 @@ const TradeRecord = () => {
     return pattern ? pattern.label : reason;
   };
 
+  const getRMultiplier = utime => {
+    // 2026-04-02 00:00:00 的时间戳
+    const cutoffTime = moment('2026-04-02', 'YYYY-MM-DD').valueOf();
+    // utime通常是毫秒时间戳，如果不是则需要转换
+    const timestamp = typeof utime === 'string' ? parseInt(utime) : utime;
+    return timestamp >= cutoffTime ? 10 : 1;
+  };
+
   const columns = [
     {
       title: '平/开仓日期',
@@ -164,15 +172,17 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '净盈亏',
+      title: '净盈亏(R倍)',
       dataIndex: 'netProfit',
       key: 'netProfit',
       width: 90,
       render: (profit, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
+        const R = getRMultiplier(record.utime);
+        const rMultiple = parseFloat(profit) / R;
         return (
           <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red' }}>
-            {parseFloat(profit).toFixed(4)}
+            {rMultiple.toFixed(2)}
           </span>
         );
       },
