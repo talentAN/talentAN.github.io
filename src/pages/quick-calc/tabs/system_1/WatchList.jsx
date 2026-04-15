@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, message, Input, Switch, Checkbox, Space, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
+import { getFutureTicker } from '@root/src/container/bitget/api';
 
 const CHECKS_CONFIG = [
   { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨' },
@@ -64,6 +65,30 @@ const WatchList = () => {
   const [newSymbol, setNewSymbol] = useState('');
   const [newReason, setNewReason] = useState('');
   const [showOnlyWatching, setShowOnlyWatching] = useState(true);
+  const [prices, setPrices] = useState({});
+
+  // 获取价格
+  useEffect(() => {
+    const fetchPrices = async () => {
+      const activeItems = dataSource.filter(item => item.achieved !== true);
+      const newPrices = {};
+
+      for (const item of activeItems) {
+        try {
+          const tickerData = await getFutureTicker(item.symbol);
+          if (tickerData && tickerData.lastPr) {
+            newPrices[item.symbol] = parseFloat(tickerData.lastPr).toFixed(2);
+          }
+        } catch (e) {
+          console.error(`获取 ${item.symbol} 价格失败:`, e);
+        }
+      }
+
+      setPrices(newPrices);
+    };
+
+    fetchPrices();
+  }, [dataSource]);
 
   const getRenderReason = record => {
     // 新格式逻辑
@@ -178,6 +203,12 @@ const WatchList = () => {
       key: 'addTime',
       width: 120,
       render: time => time || '-',
+    },
+    {
+      title: '最新价格',
+      key: 'latestPrice',
+      width: 100,
+      render: (_, record) => prices[record.symbol] || '-',
     },
     {
       title: '关注理由',
