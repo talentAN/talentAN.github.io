@@ -41,6 +41,54 @@ const TradeRecord = () => {
     return timestamp >= cutoffTime ? 10 : 1;
   };
 
+  const calculatePatternStats = patternKey => {
+    // 筛选出指定入场理由和非summery的交易
+    const filteredRecords = records.filter(
+      r => r.type !== 'summery' && r.entryReason === patternKey
+    );
+
+    if (filteredRecords.length === 0) {
+      return null;
+    }
+
+    let profitCount = 0;
+    let lossCount = 0;
+    let totalProfitR = 0;
+    let totalLossR = 0;
+
+    filteredRecords.forEach(record => {
+      const profit = parseFloat(record.netProfit);
+      const R = getRMultiplier(record.utime);
+      const rMultiple = profit / R;
+
+      if (profit >= 0) {
+        profitCount++;
+        totalProfitR += rMultiple;
+      } else {
+        lossCount++;
+        totalLossR += rMultiple;
+      }
+    });
+
+    const totalCount = filteredRecords.length;
+    const winRate = profitCount / totalCount;
+    const lossRate = 1 - winRate;
+    const avgProfitR = profitCount > 0 ? totalProfitR / profitCount : 0;
+    const avgLossR = lossCount > 0 ? Math.abs(totalLossR / lossCount) : 0;
+    const expectation = winRate * avgProfitR - lossRate * avgLossR;
+
+    return {
+      totalCount,
+      profitCount,
+      lossCount,
+      winRate,
+      lossRate,
+      avgProfitR,
+      avgLossR,
+      expectation,
+    };
+  };
+
   const columns = [
     {
       title: '平/开仓日期',
@@ -325,6 +373,77 @@ const TradeRecord = () => {
           复制数据
         </Button>
       </div>
+
+      {/* 统计信息 */}
+      {(() => {
+        const stats = calculatePatternStats('high_volume_breakout_shrink_stall');
+        if (!stats) return null;
+
+        return (
+          <Card
+            style={{ marginBottom: 16, background: '#f6f8fb' }}
+            title="放量冲关缩量滞涨 - 统计信息"
+            size="small"
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>总笔数</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold' }}>{stats.totalCount}</div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>盈利笔数</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
+                  {stats.profitCount}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>亏损笔数</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#f5222d' }}>
+                  {stats.lossCount}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>胜率</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>
+                  {(stats.winRate * 100).toFixed(2)}%
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>败率</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#faad14' }}>
+                  {(stats.lossRate * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>平均盈利 R</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
+                  {stats.avgProfitR.toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>平均亏损 R</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#f5222d' }}>
+                  {stats.avgLossR.toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#666', fontSize: 12 }}>期望值</div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
+                  }}
+                >
+                  {stats.expectation.toFixed(4)}
+                </div>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
       <Table
         columns={columns}
         dataSource={records}

@@ -7,7 +7,6 @@ const System2 = ({ location }) => {
   const menuItems = [{ key: '/quick-calc/system_2/rule', label: '风控规则' }];
 
   const currentPath = location?.pathname || '/quick-calc/system_2/rule';
-  const cleanPath = currentPath.split('?')[0];
 
   const selectedKey = '/quick-calc/system_2/rule';
 

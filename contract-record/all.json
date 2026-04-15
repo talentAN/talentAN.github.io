@@ -21,7 +21,7 @@
     "openPriceDiff": 8.858267716535435,
     "closeBestPrice3d": 0.003208,
     "closePriceDiff": 15.024937655860358,
-    "entryReason": "放量冲关缩量滞涨",
+    "entryReason": "high_volume_breakout_shrink_stall",
     "remark": "盈利超过1.5R后设定止损为成本价，被一根20%涨幅的针插出去了。忍住，看图形是否被破坏，观后续记录"
   },
   {
@@ -46,7 +46,7 @@
     "openPriceDiff": 6.004991924827499,
     "closeBestPrice3d": 0.05385,
     "closePriceDiff": 11.829155060352834,
-    "entryReason": "放量冲关缩量滞涨",
+    "entryReason": "high_volume_breakout_shrink_stall",
     "remark": "盈利超过1R后设定了止损线，被一根15%的针叉出去了。价格达到定点后想重新开空，但忍住了。不管方向判断对不对，这个行为本身就是冲动型操作，不可取。观后续记录"
   },
   {
@@ -72,7 +72,7 @@
     "openPriceDiff": 2.7181688125894117,
     "closeBestPrice3d": 0.2005,
     "closePriceDiff": 5.236907730673307,
-    "entryReason": "暴涨后缩量横盘+微涨，且未破前高持续6天",
+    "entryReason": "high_volume_breakout_shrink_stall",
     "remark": "目前看算是比较成功的一笔交易。按系统筛选和信号入场，收益达到2R后设置移动止盈出场。"
   },
   {
