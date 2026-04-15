@@ -4,6 +4,7 @@ import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
 import localRecords from '@root/contract-record/all.json';
+import { PATTERN_Array } from '@root/src/consts';
 import moment from 'moment';
 
 const { RangePicker } = DatePicker;
@@ -24,6 +25,12 @@ const TradeRecord = () => {
     if (rate > 0) return 'green';
     if (rate >= -50) return 'orange';
     return 'red';
+  };
+
+  const getEntryReasonLabel = reason => {
+    if (!reason) return '-';
+    const pattern = PATTERN_Array.find(p => p.key === reason);
+    return pattern ? pattern.label : reason;
   };
 
   const columns = [
@@ -194,7 +201,7 @@ const TradeRecord = () => {
       key: 'entryReason',
       width: 120,
       fixed: 'right',
-      render: (_, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : _),
+      render: (reason, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : getEntryReasonLabel(reason)),
     },
     {
       title: '备注',
