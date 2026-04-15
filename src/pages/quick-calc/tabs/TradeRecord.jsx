@@ -259,7 +259,8 @@ const TradeRecord = () => {
       key: 'entryReason',
       width: 120,
       fixed: 'right',
-      render: (reason, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : getEntryReasonLabel(reason)),
+      render: (reason, record) =>
+        record.type === 'summery' ? { props: { colSpan: 0 } } : getEntryReasonLabel(reason),
     },
     {
       title: '备注',
@@ -380,67 +381,30 @@ const TradeRecord = () => {
         if (!stats) return null;
 
         return (
-          <Card
-            style={{ marginBottom: 16, background: '#f6f8fb' }}
-            title="放量冲关缩量滞涨 - 统计信息"
-            size="small"
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>总笔数</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold' }}>{stats.totalCount}</div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>盈利笔数</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
-                  {stats.profitCount}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>亏损笔数</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#f5222d' }}>
-                  {stats.lossCount}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>胜率</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>
-                  {(stats.winRate * 100).toFixed(2)}%
-                </div>
-              </div>
-
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>败率</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#faad14' }}>
-                  {(stats.lossRate * 100).toFixed(2)}%
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>平均盈利 R</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#52c41a' }}>
-                  {stats.avgProfitR.toFixed(2)}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>平均亏损 R</div>
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#f5222d' }}>
-                  {stats.avgLossR.toFixed(2)}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#666', fontSize: 12 }}>期望值</div>
-                <div
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
-                  }}
-                >
-                  {stats.expectation.toFixed(4)}
-                </div>
-              </div>
-            </div>
-          </Card>
+          <div style={{ marginBottom: 12, fontSize: 13 }}>
+            <span style={{ color: '#666' }}>放量冲关缩量滞涨(1-30): </span>
+            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>{stats.profitCount}</span>
+            <span style={{ color: '#666' }}>/</span>
+            <span style={{ color: '#f5222d', fontWeight: 'bold' }}>{stats.lossCount}</span>
+            <span style={{ color: '#666' }}> 胜率 </span>
+            <span style={{ color: '#1890ff', fontWeight: 'bold' }}>
+              {(stats.winRate * 100).toFixed(2)}%
+            </span>
+            <span style={{ color: '#666' }}> 均盈/均亏 </span>
+            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>
+              {stats.avgProfitR.toFixed(2)}
+            </span>
+            <span style={{ color: '#666' }}>/</span>
+            <span style={{ color: '#f5222d', fontWeight: 'bold' }}>
+              {stats.avgLossR.toFixed(2)}
+            </span>
+            <span style={{ color: '#666' }}> 期望 </span>
+            <span
+              style={{ color: stats.expectation >= 0 ? '#52c41a' : '#f5222d', fontWeight: 'bold' }}
+            >
+              {stats.expectation.toFixed(4)}
+            </span>
+          </div>
         );
       })()}
 
