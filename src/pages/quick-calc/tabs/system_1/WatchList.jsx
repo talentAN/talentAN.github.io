@@ -205,17 +205,22 @@ const WatchList = () => {
       render: time => time || '-',
     },
     {
-      title: '最新价格',
-      key: 'latestPrice',
-      width: 100,
-      render: (_, record) => prices[record.symbol] || '-',
-    },
-    {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
       render: (_, record) => <div>{getRenderReason(record)}</div>,
     },
+    // 只在观测中时显示最新价格列
+    ...(showOnlyWatching
+      ? [
+          {
+            title: '最新价格',
+            key: 'latestPrice',
+            width: 100,
+            render: (_, record) => prices[record.symbol] || '-',
+          },
+        ]
+      : []),
     {
       title: '后续',
       dataIndex: 'followUp',
@@ -283,9 +288,7 @@ const WatchList = () => {
               {dataSource.filter(item => item.achieved !== true).length}
             </span>
             <span style={{ color: '#666', margin: '0 4px' }}>/</span>
-            <span style={{ color: '#1890ff' }}>
-              {dataSource.length}
-            </span>
+            <span style={{ color: '#1890ff' }}>{dataSource.length}</span>
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
