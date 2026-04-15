@@ -77,7 +77,7 @@ const WatchList = () => {
         try {
           const tickerData = await getFutureTicker(item.symbol);
           if (tickerData && tickerData.lastPr) {
-            newPrices[item.symbol] = parseFloat(tickerData.lastPr).toFixed(2);
+            newPrices[item.symbol] = parseFloat(tickerData.lastPr).toFixed(6);
           }
         } catch (e) {
           console.error(`获取 ${item.symbol} 价格失败:`, e);
@@ -181,12 +181,12 @@ const WatchList = () => {
     );
   };
 
-  const columns = [
+  const baseColumns = [
     {
       title: '币对',
       dataIndex: 'symbol',
       key: 'symbol',
-      width: 150,
+      width: 120,
       render: symbol => (
         <a
           href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
@@ -201,22 +201,30 @@ const WatchList = () => {
       title: '添加时间',
       dataIndex: 'addTime',
       key: 'addTime',
-      width: 120,
+      width: 100,
       render: time => time || '-',
     },
     {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
-      render: (_, record) => <div>{getRenderReason(record)}</div>,
+      width: 300,
+      render: (_, record) => (
+        <div style={{ maxWidth: '300px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+          {getRenderReason(record)}
+        </div>
+      ),
     },
-    // 只在观测中时显示最新价格列
+  ];
+
+  const columns = [
+    ...baseColumns,
     ...(showOnlyWatching
       ? [
           {
             title: '最新价格',
             key: 'latestPrice',
-            width: 100,
+            width: 80,
             render: (_, record) => prices[record.symbol] || '-',
           },
         ]
@@ -225,13 +233,13 @@ const WatchList = () => {
       title: '后续',
       dataIndex: 'followUp',
       key: 'followUp',
+      width: 150,
       render: text => (
         <div
           style={{
             whiteSpace: 'pre-wrap',
             maxHeight: '150px',
             overflowY: 'auto',
-            maxWidth: '400px',
             wordBreak: 'break-word',
           }}
         >
