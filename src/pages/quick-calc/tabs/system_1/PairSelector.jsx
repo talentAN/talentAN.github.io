@@ -249,14 +249,9 @@ const PairSelector = () => {
               }}
             >
               <Title level={3} style={{ margin: 0 }}>
-                高点缩量横盘币对
+                成交量爆炸币对 (倒数第3/4天成交量 {'>'}过去20天平均的6倍 AND {'>'}200万USDT)
               </Title>
               <Space>
-                <Button
-                  icon={<MenuOutlined />}
-                  onClick={() => setShowDetails(!showDetails)}
-                  title={showDetails ? '隐藏说明' : '显示说明'}
-                />
                 <Button
                   type="primary"
                   icon={<ReloadOutlined />}

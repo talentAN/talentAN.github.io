@@ -210,7 +210,22 @@ const WatchList = () => {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 'bold', minWidth: 'fit-content' }}>入选条件</span>
+          <Tooltip
+            title="暴涨放量 → 高位缩量 → K 线越来越小 → 突然一根放量阴线砸下来"
+            color="#2f54eb"
+            overlayStyle={{ maxWidth: 400 }}
+          >
+            <span
+              style={{
+                fontWeight: 'bold',
+                minWidth: 'fit-content',
+                borderBottom: '1px dashed #999',
+                cursor: 'help',
+              }}
+            >
+              入选条件
+            </span>
+          </Tooltip>
           {CHECKS_CONFIG.map(check => (
             <span
               key={check.key}
