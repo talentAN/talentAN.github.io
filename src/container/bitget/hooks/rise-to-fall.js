@@ -12,7 +12,14 @@ const WATCH_ACHIEVED_SYMBOLS = new Set(
 
 // 检查币对是否应该被忽略（成交量爆炸币对列表中的忽略配置）
 const shouldIgnoreSymbol = symbol => {
-  const ignoreItem = ignoreList.find(item => item.symbol === symbol);
+  const ignoreItem = ignoreList.find(item => {
+    // 如果 item.symbol 是数组，检查是否包含当前 symbol
+    if (Array.isArray(item.symbol)) {
+      return item.symbol.includes(symbol);
+    }
+    // 如果是字符串，直接比较
+    return item.symbol === symbol;
+  });
   if (!ignoreItem) return false;
 
   const currentDate = moment();
