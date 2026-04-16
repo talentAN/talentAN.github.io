@@ -191,9 +191,7 @@ const PositionCalculator = () => {
       });
   };
 
-  const isAllChecked = checkedItems.length === 8;
-
-  return (
+return (
     <>
       {/* 计算器和结果 - 左右并排 */}
       <Row gutter={16}>

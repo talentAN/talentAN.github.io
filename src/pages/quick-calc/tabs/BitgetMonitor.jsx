@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Button, Typography } from 'antd';
+import { Card, Row, Col, Button } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import StableTable from '../../../container/bitget/components/stable';
 import BurstTable from '../../../container/bitget/components/burst';

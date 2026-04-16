@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, message, Input, Switch, Checkbox, Space, Tooltip } from 'antd';
+import { Table, Button, message, Input, Switch, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
@@ -9,6 +9,7 @@ const CHECKS_CONFIG = [
   { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨' },
   { key: 'volumeJustSpike', label: '币对刚放量暴涨' },
   { key: 'volumeReducedOver2Days', label: '已经缩量大于2天' },
+  { key: ' bodyLoss', label: '实体越来越小' },
   { key: 'profitLossRatioGood', label: '盈亏比合适' },
 ];
 
@@ -90,97 +91,6 @@ const WatchList = () => {
     fetchPrices();
   }, [dataSource]);
 
-  const getRenderReason = record => {
-    // 新格式逻辑
-    const reason = typeof record.reason === 'string' ? { isNewFormat: false } : record.reason || {};
-    if (!reason.isNewFormat) return record.reason;
-
-    const checks = reason.checks || {};
-
-    const handleCheckChange = (checkKey, checked) => {
-      const newDataSource = dataSource.map(item => {
-        if (item.symbol === record.symbol && item.addTime === record.addTime) {
-          return {
-            ...item,
-            reason: {
-              ...reason,
-              checks: {
-                ...checks,
-                [checkKey]: checked,
-              },
-            },
-          };
-        }
-        return item;
-      });
-      setDataSource(newDataSource);
-    };
-
-    const handleSignalTypeChange = newSignalType => {
-      const newDataSource = dataSource.map(item => {
-        if (item.symbol === record.symbol && item.addTime === record.addTime) {
-          return {
-            ...item,
-            reason: {
-              ...reason,
-              signalType: newSignalType,
-            },
-          };
-        }
-        return item;
-      });
-      setDataSource(newDataSource);
-    };
-
-    const handleSignalChange = (signalKey, checked) => {
-      const signals = reason.signals || {};
-      const newDataSource = dataSource.map(item => {
-        if (item.symbol === record.symbol && item.addTime === record.addTime) {
-          return {
-            ...item,
-            reason: {
-              ...reason,
-              signals: {
-                ...signals,
-                [signalKey]: checked,
-              },
-            },
-          };
-        }
-        return item;
-      });
-      setDataSource(newDataSource);
-    };
-
-    const items = [
-      { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨', checked: checks.btcEthNotStrong },
-      { key: 'volumeJustSpike', label: '币对刚放量暴涨', checked: checks.volumeJustSpike },
-      {
-        key: 'volumeReducedOver2Days',
-        label: '已经缩量大于2天',
-        checked: checks.volumeReducedOver2Days,
-      },
-      { key: 'profitLossRatioGood', label: '盈亏比合适', checked: checks.profitLossRatioGood },
-    ];
-
-    return (
-      <div style={{ fontSize: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-          {items.map(item => (
-            <div key={item.key}>
-              <Checkbox
-                checked={item.checked}
-                onChange={e => handleCheckChange(item.key, e.target.checked)}
-              >
-                {item.label}
-              </Checkbox>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const baseColumns = [
     {
       title: '币对',
@@ -209,9 +119,9 @@ const WatchList = () => {
       dataIndex: 'reason',
       key: 'reason',
       width: 300,
-      render: (_, record) => (
+      render: readon => (
         <div style={{ maxWidth: '300px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-          {getRenderReason(record)}
+          {readon}
         </div>
       ),
     },
