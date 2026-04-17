@@ -1,5 +1,62 @@
 [
   {
+    "positionId": "summery-high_volume_breakout_shrink_stall-1-6",
+    "type": "summery",
+    "content": "放量冲关缩量滞涨阶段性总结（1-6）：\n\n 疑问：\n -1、系统是不是太苛刻了？几乎找不到合适的形态去做了。首先要求暴涨、然后缩量横盘、且实体要一直变小、且没超过暴涨后窗口 7 天，还要出现信号。"
+  },
+  {
+    "positionId": "1428690295116673027",
+    "symbol": "SKYAIUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "leverage": 5,
+    "openAvgPrice": "0.13",
+    "closeAvgPrice": "0.1495",
+    "marginMode": "isolated",
+    "openTotalPos": "531",
+    "closeTotalPos": "531",
+    "pnl": "-10.3545",
+    "netProfit": "-10.3972986",
+    "totalFunding": "0",
+    "openFee": "-0.0110448",
+    "closeFee": "-0.0317538",
+    "posMode": "hedge_mode",
+    "ctime": "1776352230814",
+    "utime": "1776353239090",
+    "openBestPrice3d": 0.21533,
+    "openPriceDiff": 39.62754841406213,
+    "closeBestPrice3d": 0.1037,
+    "closePriceDiff": 44.16586306653809,
+    "entryReason": "high_volume_breakout_shrink_stall",
+    "remark": "0417：入场是因为放量暴涨 60%，横盘前 3 天实体振幅 7-10，横盘第四天变十字线，判断要变盘，挂了开空委托单；半夜爆拉 60%，1R 止损出局；\n- 肯定：委托单带止损，控制了损失；\n- 改进：\n- 1、十字星是弱信号，开仓相当于赌博，不知道好坏，如果后面继续堵，得统计概率看；\n- 2、以后入睡前取消未成交的当日开仓委托单，夜间成交的单子质量太差，很多次了；\n- 3、当前的币价是在历史高位，没什么阻力点，这也可能是他十字星后又向上突的原因，后续继续关注这点\n- 总结：开仓时机没问题，但应该注意价格当前所在区间，还有就是睡觉前撤销开仓委托单；"
+  },
+  {
+    "positionId": "1428544240098095105",
+    "symbol": "BOBUSDT",
+    "marginCoin": "USDT",
+    "leverage": 5,
+    "holdSide": "short",
+    "openAvgPrice": "0.0082",
+    "closeAvgPrice": "0.00912",
+    "marginMode": "isolated",
+    "openTotalPos": "12038",
+    "closeTotalPos": "12038",
+    "pnl": "-11.065762",
+    "netProfit": "-11.11534103",
+    "totalFunding": "0.01012576",
+    "openFee": "-0.01579385",
+    "closeFee": "-0.04391094",
+    "posMode": "hedge_mode",
+    "ctime": "1776317408584",
+    "utime": "1776351614481",
+    "openBestPrice3d": 0.009153,
+    "openPriceDiff": 10.411886813066744,
+    "closeBestPrice3d": 0.00706,
+    "closePriceDiff": 29.178470254957496,
+    "entryReason": "high_volume_breakout_shrink_stall",
+    "remark": "0417：入场是因为放量涨了20%，随后震荡横盘，连续三天实体缩小后，选择一个相对高位开仓入场；设定 1R 止损，半夜精确触发出局；\n - 改进：问题 1、回头看这不是个开仓的好时机，说是横盘，但实体整体还在向上爬，尽管缩量也应该避开；是当时看的不仔细么？还是着急入场了？问题 2、止损价设置的不合理，至少要比前面的高点或者阻力位要高，怎么还设置低了呢？这个真的怪不了别人。特别是触发止损后价格又回来这种场景，后续一定要注意；"
+  },
+  {
     "positionId": "1428100140689403904",
     "symbol": "JCTUSDT",
     "marginCoin": "USDT",
@@ -22,11 +79,12 @@
     "closeBestPrice3d": 0.003208,
     "closePriceDiff": 11.22194513715711,
     "entryReason": "high_volume_breakout_shrink_stall",
-    "remark": "0416：跟 ai 对话，注意到了理想形态是 K 线实体越来越小，之前没注意这个形态，已补充；\n0416：不算插针，但的确是被反弹弹出去了，eth 和 btc 都在一个月前高位徘徊，这会儿谨慎点，甚至可以考虑提前止盈"
+    "remark": "0417：入场理由是，缩量横盘，价格反弹到高点，盈亏比合适，开仓；如果按照系统的想法，实体变大了，应该继续观察，不该入场，后续看价格的确也在上下摆动。\n0416：跟 ai 对话，注意到了理想形态是 K 线实体越来越小，之前没注意这个形态，已补充；\n0416：不算插针，但的确是被反弹弹出去了，eth 和 btc 都在一个月前高位徘徊，这会儿谨慎点，甚至可以考虑提前止盈"
   },
   {
     "positionId": "1428131112705208321",
     "symbol": "GIGGLEUSDT",
+    "leverage": 5,
     "marginCoin": "USDT",
     "holdSide": "long",
     "openAvgPrice": "52.55",
@@ -72,7 +130,7 @@
     "closeBestPrice3d": 0.003208,
     "closePriceDiff": 15.024937655860358,
     "entryReason": "high_volume_breakout_shrink_stall",
-    "remark": "盈利超过1.5R后设定止损为成本价，被一根20%涨幅的针插出去了。忍住，看图形是否被破坏，观后续记录"
+    "remark": "260417：暴涨横盘锤子线后一天，还在下跌，选择入场；后来被插针触发成本止损出局；没啥说的。盈利超过1.5R后设定止损为成本价，被一根20%涨幅的针插出去了。忍住，看图形是否被破坏，观后续记录"
   },
   {
     "positionId": "1426396468414656513",
@@ -97,7 +155,7 @@
     "closeBestPrice3d": 0.05385,
     "closePriceDiff": 11.829155060352834,
     "entryReason": "high_volume_breakout_shrink_stall",
-    "remark": "盈利超过1R后设定了止损线，被一根15%的针叉出去了。价格达到定点后想重新开空，但忍住了。不管方向判断对不对，这个行为本身就是冲动型操作，不可取。观后续记录"
+    "remark": "260417：暴涨缩量+实体萎缩第二天，入场（但当时没注意实体的变化）；没啥特别说的\n盈利超过1R后设定了止损线，被一根15%的针叉出去了。价格达到定点后想重新开空，但忍住了。不管方向判断对不对，这个行为本身就是冲动型操作，不可取。观后续记录"
   },
   {
     "positionId": "1423467873081896963",
@@ -123,7 +181,7 @@
     "closeBestPrice3d": 0.2005,
     "closePriceDiff": 5.236907730673307,
     "entryReason": "high_volume_breakout_shrink_stall",
-    "remark": "目前看算是比较成功的一笔交易。按系统筛选和信号入场，收益达到2R后设置移动止盈出场。"
+    "remark": "260417：放量一根长长的上影线，缩量两天盈亏比不够没入，第三天再涨 10%，缩量横盘 2 天，第二天是十字星，第三天入场；下跌 4 天后，第五天触发移动止盈平仓；目前看算是比较成功的一笔交易。按系统筛选和信号入场，收益达到2R后设置移动止盈出场。"
   },
   {
     "positionId": "1415605365671342083",

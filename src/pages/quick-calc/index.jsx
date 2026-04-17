@@ -14,11 +14,11 @@ const QuickCalc = ({ children, location }) => {
   }, [location]);
   const menuItems = [
     { key: '/quick-calc/trade-record', label: '交易记录' },
-    { key: '/quick-calc/pattern', label: '模式' },
-    { key: '/quick-calc/kang-dan', label: '扛单分析' },
-    { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
+    // { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/system_1', label: '放量冲关缩量滞涨' },
     { key: '/quick-calc/system_2', label: '开多探索' },
+    // { key: '/quick-calc/kang-dan', label: '扛单分析' },
+    { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/trade-record';

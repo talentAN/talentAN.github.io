@@ -5,60 +5,63 @@ import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
 import { getFutureTicker } from '@root/src/container/bitget/api';
 
+const BODY_SHRINK_TOOLTIP = (
+  <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+    <div style={{ marginBottom: 6, color: '#aaa' }}>核心指标：和暴涨那根K线比</div>
+    <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 10 }}>
+      <thead>
+        <tr style={{ color: '#aaa', borderBottom: '1px solid #444' }}>
+          <th style={{ textAlign: 'left', padding: '2px 8px 2px 0', fontWeight: 'normal' }}>
+            阶段
+          </th>
+          <th style={{ textAlign: 'left', padding: '2px 8px', fontWeight: 'normal' }}>K线实体</th>
+          <th style={{ textAlign: 'left', padding: '2px 8px', fontWeight: 'normal' }}>日内振幅</th>
+          <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 'normal' }}>大致感觉</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style={{ padding: '2px 8px 2px 0', color: '#faad14' }}>暴涨日</td>
+          <td style={{ padding: '2px 8px' }}>基准 (100%)</td>
+          <td style={{ padding: '2px 8px' }}>大</td>
+          <td style={{ padding: '2px 0' }}>市场疯狂</td>
+        </tr>
+        <tr>
+          <td style={{ padding: '2px 8px 2px 0' }}>缩量第1-2天</td>
+          <td style={{ padding: '2px 8px' }}>1/3 以内</td>
+          <td style={{ padding: '2px 8px' }}>明显收窄</td>
+          <td style={{ padding: '2px 0' }}>开始安静</td>
+        </tr>
+        <tr>
+          <td style={{ padding: '2px 8px 2px 0', color: '#52c41a' }}>横盘成熟 ✓</td>
+          <td style={{ padding: '2px 8px' }}>1/5 ~ 1/10</td>
+          <td style={{ padding: '2px 8px' }}>接近十字星</td>
+          <td style={{ padding: '2px 0' }}>市场快睡着了</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style={{ marginBottom: 6, color: '#aaa' }}>举个具体场景：</div>
+    <div>暴涨日：实体 30%，振幅 35%</div>
+    <div>第2天：实体 8%，振幅 12% → 还在消化，不急</div>
+    <div>第3天：实体 4%，振幅 6%　→ 在收敛，继续等</div>
+    <div style={{ color: '#52c41a' }}>第4天：实体 1.5%，振幅 3% → 到位了，开始蹲确认K线</div>
+    <div style={{ marginTop: 8, color: '#aaa', borderTop: '1px solid #444', paddingTop: 6 }}>
+      比绝对数字更重要的是趋势 — 每天都在缩小。如果第3天突然又放大了，说明多空还在打架，重新计时。
+    </div>
+    <div style={{ marginTop: 6 }}>
+      快速判断：看最近两根K线，肉眼上和暴涨那根放一起像
+      <span style={{ color: '#52c41a' }}>「一根柱子旁边站了两根牙签」</span>，差不多了； 还像
+      <span style={{ color: '#faad14' }}>「两根筷子」</span>，再等等。
+    </div>
+  </div>
+);
+
 const CHECKS_CONFIG = [
   { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨' },
   { key: 'volumeJustSpike', label: '币对刚放量暴涨' },
   { key: 'volumeReducedOver2Days', label: '已经缩量大于2天' },
-  { key: ' bodyLoss', label: '实体越来越小' },
+  { key: ' bodyLoss', label: '实体越来越小', tooltip: BODY_SHRINK_TOOLTIP },
   { key: 'profitLossRatioGood', label: '盈亏比合适' },
-];
-
-const SIGNALS_CONFIG = [
-  {
-    category: '高优',
-    items: [
-      {
-        key: 'bearishEngulfing',
-        label: '看跌吞没',
-        desc: '前一天小阳线，第二天一根大阴线把前一天的实体完全包住。',
-      },
-      {
-        key: 'shootingStar',
-        label: '流星线',
-        desc: '上影线很长（至少是实体的 2 倍），实体小，在下方，下影线很短或没有。',
-      },
-    ],
-  },
-  {
-    category: '第二梯队',
-    items: [
-      {
-        key: 'eveningStar',
-        label: '黄昏星',
-        desc: '第一根大阳线 → 第二根小实体（十字星更好）→ 第三根大阴线。',
-      },
-      {
-        key: 'tombstoneDoji',
-        label: '墓碑十字',
-        desc: '开盘价 = 收盘价 = 最低价，有长上影线。形态上像没有实体的流星线。',
-      },
-    ],
-  },
-  {
-    category: '辅助信号',
-    items: [
-      {
-        key: 'longUpperShadow',
-        label: '长上影线 + 关键阻力位',
-        desc: '不管实体是阳还是阴，只要上影线明显很长，就说明上方卖压重。',
-      },
-      {
-        key: 'crossoverDoji',
-        label: '十字星',
-        desc: '开盘 ≈ 收盘，上下影线都有。需要等下一根 K 线确认方向。',
-      },
-    ],
-  },
 ];
 
 const WatchList = () => {
@@ -226,48 +229,36 @@ const WatchList = () => {
               入选条件
             </span>
           </Tooltip>
-          {CHECKS_CONFIG.map(check => (
-            <span
-              key={check.key}
-              style={{
-                padding: '4px 10px',
-                background: '#f0f2f5',
-                borderRadius: '4px',
-                fontSize: 12,
-                color: '#666',
-                display: 'inline-block',
-              }}
-            >
-              {check.label}
-            </span>
-          ))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 'bold', minWidth: 'fit-content' }}>信号</span>
-          {SIGNALS_CONFIG.flatMap(category =>
-            category.items.map(signal => (
-              <Tooltip
-                key={signal.key}
-                title={signal.desc}
-                color="#2f54eb"
-                overlayStyle={{ maxWidth: 350 }}
+          {CHECKS_CONFIG.map(check => {
+            const tag = (
+              <span
+                key={check.key}
+                style={{
+                  padding: '4px 10px',
+                  background: '#f0f2f5',
+                  borderRadius: '4px',
+                  fontSize: 12,
+                  color: '#666',
+                  display: 'inline-block',
+                  ...(check.tooltip ? { borderBottom: '1px dashed #999', cursor: 'help' } : {}),
+                }}
               >
-                <span
-                  style={{
-                    padding: '4px 10px',
-                    background: '#f0f2f5',
-                    borderRadius: '4px',
-                    fontSize: 12,
-                    cursor: 'help',
-                    color: '#1890ff',
-                    display: 'inline-block',
-                  }}
-                >
-                  {signal.label}
-                </span>
+                {check.label}
+              </span>
+            );
+            return check.tooltip ? (
+              <Tooltip
+                key={check.key}
+                title={check.tooltip}
+                color="#1f1f1f"
+                overlayStyle={{ maxWidth: 420 }}
+              >
+                {tag}
               </Tooltip>
-            ))
-          )}
+            ) : (
+              tag
+            );
+          })}
         </div>
       </div>
       <div style={{ marginBottom: 16 }}>

@@ -220,27 +220,10 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '净盈亏(R倍)',
-      dataIndex: 'netProfit',
-      key: 'netProfit',
-      width: 90,
-      render: (profit, record) => {
-        if (record.type === 'summery') return { props: { colSpan: 0 } };
-        const R = getRMultiplier(record.utime);
-        const rMultiple = parseFloat(profit) / R;
-        return (
-          <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red' }}>
-            {rMultiple.toFixed(2)}
-          </span>
-        );
-      },
-    },
-    {
       title: '收益比',
       dataIndex: 'profitRate',
       key: 'profitRate',
       width: 80,
-      fixed: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const openPrice = parseFloat(record.openAvgPrice);
@@ -254,13 +237,52 @@ const TradeRecord = () => {
       },
     },
     {
+      title: '净盈亏(R倍)',
+      dataIndex: 'netProfit',
+      key: 'netProfit',
+      fixed: 'right',
+      width: 90,
+      render: (profit, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        const R = getRMultiplier(record.utime);
+        const rMultiple = parseFloat(profit) / R;
+        return (
+          <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red' }}>
+            {rMultiple.toFixed(2)}
+          </span>
+        );
+      },
+    },
+
+    {
       title: '入场理由',
       dataIndex: 'entryReason',
       key: 'entryReason',
       width: 120,
       fixed: 'right',
-      render: (reason, record) =>
-        record.type === 'summery' ? { props: { colSpan: 0 } } : getEntryReasonLabel(reason),
+      render: (reason, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        const label = getEntryReasonLabel(reason);
+        if (reason === 'high_volume_breakout_shrink_stall') {
+          return (
+            <span
+              style={{ cursor: 'pointer', borderBottom: '1px dashed #1890ff', color: '#1890ff' }}
+              onClick={() => {
+                const filtered = records.filter(
+                  r => r.type !== 'summery' && r.entryReason === 'high_volume_breakout_shrink_stall'
+                );
+                navigator.clipboard
+                  .writeText(JSON.stringify(filtered, null, 2))
+                  .then(() => message.success(`已复制 ${filtered.length} 条记录`))
+                  .catch(() => message.error('复制失败'));
+              }}
+            >
+              {label}
+            </span>
+          );
+        }
+        return label;
+      },
     },
     {
       title: '备注',
