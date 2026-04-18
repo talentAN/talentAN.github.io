@@ -15,7 +15,6 @@ export const getTradingPairs = async () => {
   let response;
   let data;
 
-  // 获取Bitget合约数据
   response = await fetch(`${exchange.baseUrl}${exchange.tickerUrl}?productType=USDT-FUTURES`);
   data = await response.json();
   if (data.code === '00000') {
@@ -30,7 +29,6 @@ export const getTradingPairs = async () => {
 export const getSpotTradingPairs = async () => {
   let response;
   let data;
-  // 获取Bitget合约数据
   response = await fetch(`https://api.bitget.com/api/v2/spot/public/symbols`);
   data = await response.json();
   if (data.code === '00000') {
@@ -69,6 +67,20 @@ export const getSpotKlineData = async ({ symbol, granularity, limit = 2, startTi
     );
     return ret.json();
   } catch (e) {
+    return {};
+  }
+};
+
+// 获取单个现货交易对行情
+export const getSpotTicker = async symbol => {
+  try {
+    const response = await fetch(
+      `${exchange.baseUrl}/api/v2/spot/market/tickers?symbol=${symbol}`
+    );
+    const data = await response.json();
+    return data?.data?.[0];
+  } catch (e) {
+    console.error('Get spot ticker error:', e);
     return {};
   }
 };

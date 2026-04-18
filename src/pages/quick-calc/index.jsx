@@ -14,6 +14,7 @@ const QuickCalc = ({ children, location }) => {
   }, [location]);
   const menuItems = [
     { key: '/quick-calc/trade-record', label: '交易记录' },
+    { key: '/quick-calc/spot-record', label: '现统计' },
     // { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/system_1', label: '放量冲关缩量滞涨' },
     { key: '/quick-calc/system_2', label: '开多探索' },
@@ -26,6 +27,7 @@ const QuickCalc = ({ children, location }) => {
 
   const getSelectedKey = () => {
     const routes = [
+      '/quick-calc/spot-record',
       '/quick-calc/trade-record',
       '/quick-calc/pattern',
       '/quick-calc/kang-dan',
