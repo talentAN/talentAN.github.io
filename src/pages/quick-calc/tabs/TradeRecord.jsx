@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, message, DatePicker, Tag } from 'antd';
+import { Card, Table, Button, message, DatePicker, Tag, Radio } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
@@ -13,6 +13,7 @@ const TradeRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
+  const [directionFilter, setDirectionFilter] = useState('all');
 
   const getDiffColor = diff => {
     if (!diff) return undefined;
@@ -42,9 +43,11 @@ const TradeRecord = () => {
   };
 
   const calculatePatternStats = patternKey => {
-    // 筛选出指定入场理由和非summery的交易
     const filteredRecords = records.filter(
-      r => r.type !== 'summery' && r.entryReason === patternKey
+      r =>
+        r.type !== 'summery' &&
+        r.entryReason === patternKey &&
+        (directionFilter === 'all' || r.holdSide === directionFilter)
     );
 
     if (filteredRecords.length === 0) {
@@ -382,6 +385,18 @@ const TradeRecord = () => {
   return (
     <Card>
       <div style={{ marginBottom: 16 }}>
+        <Radio.Group
+          value={directionFilter}
+          onChange={e => setDirectionFilter(e.target.value)}
+          optionType="button"
+          buttonStyle="solid"
+          size="middle"
+          style={{ marginRight: 8 }}
+        >
+          <Radio.Button value="all">全部</Radio.Button>
+          <Radio.Button value="long">做多</Radio.Button>
+          <Radio.Button value="short">做空</Radio.Button>
+        </Radio.Group>
         <RangePicker value={dateRange} onChange={setDateRange} style={{ marginRight: 8 }} />
         <Button
           type="primary"
@@ -432,7 +447,11 @@ const TradeRecord = () => {
 
       <Table
         columns={columns}
-        dataSource={records}
+        dataSource={
+          directionFilter === 'all'
+            ? records
+            : records.filter(r => r.type === 'summery' || r.holdSide === directionFilter)
+        }
         loading={loading}
         rowKey={record => record.positionId}
         pagination={{ pageSize: 100 }}

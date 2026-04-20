@@ -1,0 +1,35 @@
+{
+  "tabs": [
+    {
+      "key": "tab1",
+      "label": "放量 + 长尾流星线",
+      "data": [
+        {
+          "symbol": "ACEUSDT",
+          "keyDate": "260418",
+          "addDate": "2026-04-20"
+        },
+        {
+          "symbol": "SKLUSDT",
+          "keyDate": "260417",
+          "addDate": "2026-04-20"
+        },
+        {
+          "symbol": "KSMUSDT",
+          "keyDate": "260417",
+          "addDate": "2026-04-20"
+        },
+        {
+          "symbol": "ALICEUSDT",
+          "keyDate": "260418",
+          "addDate": "2026-04-20"
+        },
+        {
+          "symbol": "THETAUSDT",
+          "keyDate": "260418",
+          "addDate": "2026-04-20"
+        }
+      ]
+    }
+  ]
+}

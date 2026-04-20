@@ -18,32 +18,31 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/retrospective', label: '复盘' },
   ];
 
-  const currentPath = location?.pathname || '/quick-calc/system_1/pair-selector';
+  const currentPath = location?.pathname || '/quick-calc/system_1/watching';
   const cleanPath = currentPath.split('?')[0];
 
   const selectedKey = cleanPath.startsWith('/quick-calc/system_1/retrospective')
     ? '/quick-calc/system_1/retrospective'
     : cleanPath.startsWith('/quick-calc/system_1/position-calculator')
-    ? '/quick-calc/system_1/position-calculator'
-    : cleanPath.startsWith('/quick-calc/system_1/pair-selector')
-      ? '/quick-calc/system_1/pair-selector'
-      : cleanPath.startsWith('/quick-calc/system_1/watching')
-        ? '/quick-calc/system_1/watching'
-        : cleanPath.startsWith('/quick-calc/system_1/trading-discipline')
-          ? '/quick-calc/system_1/trading-discipline'
-          : cleanPath.startsWith('/quick-calc/system_1/rule')
-            ? '/quick-calc/system_1/rule'
-            : '/quick-calc/system_1/pair-selector';
+      ? '/quick-calc/system_1/position-calculator'
+      : cleanPath.startsWith('/quick-calc/system_1/pair-selector')
+        ? '/quick-calc/system_1/pair-selector'
+        : cleanPath.startsWith('/quick-calc/system_1/watching')
+          ? '/quick-calc/system_1/watching'
+          : cleanPath.startsWith('/quick-calc/system_1/trading-discipline')
+            ? '/quick-calc/system_1/trading-discipline'
+            : cleanPath.startsWith('/quick-calc/system_1/rule')
+              ? '/quick-calc/system_1/rule'
+              : '/quick-calc/system_1/watching';
 
   const showRule = currentPath.includes('/system_1/rule');
   const showTradingDiscipline = currentPath.includes('/system_1/trading-discipline');
   const showPositionCalculator = currentPath.includes('/system_1/position-calculator');
   const showWatchList = currentPath.includes('/system_1/watching');
   const showRetrospective = currentPath.includes('/system_1/retrospective');
-  const showPairSelector =
-    currentPath.includes('/system_1/pair-selector') ||
-    currentPath === '/quick-calc/system_1' ||
-    currentPath === '/quick-calc/system_1/';
+  const showPairSelector = currentPath.includes('/system_1/pair-selector');
+  const showDefaultWatchList = showWatchList;
+  currentPath === '/quick-calc/system_1' || currentPath === '/quick-calc/system_1/';
 
   return (
     <Card>
@@ -58,7 +57,7 @@ const System1 = ({ location }) => {
       {showTradingDiscipline && <TradingDiscipline />}
       {showPositionCalculator && <PositionCalculator />}
       {showPairSelector && <PairSelector />}
-      {showWatchList && <WatchList />}
+      {showDefaultWatchList && <WatchList />}
       {showRetrospective && <Retrospective />}
     </Card>
   );

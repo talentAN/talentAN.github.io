@@ -6,7 +6,7 @@ import { Table, Typography, Tag } from 'antd';
 const { Text } = Typography;
 
 const RiseToFallTable = ({ futureSymbols }) => {
-  const { symbols, checkedSymbolCount, volumeSpikeData } = useRiseToFallLine({
+  const { checkedSymbolCount, volumeSpikeData } = useRiseToFallLine({
     futureSymbols,
   });
 
@@ -24,7 +24,7 @@ const RiseToFallTable = ({ futureSymbols }) => {
 
   return (
     <>
-      <div>{`共${futureSymbols?.length}，已查看${checkedSymbolCount}，已筛选${symbols.length}`}</div>
+      <div>{`共${futureSymbols?.length}，已查看${checkedSymbolCount}，已筛选${volumeSpikeData.length}`}</div>
       <Table
         columns={[
           {
