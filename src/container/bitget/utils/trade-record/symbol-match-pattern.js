@@ -21,7 +21,7 @@ export const parseKlineData = data => {
 };
 
 export const matchLongStable = ({ highPrice, lowPrice, avgVolume, latestPrice }) => {
-  return highPrice <= lowPrice * 2 && avgVolume > 5000000 && latestPrice >= highPrice * 0.9;
+  return highPrice <= lowPrice * 2 && lowPrice < 50;
 };
 
 export const matchRiseToFall = data => {
