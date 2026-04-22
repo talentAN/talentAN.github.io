@@ -100,11 +100,15 @@ const WatchList = () => {
       dataIndex: 'symbol',
       key: 'symbol',
       width: 120,
-      render: symbol => (
+      render: (symbol, record) => (
         <a
           href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
           target="_blank"
           rel="noopener noreferrer"
+          style={{
+            ...(!showOnlyWatching && record.judge === 1 ? { color: '#52c41a' } : {}),
+            ...(!showOnlyWatching && record.judge === -1 ? { color: '#f5222d' } : {}),
+          }}
         >
           {symbol}
         </a>
@@ -122,11 +126,7 @@ const WatchList = () => {
       dataIndex: 'reason',
       key: 'reason',
       width: 300,
-      render: readon => (
-        <div style={{ maxWidth: '300px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-          {readon}
-        </div>
-      ),
+      render: reason => <div>{reason}</div>,
     },
   ];
 
@@ -147,18 +147,7 @@ const WatchList = () => {
       dataIndex: 'followUp',
       key: 'followUp',
       width: 150,
-      render: text => (
-        <div
-          style={{
-            whiteSpace: 'pre-wrap',
-            maxHeight: '150px',
-            overflowY: 'auto',
-            wordBreak: 'break-word',
-          }}
-        >
-          {text || '-'}
-        </div>
-      ),
+      render: text => <div>{text || '-'}</div>,
     },
   ];
 
@@ -290,6 +279,18 @@ const WatchList = () => {
         />
         <span style={{ marginLeft: 8 }}>观察中</span>
       </div>
+      {!showOnlyWatching &&
+        (() => {
+          const finished = dataSource.filter(item => item.achieved === true);
+          const correct = finished.filter(item => item.judge === 1).length;
+          const wrong = finished.filter(item => item.judge === -1).length;
+          return (
+            <div style={{ marginBottom: 12, display: 'flex', gap: 16 }}>
+              <span style={{ color: '#52c41a' }}>判断正确：{correct}</span>
+              <span style={{ color: '#f5222d' }}>判断错误：{wrong}</span>
+            </div>
+          );
+        })()}
       <Table
         columns={columns}
         dataSource={
@@ -300,6 +301,7 @@ const WatchList = () => {
         rowKey={(record, index) => `${record.symbol}_${index}`}
         pagination={false}
         scroll={{ x: 'max-content' }}
+        rowClassName={() => (!showOnlyWatching ? 'compact-row' : '')}
       />
     </div>
   );
