@@ -62,9 +62,10 @@ export const getFutureKlineData = async ({
 // 获取现货K线数据
 export const getSpotKlineData = async ({ symbol, granularity, limit = 2, startTime, endTime }) => {
   try {
-    const ret = await fetch(
-      `${exchange.baseUrl}/${exchange.spotKlineUrl}?symbol=${symbol}&granularity=${granularity}&limit=${limit}&startTime=${startTime}&endTime=${endTime}`
-    );
+    let url = `${exchange.baseUrl}${exchange.spotKlineUrl}?symbol=${symbol}&granularity=${granularity}&limit=${limit}`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+    const ret = await fetch(url);
     return ret.json();
   } catch (e) {
     return {};
