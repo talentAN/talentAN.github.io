@@ -191,7 +191,7 @@ const PositionCalculator = () => {
       });
   };
 
-return (
+  return (
     <>
       {/* 计算器和结果 - 左右并排 */}
       <Row gutter={16}>

@@ -170,6 +170,7 @@
     "closeFee": "-0.02598372",
     "posMode": "hedge_mode",
     "ctime": "1775107108373",
+    "tags": ["highlight"],
     "utime": "1775531163322",
     "openBestPrice3d": 0.2796,
     "openPriceDiff": 2.7181688125894117,

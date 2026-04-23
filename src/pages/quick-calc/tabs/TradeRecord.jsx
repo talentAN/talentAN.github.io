@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, message, DatePicker, Tag, Radio } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
@@ -13,7 +13,16 @@ const TradeRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
+  const [onlyHighlight, setOnlyHighlight] = useState(false);
   const [directionFilter, setDirectionFilter] = useState('all');
+
+  const recordsToDisplay = useMemo(() => {
+    const temp =
+      directionFilter === 'all'
+        ? records
+        : records.filter(r => r.type === 'summery' || r.holdSide === directionFilter);
+    return onlyHighlight ? temp.filter(r => r.tags?.includes?.('highlight')) : temp;
+  }, [records, directionFilter, onlyHighlight]);
 
   const getDiffColor = diff => {
     if (!diff) return undefined;
@@ -410,6 +419,15 @@ const TradeRecord = () => {
         <Button icon={<CopyOutlined />} onClick={handleCopy}>
           复制数据
         </Button>
+        <Checkbox
+          checked={onlyHighlight}
+          onChange={e => {
+            setOnlyHighlight(e.target.checked);
+          }}
+          style={{ fontSize: 12 }}
+        >
+          只展示标杆
+        </Checkbox>
       </div>
 
       {/* 统计信息 */}
@@ -447,11 +465,7 @@ const TradeRecord = () => {
 
       <Table
         columns={columns}
-        dataSource={
-          directionFilter === 'all'
-            ? records
-            : records.filter(r => r.type === 'summery' || r.holdSide === directionFilter)
-        }
+        dataSource={recordsToDisplay}
         loading={loading}
         rowKey={record => record.positionId}
         pagination={{ pageSize: 100 }}
