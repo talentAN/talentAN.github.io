@@ -30,6 +30,33 @@
           "addDate": "2026-04-20"
         }
       ]
+    },
+    {
+      "key": "tab_1777012187647",
+      "label": "低波动 + 暴涨",
+      "data": [
+        {
+          "symbol": "SIGNUSDT",
+          "low": "0.062",
+          "high": "0.1",
+          "highPoint": "0.13319",
+          "period": "140天"
+        },  
+        {
+          "symbol": "XPLUSDT",
+          "low": "0.5255",
+          "high": "0.8788",
+          "highPoint": "1.6923",
+          "period": "28天"
+        },
+        {
+          "symbol": "LIGHTUSDT",
+          "low": "0.72",
+          "high": "1.32",
+          "highPoint": "2.8410",
+          "period": "20天"
+        }
+      ]
     }
   ]
 }

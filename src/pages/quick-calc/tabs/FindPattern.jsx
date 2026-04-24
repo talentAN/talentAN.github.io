@@ -54,14 +54,28 @@ const FindPattern = () => {
         </a>
       ),
     },
-    {
+    activeKey === "tab_1777012187647" &&{
+        title: '横盘时间',
+        dataIndex: 'period',
+        key: 'period',
+        width: 120,
+        render: text => text || '-',
+    },
+    activeKey === "tab_1777012187647" &&{
+      title: '下沿/上沿/最高点',
+      dataIndex: 'sum',
+      key: 'sum',
+      width: 120,
+      render: (_,record) => `${record.low} / ${record.high} / ${record.highPoint}`,
+  } ,
+    activeKey === 'tab1' && {
       title: '关键日期',
       dataIndex: 'keyDate',
       key: 'keyDate',
       width: 120,
       render: text => text || '-',
     },
-    {
+    activeKey === 'tab1' &&{
       title: '添加日期',
       dataIndex: 'addDate',
       key: 'addDate',
@@ -74,7 +88,7 @@ const FindPattern = () => {
       width: 120,
       render: (_, record) => prices[record.symbol] || '-',
     },
-  ];
+  ].filter(column => !!column);
 
   const handleAddRecord = () => {
     if (!newSymbol.trim()) {
