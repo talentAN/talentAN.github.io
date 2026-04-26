@@ -9,7 +9,7 @@ isTranslated: true
 keywords: ['个人成长', 'power', '力量']
 prePage: 'blog/translation/pdfsp/chapter_2'
 nextPage: 'blog/translation/pdfsp/chapter_4'
-totalCount: 77511
+totalCount: 77513
 ---
 
 > _最有力量的人，是能掌控自己的人。 —— SENECA_
