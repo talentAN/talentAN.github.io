@@ -191,6 +191,21 @@ const PositionCalculator = () => {
       });
   };
 
+  const handleCopySimulate = () => {
+    if (!result) {
+      message.warning('请先计算仓位');
+      return;
+    }
+    const entry = form.getFieldValue('entry');
+    const stopLoss = form.getFieldValue('stopLoss');
+    const leverage = form.getFieldValue('leverage');
+    const copyText = `simulate:${entry},${stopLoss},${leverage}`;
+    navigator.clipboard
+      .writeText(copyText)
+      .then(() => message.success('已复制模拟数据'))
+      .catch(() => message.error('复制失败'));
+  };
+
   return (
     <>
       {/* 计算器和结果 - 左右并排 */}
@@ -351,6 +366,14 @@ const PositionCalculator = () => {
                     style={{ fontSize: 12, flex: 1, height: 40 }}
                     title="复制: 开仓价、止损、止盈、盈亏比"
                   />
+                  <Button
+                    onClick={handleCopySimulate}
+                    size="large"
+                    style={{ fontSize: 12, flex: 1, height: 40 }}
+                    title="复制模拟数据: 入场价、止损价、杠杆"
+                  >
+                    模拟
+                  </Button>
                 </Space>
               </Form.Item>
             </Form>

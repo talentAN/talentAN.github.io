@@ -7,6 +7,7 @@ import PositionCalculator from './PositionCalculator';
 import PairSelector from './PairSelector';
 import WatchList from './WatchList';
 import Retrospective from './Retrospective';
+import Simulate from './Simulate';
 
 const System1 = ({ location }) => {
   const menuItems = [
@@ -16,12 +17,15 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/watching', label: '观测中' },
     { key: '/quick-calc/system_1/position-calculator', label: '仓位计算器' },
     { key: '/quick-calc/system_1/retrospective', label: '复盘' },
+    { key: '/quick-calc/system_1/simulate', label: '模拟' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/system_1/watching';
   const cleanPath = currentPath.split('?')[0];
 
-  const selectedKey = cleanPath.startsWith('/quick-calc/system_1/retrospective')
+  const selectedKey = cleanPath.startsWith('/quick-calc/system_1/simulate')
+    ? '/quick-calc/system_1/simulate'
+    : cleanPath.startsWith('/quick-calc/system_1/retrospective')
     ? '/quick-calc/system_1/retrospective'
     : cleanPath.startsWith('/quick-calc/system_1/position-calculator')
       ? '/quick-calc/system_1/position-calculator'
@@ -40,6 +44,7 @@ const System1 = ({ location }) => {
   const showPositionCalculator = currentPath.includes('/system_1/position-calculator');
   const showWatchList = currentPath.includes('/system_1/watching');
   const showRetrospective = currentPath.includes('/system_1/retrospective');
+  const showSimulate = currentPath.includes('/system_1/simulate');
   const showPairSelector = currentPath.includes('/system_1/pair-selector');
   const showDefaultWatchList = showWatchList;
   currentPath === '/quick-calc/system_1' || currentPath === '/quick-calc/system_1/';
@@ -59,6 +64,7 @@ const System1 = ({ location }) => {
       {showPairSelector && <PairSelector />}
       {showDefaultWatchList && <WatchList />}
       {showRetrospective && <Retrospective />}
+      {showSimulate && <Simulate />}
     </Card>
   );
 };
