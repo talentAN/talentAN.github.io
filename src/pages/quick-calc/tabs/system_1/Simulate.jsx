@@ -2,11 +2,19 @@ import React, { useState, useMemo } from 'react';
 import { Table, Statistic, Row, Col, Button, Input, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
+import initData from '@root/contract-record/simulate.json';
 
-const INIT_DATA = [];
+const INIT_DATA = initData;
 
 const columns = [
-  { title: '币对', dataIndex: 'symbol', key: 'symbol', width: 120 },
+  {
+    title: '币对', dataIndex: 'symbol', key: 'symbol', width: 120,
+    render: symbol => (
+      <a href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} target="_blank" rel="noopener noreferrer">
+        {symbol}
+      </a>
+    ),
+  },
   { title: '入场日期', dataIndex: 'entryDate', key: 'entryDate', width: 110 },
   { title: '入场价', dataIndex: 'entryPrice', key: 'entryPrice', width: 100 },
   { title: '止损价', dataIndex: 'stopLoss', key: 'stopLoss', width: 100 },
