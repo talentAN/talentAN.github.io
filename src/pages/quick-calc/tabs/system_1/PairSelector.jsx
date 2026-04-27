@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Row,
@@ -8,12 +8,13 @@ import {
   Space,
   Divider,
   Spin,
-  Collapse,
   Statistic,
+  Table,
+  Tag,
+  Progress,
   message,
 } from 'antd';
-import { ReloadOutlined, MenuOutlined } from '@ant-design/icons';
-import RiseToFallTable from '../../../../container/bitget/components/rise-to-fall';
+import { ReloadOutlined } from '@ant-design/icons';
 import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
 import moment from 'moment';
 
@@ -25,6 +26,10 @@ const PairSelector = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [marketData, setMarketData] = useState({ BTC: {}, ETH: {} });
   const [loadingMarket, setLoadingMarket] = useState(true);
+  const [spikeResults, setSpikeResults] = useState([]);
+  const [spikeProgress, setSpikeProgress] = useState({ checked: 0, total: 0 });
+  const [spikeRunning, setSpikeRunning] = useState(false);
+  const abortRef = useRef(false);
 
   const calculatePriceChange = (klineData, days) => {
     if (!klineData || klineData.length < days) return null;
@@ -76,14 +81,53 @@ const PairSelector = () => {
   };
 
   const loadData = () => {
+    abortRef.current = true;
+    setSpikeRunning(false);
     setLoading(true);
     getTradingPairs()
       .then(res => {
         setTradingPairs(res);
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
+  };
+
+  const runSpikeFilter = async () => {
+    abortRef.current = false;
+    setSpikeRunning(true);
+    setSpikeResults([]);
+
+    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs();
+    if (!tradingPairs.length) setTradingPairs(pairs);
+
+    const startTime = moment.utc().subtract(4, 'days').startOf('day').valueOf();
+    const endTime = moment.utc().valueOf();
+    setSpikeProgress({ checked: 0, total: pairs.length });
+
+    const matched = [];
+    for (let i = 0; i < pairs.length; i++) {
+      if (abortRef.current) break;
+      const { symbol } = pairs[i];
+      try {
+        const res = await getFutureKlineData({ symbol, granularity: '1Dutc', limit: 5, startTime, endTime });
+        const candles = Array.isArray(res?.data) ? res.data : [];
+        const spike = candles.find(c => {
+          const open = parseFloat(c[1]), close = parseFloat(c[4]);
+          return open > 0 && (close - open) / open >= 0.3;
+        });
+        if (spike) {
+          const open = parseFloat(spike[1]), close = parseFloat(spike[4]);
+          matched.push({
+            key: symbol,
+            symbol,
+            date: new Date(Number(spike[0])).toISOString().slice(0, 10),
+            rise: (((close - open) / open) * 100).toFixed(1),
+          });
+          setSpikeResults([...matched]);
+        }
+      } catch (_) {}
+      setSpikeProgress({ checked: i + 1, total: pairs.length });
+    }
+    setSpikeRunning(false);
   };
 
   useEffect(() => {
@@ -230,47 +274,52 @@ const PairSelector = () => {
         </Row>
       )}
       <Row gutter={16}>
-        {showDetails && (
-          <Col span={12}>
-            <Card>
-              <Title level={3}>筛选说明</Title>
-              {detailsContent}
-            </Card>
-          </Col>
-        )}
-        <Col span={showDetails ? 12 : 24}>
+        <Col span={24}>
           <Card>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 16,
-              }}
-            >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Title level={3} style={{ margin: 0 }}>
-                成交量爆炸币对 (倒数第3/4天成交量 {'>'}过去20天平均的6倍 AND {'>'}200万USDT)
+                过去3天单日涨幅 &gt;= 30% 的币对
               </Title>
               <Space>
-                <Button
-                  type="primary"
-                  icon={<ReloadOutlined />}
-                  onClick={loadData}
-                  loading={loading}
-                >
-                  刷新
+                <Button type="primary" icon={<ReloadOutlined />} onClick={runSpikeFilter} loading={spikeRunning}>
+                  {spikeRunning ? '筛选中...' : '开始筛选'}
                 </Button>
+                {spikeRunning && (
+                  <Button onClick={() => { abortRef.current = true; setSpikeRunning(false); }}>
+                    停止
+                  </Button>
+                )}
               </Space>
             </div>
-            <Spin spinning={loading}>
-              {tradingPairs.length > 0 ? (
-                <RiseToFallTable futureSymbols={tradingPairs} />
-              ) : (
-                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                  <Text type="secondary">{loading ? '加载中...' : '点击刷新获取数据'}</Text>
-                </div>
-              )}
-            </Spin>
+            {spikeProgress.total > 0 && (
+              <Progress
+                percent={Math.round((spikeProgress.checked / spikeProgress.total) * 100)}
+                status={spikeRunning ? 'active' : 'normal'}
+                format={() => `${spikeProgress.checked} / ${spikeProgress.total}`}
+                style={{ marginBottom: 12 }}
+              />
+            )}
+            <Table
+              size="small"
+              pagination={{ pageSize: 20 }}
+              dataSource={spikeResults}
+              locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
+              columns={[
+                {
+                  title: '币对', dataIndex: 'symbol', key: 'symbol', width: 150,
+                  render: symbol => (
+                    <a href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} target="_blank" rel="noopener noreferrer">
+                      {symbol}
+                    </a>
+                  ),
+                },
+                { title: '触发日期', dataIndex: 'date', key: 'date', width: 130 },
+                {
+                  title: '当日涨幅', dataIndex: 'rise', key: 'rise',
+                  render: v => <Tag color="green">+{v}%</Tag>,
+                },
+              ]}
+            />
           </Card>
         </Col>
       </Row>

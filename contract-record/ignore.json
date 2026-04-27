@@ -1,5 +1,10 @@
 [
   {
+    "symbol": ["RAVEUSDT", "SKYAIUSDT"],
+    "ignoreBefore": "2026-05-20 21:20:26",
+    "reason": "260420插针"
+  },
+  {
     "symbol": "MCDUSDT",
     "ignoreBefore": "2029-04-07 21:20:26",
     "reason": "股票"

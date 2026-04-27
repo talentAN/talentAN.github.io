@@ -41,7 +41,7 @@
           "high": "0.1",
           "highPoint": "0.13319",
           "period": "140天"
-        },  
+        },
         {
           "symbol": "XPLUSDT",
           "low": "0.5255",
@@ -55,6 +55,25 @@
           "high": "1.32",
           "highPoint": "2.8410",
           "period": "20天"
+        },
+        {
+          "symbol": "BSBUSDT",
+          "low": "0.159",
+          "high": "0.29",
+          "highPoint": "0.79",
+          "period": "28天"
+        },
+        {
+          "symbol": "SKRUSDT"
+        },
+        {
+          "symbol": "NIGHTUSDT"
+        },
+        {
+          "symbol": "PRLUSDT"
+        },
+        {
+          "symbol": "GENIUSUSDT"
         }
       ]
     }
