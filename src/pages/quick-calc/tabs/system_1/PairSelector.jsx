@@ -16,7 +16,12 @@ import {
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
+import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
+
+const WATCHING_SYMBOLS = new Set(
+  watchData.filter(d => !d.achieved).map(d => d.symbol)
+);
 
 const { Title, Text } = Typography;
 
@@ -114,7 +119,7 @@ const PairSelector = () => {
           const open = parseFloat(c[1]), close = parseFloat(c[4]);
           return open > 0 && (close - open) / open >= 0.3;
         });
-        if (spike) {
+        if (spike && !WATCHING_SYMBOLS.has(symbol)) {
           const open = parseFloat(spike[1]), close = parseFloat(spike[4]);
           matched.push({
             key: symbol,
