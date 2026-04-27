@@ -50,6 +50,7 @@ const SpotRecord = () => {
         const apiSymbol = toApiSymbol(row.symbol);
         const ticker = await getSpotTicker(apiSymbol);
         if (ticker?.lastPr) result[row.symbol] = parseFloat(ticker.lastPr);
+        else result[row.symbol] = 0;
       }
       setPrices(result);
       setLoadingPrices(false);
@@ -58,9 +59,9 @@ const SpotRecord = () => {
   }, []);
 
   const data = rawData.map(r => {
-    const lastPr = prices[r.symbol];
+    const lastPr = prices[r.symbol] ?? 0;
     const unrealizedPnl =
-      lastPr != null && r.remainingQty > 0
+      r.remainingQty > 0
         ? (lastPr - r.avgBuyPrice) * r.remainingQty
         : null;
     return { ...r, lastPr, unrealizedPnl };
@@ -111,7 +112,7 @@ const SpotRecord = () => {
       render: (v, r) => {
         if (!r.remainingQty) return '-';
         if (loadingPrices) return <Spin size="small" />;
-        return v != null ? fmt(v, 4) : '-';
+        return fmt(v, 4);
       },
     },
     {
