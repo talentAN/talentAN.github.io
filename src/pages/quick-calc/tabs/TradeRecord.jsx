@@ -304,7 +304,7 @@ const TradeRecord = () => {
       fixed: 'right',
       render: (text, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>;
+        return <div style={{ whiteSpace: 'pre-wrap' }}>{text?.replace(/\\n/g, '\n') || '-'}</div>;
       },
     },
   ];
