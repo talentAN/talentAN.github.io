@@ -60,7 +60,7 @@ const CHECKS_CONFIG = [
   { key: 'btcEthNotStrong', label: 'BTC/ETH不处于强势上涨' },
   { key: 'volumeJustSpike', label: '币对刚放量暴涨' },
   { key: 'volumeReducedOver2Days', label: '已经缩量大于2天' },
-  { key: ' bodyLoss', label: '实体越来越小', tooltip: BODY_SHRINK_TOOLTIP },
+  { key: ' bodyLoss', label: '实体最好越来越小', tooltip: BODY_SHRINK_TOOLTIP },
   { key: 'profitLossRatioGood', label: '盈亏比合适' },
 ];
 
