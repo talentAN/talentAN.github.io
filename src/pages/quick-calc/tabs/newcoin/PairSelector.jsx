@@ -3,8 +3,10 @@ import { Card, Row, Col, Button, Typography, Table, Tag, Progress, InputNumber }
 import { ReloadOutlined } from '@ant-design/icons';
 import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
 import watchData from '@root/contract-record/watch-newcoin.json';
+import ignoreData from '@root/contract-record/ignore-pair-selector.json';
 
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
+const IGNORE_SYMBOLS = new Set(ignoreData.map(d => d.symbol));
 
 const { Title } = Typography;
 
@@ -36,7 +38,7 @@ const PairSelector = () => {
       if (abortRef.current) break;
       const { symbol } = pairs[i];
 
-      if (WATCHING_SYMBOLS.has(symbol)) {
+      if (WATCHING_SYMBOLS.has(symbol) || IGNORE_SYMBOLS.has(symbol)) {
         setProgress({ checked: i + 1, total: pairs.length });
         continue;
       }

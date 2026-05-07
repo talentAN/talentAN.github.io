@@ -1,0 +1,7 @@
+[
+  { "symbol": "COPPERUSDT" },
+  { "symbol": "NATGASUSDT" },
+  { "symbol": "CCUSDT", "reason": "已持仓" },
+  { "symbol": "SOXSUSDT", "reason": "ETF" },
+  { "symbol": "XXXUSDT" }
+]
