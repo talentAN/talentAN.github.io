@@ -424,7 +424,7 @@ const TradeRecord = () => {
           onChange={e => {
             setOnlyHighlight(e.target.checked);
           }}
-          style={{ fontSize: 12 }}
+          style={{ fontSize: 12, marginLeft: 8 }}
         >
           只展示标杆
         </Checkbox>
