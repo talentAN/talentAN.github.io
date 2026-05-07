@@ -8,7 +8,7 @@ import PairSelector from './PairSelector';
 import WatchList from './WatchList';
 import Retrospective from './Retrospective';
 import Simulate from './Simulate';
-import SimulateRetrospective from '../../system_1/simulate-retrospective';
+import SimulateRetrospective from './SimulateRetrospective';
 
 const System1 = ({ location }) => {
   const menuItems = [
