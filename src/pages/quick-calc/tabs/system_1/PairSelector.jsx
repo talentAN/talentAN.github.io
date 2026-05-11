@@ -18,10 +18,9 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
+import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
 
-const WATCHING_SYMBOLS = new Set(
-  watchData.filter(d => !d.achieved).map(d => d.symbol)
-);
+const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
 
 const { Title, Text } = Typography;
 
@@ -113,14 +112,22 @@ const PairSelector = () => {
       if (abortRef.current) break;
       const { symbol } = pairs[i];
       try {
-        const res = await getFutureKlineData({ symbol, granularity: '1Dutc', limit: 5, startTime, endTime });
+        const res = await getFutureKlineData({
+          symbol,
+          granularity: '1Dutc',
+          limit: 5,
+          startTime,
+          endTime,
+        });
         const candles = Array.isArray(res?.data) ? res.data : [];
         const spike = candles.find(c => {
-          const open = parseFloat(c[1]), close = parseFloat(c[4]);
+          const open = parseFloat(c[1]),
+            close = parseFloat(c[4]);
           return open > 0 && (close - open) / open >= 0.3;
         });
         if (spike && !WATCHING_SYMBOLS.has(symbol)) {
-          const open = parseFloat(spike[1]), close = parseFloat(spike[4]);
+          const open = parseFloat(spike[1]),
+            close = parseFloat(spike[4]);
           matched.push({
             key: symbol,
             symbol,
@@ -281,16 +288,34 @@ const PairSelector = () => {
       <Row gutter={16}>
         <Col span={24}>
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 16,
+              }}
+            >
               <Title level={3} style={{ margin: 0 }}>
                 过去3天单日涨幅 &gt;= 30% 的币对
               </Title>
               <Space>
-                <Button type="primary" icon={<ReloadOutlined />} onClick={runSpikeFilter} loading={spikeRunning}>
+                <PositionCalculatorButton />
+                <Button
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  onClick={runSpikeFilter}
+                  loading={spikeRunning}
+                >
                   {spikeRunning ? '筛选中...' : '开始筛选'}
                 </Button>
                 {spikeRunning && (
-                  <Button onClick={() => { abortRef.current = true; setSpikeRunning(false); }}>
+                  <Button
+                    onClick={() => {
+                      abortRef.current = true;
+                      setSpikeRunning(false);
+                    }}
+                  >
                     停止
                   </Button>
                 )}
@@ -311,16 +336,25 @@ const PairSelector = () => {
               locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
               columns={[
                 {
-                  title: '币对', dataIndex: 'symbol', key: 'symbol', width: 150,
+                  title: '币对',
+                  dataIndex: 'symbol',
+                  key: 'symbol',
+                  width: 150,
                   render: symbol => (
-                    <a href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       {symbol}
                     </a>
                   ),
                 },
                 { title: '触发日期', dataIndex: 'date', key: 'date', width: 130 },
                 {
-                  title: '当日涨幅', dataIndex: 'rise', key: 'rise',
+                  title: '当日涨幅',
+                  dataIndex: 'rise',
+                  key: 'rise',
                   render: v => <Tag color="green">+{v}%</Tag>,
                 },
               ]}

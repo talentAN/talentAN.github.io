@@ -4,6 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
 import { getFutureTicker } from '@root/src/container/bitget/api';
+import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
 
 const BODY_SHRINK_TOOLTIP = (
   <div style={{ fontSize: 12, lineHeight: 1.8 }}>
@@ -272,6 +273,9 @@ const WatchList = () => {
           添加
         </Button>
         <Button onClick={handleExport}>导出数据</Button>
+        <span style={{ marginLeft: 8 }}>
+          <PositionCalculatorButton />
+        </span>
         <Switch
           checked={showOnlyWatching}
           onChange={setShowOnlyWatching}
