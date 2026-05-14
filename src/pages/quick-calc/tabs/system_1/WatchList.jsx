@@ -148,7 +148,7 @@ const WatchList = () => {
       dataIndex: 'followUp',
       key: 'followUp',
       width: 300,
-      render: text => <div>{text || '-'}</div>,
+      render: text => <div style={{ whiteSpace: 'pre-wrap' }}>{text || '-'}</div>,
     },
   ];
 
