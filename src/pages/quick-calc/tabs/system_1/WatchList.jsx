@@ -126,7 +126,7 @@ const WatchList = () => {
       title: '关注理由',
       dataIndex: 'reason',
       key: 'reason',
-      width: 300,
+      width: 150,
       render: reason => <div>{reason}</div>,
     },
   ];
@@ -147,7 +147,7 @@ const WatchList = () => {
       title: '后续',
       dataIndex: 'followUp',
       key: 'followUp',
-      width: 150,
+      width: 300,
       render: text => <div>{text || '-'}</div>,
     },
   ];
