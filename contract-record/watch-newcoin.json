@@ -2,6 +2,19 @@
   {
     "symbol": "ZAMAUSDT",
     "addTime": "2026-04-27 21:24:40",
+    "entryPrice": 0.028481,
+    "reason": ""
+  },
+  {
+    "symbol": "CCUSDT",
+    "addTime": "2026-04-27 21:24:40",
+    "entryPrice": 0.1501,
+    "reason": ""
+  },
+  {
+    "symbol": "MEGAUSDT",
+    "addTime": "2026-04-27 21:24:40",
+    "entryPrice": 0.12179,
     "reason": ""
   },
   {
@@ -12,6 +25,7 @@
   {
     "symbol": "GENIUSUSDT",
     "addTime": "2026-04-27 21:22:54",
+    "entryPrice": 0.56835,
     "reason": ""
   },
   {

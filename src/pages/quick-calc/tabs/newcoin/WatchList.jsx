@@ -3,7 +3,7 @@ import { Table, Button, message, Input, Switch, Tag, Spin } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch-newcoin.json';
-import { getFutureTicker, getFutureKlineData } from '@root/src/container/bitget/api';
+import { getSpotTicker, getFutureTicker, getFutureKlineData } from '@root/src/container/bitget/api';
 
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -22,16 +22,36 @@ const WatchList = () => {
     const fetchPrices = async () => {
       const newPrices = {};
       for (const item of activeItems) {
+        let entry = {};
+        let spotData = null;
         try {
-          const tickerData = await getFutureTicker(item.symbol);
-          if (tickerData) {
-            const entry = {};
-            if (tickerData.lastPr) entry.price = parseFloat(tickerData.lastPr).toFixed(6);
-            if (tickerData.quoteVolume) entry.quoteVolume = parseFloat(tickerData.quoteVolume);
-            newPrices[item.symbol] = entry;
+          spotData = await getSpotTicker(item.symbol);
+          if (spotData?.lastPr) {
+            entry.price = parseFloat(spotData.lastPr).toFixed(6);
+          }
+          if (spotData?.quoteVolume) {
+            entry.quoteVolume = parseFloat(spotData.quoteVolume);
           }
         } catch (e) {
-          console.error(`获取 ${item.symbol} 价格失败:`, e);
+          console.error(`获取 ${item.symbol} 现货价格失败:`, e);
+        }
+
+        if (!entry.price) {
+          try {
+            const futureData = await getFutureTicker(item.symbol);
+            if (futureData?.lastPr) {
+              entry.price = parseFloat(futureData.lastPr).toFixed(6);
+            }
+            if (!entry.quoteVolume && futureData?.quoteVolume) {
+              entry.quoteVolume = parseFloat(futureData.quoteVolume);
+            }
+          } catch (e) {
+            console.error(`获取 ${item.symbol} 合约价格失败:`, e);
+          }
+        }
+
+        if (entry.price || entry.quoteVolume) {
+          newPrices[item.symbol] = entry;
         }
       }
       setPrices(newPrices);
@@ -160,6 +180,25 @@ const WatchList = () => {
       key: 'latestPrice',
       width: 100,
       render: (_, record) => prices[record.symbol]?.price || '-',
+    },
+    {
+      title: '当前持仓价',
+      key: 'entryPrice',
+      width: 120,
+      render: (_, record) => record.entryPrice || '-',
+    },
+    {
+      title: '盈利比例',
+      key: 'profitRatio',
+      width: 120,
+      render: (_, record) => {
+        const entryPrice = parseFloat(record.entryPrice);
+        const currentPrice = parseFloat(prices[record.symbol]?.price);
+        if (!entryPrice || !currentPrice) return '-';
+        const ratio = ((currentPrice - entryPrice) / entryPrice) * 100;
+        const formatted = `${ratio >= 0 ? '+' : ''}${ratio.toFixed(2)}%`;
+        return <Tag color={ratio >= 0 ? 'green' : 'red'}>{formatted}</Tag>;
+      },
     },
     {
       title: '24h成交额(USDT)',
