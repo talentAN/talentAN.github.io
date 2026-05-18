@@ -381,7 +381,16 @@ const TradeRecord = () => {
       message.warning('没有数据可复制');
       return;
     }
-    const text = JSON.stringify(records, null, 2);
+    const summaryOrder = ['summeryLatest', 'summeryCurrent'];
+    const orderedRecords = [
+      ...summaryOrder
+        .map(id => records.find(r => r.positionId === id))
+        .filter(Boolean),
+      ...records.filter(
+        r => !summaryOrder.includes(r.positionId)
+      ),
+    ];
+    const text = JSON.stringify(orderedRecords, null, 2);
     navigator.clipboard
       .writeText(text)
       .then(() => {

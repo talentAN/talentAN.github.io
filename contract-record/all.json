@@ -10,6 +10,31 @@
     "content": "- 如当前价格低于历史高点，选择近期第二高点开仓；\n- 如果价格处于历史高点，谨慎开仓，并选取历史最高点开仓，严格设定止损；\n- 注意执行动作是系统驱动还是情绪驱动（比如扛单）"
   },
   {
+    "positionId": "1435812802932125702",
+    "symbol": "GWEIUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "0.139",
+    "closeAvgPrice": "0.13938",
+    "marginMode": "isolated",
+    "openTotalPos": "355",
+    "closeTotalPos": "355",
+    "pnl": "-0.1349",
+    "netProfit": "1.06044406",
+    "totalFunding": "1.22303122",
+    "openFee": "-0.0078952",
+    "closeFee": "-0.01979196",
+    "posMode": "hedge_mode",
+    "ctime": "1778050369007",
+    "utime": "1779083612321",
+    "openBestPrice3d": 0.14354,
+    "openPriceDiff": 3.1628814267799834,
+    "closeBestPrice3d": 0.12479,
+    "closePriceDiff": 11.691641958490269,
+    "entryReason": "",
+    "remark": "不符合系统的交易。开仓前一天的大阳线虽然量不大，但相比上一天还是放量的，不该挑选高点入场。后续横盘了几天被一跟大阳线顶破了图。差一点触发爆仓，价格回调后退出了，因为图形已经走破。"
+  },
+  {
     "positionId": "1432522651946594305",
     "symbol": "PROMUSDT",
     "marginCoin": "USDT",
@@ -31,8 +56,8 @@
     "utime": "1779076907930",
     "openBestPrice3d": 2.5245,
     "openPriceDiff": 2.5549613784907987,
-    "closeBestPrice3d": 1.3428,
-    "closePriceDiff": 16.070896633899316,
+    "closeBestPrice3d": 1.2184,
+    "closePriceDiff": 27.92186474064347,
     "remark": "暴涨后一根缩量大阳线把价格拉回接近高位，选择第三高点附近开仓；中间价格经历了3-4 次价格较大的回撤，但坚持盈利超过 1R没到 2R 之前，设置平仓价为开仓价。盈利超过 2R 后，设定 5% 移动止损触发平仓。这是一个高量操作，还可以更完美，可以进一步细化超过 2R 后的止盈策略。"
   },
   {
