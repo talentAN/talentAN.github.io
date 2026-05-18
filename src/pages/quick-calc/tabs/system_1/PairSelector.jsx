@@ -19,7 +19,11 @@ import { getTradingPairs, getFutureKlineData } from '../../../../container/bitge
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
-
+import {
+  SPIKE_FILTER_CONFIG,
+  MARKET_DATA_CONFIG,
+  UI_CONFIG,
+} from '../../../../configs/pairSelectorConfig';
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
 
 const { Title, Text } = Typography;
@@ -27,7 +31,6 @@ const { Title, Text } = Typography;
 const PairSelector = () => {
   const [tradingPairs, setTradingPairs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [marketData, setMarketData] = useState({ BTC: {}, ETH: {} });
   const [loadingMarket, setLoadingMarket] = useState(true);
   const [spikeResults, setSpikeResults] = useState([]);
@@ -42,40 +45,56 @@ const PairSelector = () => {
     return (((latestPrice - pastPrice) / pastPrice) * 100).toFixed(2);
   };
 
+  const renderMarketStats = (symbol, data) => (
+    <Row gutter={16}>
+      {MARKET_DATA_CONFIG.displayPeriods.map(days => (
+        <Col span={24 / MARKET_DATA_CONFIG.displayPeriods.length} key={days}>
+          <Statistic
+            title={`${days}日`}
+            value={data[`day${days}`]}
+            suffix="%"
+            valueStyle={{
+              color: parseFloat(data[`day${days}`]) >= 0 ? '#3f8600' : '#cf1322',
+            }}
+          />
+        </Col>
+      ))}
+    </Row>
+  );
+
   const fetchMarketData = async () => {
     setLoadingMarket(true);
     try {
       const endTime = moment().valueOf();
-      const startTime = moment().subtract(20, 'days').valueOf();
+      const startTime = moment().subtract(MARKET_DATA_CONFIG.days, 'days').valueOf();
 
       const [btcData, ethData] = await Promise.all([
         getFutureKlineData({
           symbol: 'BTCUSDT',
-          granularity: '1D',
-          limit: 20,
+          granularity: MARKET_DATA_CONFIG.granularity,
+          limit: MARKET_DATA_CONFIG.limit,
           startTime,
           endTime,
         }),
         getFutureKlineData({
           symbol: 'ETHUSDT',
-          granularity: '1D',
-          limit: 20,
+          granularity: MARKET_DATA_CONFIG.granularity,
+          limit: MARKET_DATA_CONFIG.limit,
           startTime,
           endTime,
         }),
       ]);
 
+      const btcStats = {};
+      const ethStats = {};
+      MARKET_DATA_CONFIG.displayPeriods.forEach(days => {
+        btcStats[`day${days}`] = calculatePriceChange(btcData.data, days);
+        ethStats[`day${days}`] = calculatePriceChange(ethData.data, days);
+      });
+
       setMarketData({
-        BTC: {
-          day3: calculatePriceChange(btcData.data, 3),
-          day7: calculatePriceChange(btcData.data, 7),
-          day15: calculatePriceChange(btcData.data, 15),
-        },
-        ETH: {
-          day3: calculatePriceChange(ethData.data, 3),
-          day7: calculatePriceChange(ethData.data, 7),
-          day15: calculatePriceChange(ethData.data, 15),
-        },
+        BTC: btcStats,
+        ETH: ethStats,
       });
     } catch (error) {
       message.error('获取市场数据失败：' + error.message);
@@ -103,7 +122,11 @@ const PairSelector = () => {
     const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs();
     if (!tradingPairs.length) setTradingPairs(pairs);
 
-    const startTime = moment.utc().subtract(4, 'days').startOf('day').valueOf();
+    const startTime = moment
+      .utc()
+      .subtract(SPIKE_FILTER_CONFIG.days, 'days')
+      .startOf('day')
+      .valueOf();
     const endTime = moment.utc().valueOf();
     setSpikeProgress({ checked: 0, total: pairs.length });
 
@@ -114,8 +137,8 @@ const PairSelector = () => {
       try {
         const res = await getFutureKlineData({
           symbol,
-          granularity: '1Dutc',
-          limit: 5,
+          granularity: SPIKE_FILTER_CONFIG.granularity,
+          limit: SPIKE_FILTER_CONFIG.limit,
           startTime,
           endTime,
         });
@@ -123,7 +146,7 @@ const PairSelector = () => {
         const spike = candles.find(c => {
           const open = parseFloat(c[1]),
             close = parseFloat(c[4]);
-          return open > 0 && (close - open) / open >= 0.3;
+          return open > 0 && (close - open) / open >= SPIKE_FILTER_CONFIG.riseThreshold;
         });
         if (spike && !WATCHING_SYMBOLS.has(symbol)) {
           const open = parseFloat(spike[1]),
@@ -201,38 +224,7 @@ const PairSelector = () => {
                 </a>
               }
             >
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Statistic
-                    title="3日"
-                    value={marketData.BTC.day3}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.BTC.day3) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="7日"
-                    value={marketData.BTC.day7}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.BTC.day7) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="15日"
-                    value={marketData.BTC.day15}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.BTC.day15) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-              </Row>
+              {renderMarketStats('BTC', marketData.BTC)}
             </Card>
           </Col>
           <Col span={12}>
@@ -249,38 +241,7 @@ const PairSelector = () => {
                 </a>
               }
             >
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Statistic
-                    title="3日"
-                    value={marketData.ETH.day3}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.ETH.day3) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="7日"
-                    value={marketData.ETH.day7}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.ETH.day7) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="15日"
-                    value={marketData.ETH.day15}
-                    suffix="%"
-                    valueStyle={{
-                      color: parseFloat(marketData.ETH.day15) >= 0 ? '#3f8600' : '#cf1322',
-                    }}
-                  />
-                </Col>
-              </Row>
+              {renderMarketStats('ETH', marketData.ETH)}
             </Card>
           </Col>
         </Row>
@@ -297,7 +258,8 @@ const PairSelector = () => {
               }}
             >
               <Title level={3} style={{ margin: 0 }}>
-                过去3天单日涨幅 &gt;= 30% 的币对
+                过去{UI_CONFIG.spikeTitleDays}天单日涨幅 &gt;= {UI_CONFIG.spikeTitleThreshold}%
+                的币对
               </Title>
               <Space>
                 <PositionCalculatorButton />
