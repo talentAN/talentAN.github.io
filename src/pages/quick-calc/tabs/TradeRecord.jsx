@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio } from 'antd';
+import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio, Tooltip } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { authenticatedRequest } from '../../../container/bitget/utils/auth';
 import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
@@ -383,12 +383,8 @@ const TradeRecord = () => {
     }
     const summaryOrder = ['summeryLatest', 'summeryCurrent'];
     const orderedRecords = [
-      ...summaryOrder
-        .map(id => records.find(r => r.positionId === id))
-        .filter(Boolean),
-      ...records.filter(
-        r => !summaryOrder.includes(r.positionId)
-      ),
+      ...summaryOrder.map(id => records.find(r => r.positionId === id)).filter(Boolean),
+      ...records.filter(r => !summaryOrder.includes(r.positionId)),
     ];
     const text = JSON.stringify(orderedRecords, null, 2);
     navigator.clipboard
@@ -477,11 +473,48 @@ const TradeRecord = () => {
               {stats.avgLossR.toFixed(2)}
             </span>
             <span style={{ color: '#666' }}> 期望 </span>
-            <span
-              style={{ color: stats.expectation >= 0 ? '#52c41a' : '#f5222d', fontWeight: 'bold' }}
+            <Tooltip
+              title={
+                <div style={{ fontSize: 12, lineHeight: '1.8' }}>
+                  <div style={{ marginBottom: 4, fontWeight: 'bold', color: '#fff' }}>
+                    期望值 = 胜率×均盈R − 败率×均亏R
+                  </div>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6 }}>
+                    <div>
+                      <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
+                      {'　负期望，长期必亏，系统不可用'}
+                    </div>
+                    <div>
+                      <span style={{ color: '#faad14' }}>{'0 ~ 0.1'}</span>
+                      {'　微弱正期望，接近保本，仍在噪音区间'}
+                    </div>
+                    <div>
+                      <span style={{ color: '#73d13d' }}>{'0.1 ~ 0.2'}</span>
+                      {'　轻微正期望，系统基本可行，继续验证'}
+                    </div>
+                    <div>
+                      <span style={{ color: '#52c41a' }}>{'0.2 ~ 0.4'}</span>
+                      {'　良好正期望，系统稳定可用'}
+                    </div>
+                    <div>
+                      <span style={{ color: '#1890ff' }}>{'>  0.4'}</span>
+                      {'　高期望，优质系统（注意样本量是否充足）'}
+                    </div>
+                  </div>
+                </div>
+              }
             >
-              {stats.expectation.toFixed(4)}
-            </span>
+              <span
+                style={{
+                  color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
+                  fontWeight: 'bold',
+                  borderBottom: '1px dashed currentColor',
+                  cursor: 'help',
+                }}
+              >
+                {stats.expectation.toFixed(4)}
+              </span>
+            </Tooltip>
           </div>
         );
       })()}

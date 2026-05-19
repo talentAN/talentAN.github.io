@@ -298,7 +298,6 @@ const Phase1 = () => (
           下次遇到这种情况，问自己：如果我今天第一次看到这个币，系统会让我做吗？
         </Callout>
       </TradeCard>
-
       <TradeCard color="green" title="#9 EPICUSDT — 合规，干净（+1.97R）">
         <Row label="入场">二次触碰高点 ✓（阻力测试）+ 两个小实体 ✓ + 缩量 ✓</Row>
         <Row label="出场">收益达 2R 后移动止盈，纪律执行到位</Row>
