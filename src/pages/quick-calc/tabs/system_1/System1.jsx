@@ -23,21 +23,18 @@ const System1 = ({ location }) => {
   const currentPath = location?.pathname || '/quick-calc/system_1/watching';
   const cleanPath = currentPath.split('?')[0];
 
-  const selectedKey = cleanPath.startsWith('/quick-calc/system_1/simulate-retrospective')
-    ? '/quick-calc/system_1/simulate-retrospective'
-    : cleanPath.startsWith('/quick-calc/system_1/simulate')
-      ? '/quick-calc/system_1/simulate'
-      : cleanPath.startsWith('/quick-calc/system_1/retrospective')
-        ? '/quick-calc/system_1/retrospective'
-        : cleanPath.startsWith('/quick-calc/system_1/pair-selector')
-          ? '/quick-calc/system_1/pair-selector'
-          : cleanPath.startsWith('/quick-calc/system_1/watching')
-            ? '/quick-calc/system_1/watching'
-            : cleanPath.startsWith('/quick-calc/system_1/trading-discipline')
-              ? '/quick-calc/system_1/trading-discipline'
-              : cleanPath.startsWith('/quick-calc/system_1/rule')
-                ? '/quick-calc/system_1/rule'
-                : '/quick-calc/system_1/watching';
+  const defaultKey = '/quick-calc/system_1/watching';
+  const pathOrder = [
+    '/quick-calc/system_1/simulate-retrospective',
+    '/quick-calc/system_1/simulate',
+    '/quick-calc/system_1/retrospective',
+    '/quick-calc/system_1/pair-selector',
+    '/quick-calc/system_1/watching',
+    '/quick-calc/system_1/trading-discipline',
+    '/quick-calc/system_1/rule',
+  ];
+
+  const selectedKey = pathOrder.find(path => cleanPath.startsWith(path)) || defaultKey;
 
   const showRule = currentPath.includes('/system_1/rule');
   const showTradingDiscipline = currentPath.includes('/system_1/trading-discipline');

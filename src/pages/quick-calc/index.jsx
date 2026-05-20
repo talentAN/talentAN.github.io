@@ -17,13 +17,13 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/spot-record', label: '现货统计' },
     // { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/meta-system', label: '第一性系统' },
-    { key: '/quick-calc/system_1', label: '放量冲关缩量滞涨' },
-    { key: '/quick-calc/newcoin', label: '新币低波动高潜' },
-    { key: '/quick-calc/system_2', label: '开多探索' },
+    { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
+    { key: '/quick-calc/newcoin', label: '系统-新币低波动高潜' },
+    // { key: '/quick-calc/system_2', label: '开多探索' },
     // { key: '/quick-calc/kang-dan', label: '扛单分析' },
-    { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
-    { key: '/quick-calc/newcoin-breakout', label: '新币横盘突破' },
-    { key: '/quick-calc/find-pattern', label: '找规律' },
+    // { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
+    { key: '/quick-calc/newcoin-breakout', label: '概率-新币横盘突破' },
+    // { key: '/quick-calc/find-pattern', label: '找规律' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/trade-record';
