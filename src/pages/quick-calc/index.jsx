@@ -22,6 +22,7 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/system_2', label: '开多探索' },
     // { key: '/quick-calc/kang-dan', label: '扛单分析' },
     { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
+    { key: '/quick-calc/newcoin-breakout', label: '新币横盘突破' },
     { key: '/quick-calc/find-pattern', label: '找规律' },
   ];
 
@@ -36,6 +37,7 @@ const QuickCalc = ({ children, location }) => {
       '/quick-calc/kang-dan',
       '/quick-calc/bitget-monitor',
       '/quick-calc/find-pattern',
+      '/quick-calc/newcoin-breakout',
       '/quick-calc/meta-system',
       '/quick-calc/system_1',
       '/quick-calc/newcoin',

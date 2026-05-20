@@ -128,5 +128,31 @@
     "remark": "爆仓出局，11%的大阳线还是入场早了，好像这个问题翻了很多次？",
     "key": "1777212317226",
     "result": -2.16
+  },
+  {
+    "symbol": "ASRUSDT",
+    "entryDate": "250807",
+    "entryPrice": "6.4",
+    "stopLoss": "7",
+    "entryReason": "暴涨横盘缩量下跌，前高位置挂委托单",
+    "leverage": "5",
+    "margin": "21.33",
+    "exitPrice": "7",
+    "remark": "",
+    "key": "1778211529839",
+    "result": -1
+  },
+  {
+    "symbol": "SQDUSDT",
+    "entryDate": "251010",
+    "entryPrice": "0.2635",
+    "stopLoss": "0.29",
+    "entryReason": "第三次触碰高点，但没破前高，二高位置开仓",
+    "leverage": "5",
+    "margin": "20",
+    "exitPrice": "0.151767",
+    "remark": "盈利达到2R后，设置移动止盈10%出场",
+    "key": "1778223514219",
+    "result": 4.24
   }
 ]

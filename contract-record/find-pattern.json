@@ -16,6 +16,13 @@
       "label": "低波动 + 暴涨",
       "data": [
         {
+          "symbol": "BASUSDT",
+          "low": "0.0128",
+          "high": "0.02686",
+          "highPoint": "0.169",
+          "period": "46天"
+        },
+        {
           "symbol": "SIGNUSDT",
           "low": "0.062",
           "high": "0.1",
@@ -24,93 +31,31 @@
         },
         {
           "symbol": "XPLUSDT",
-          "listDate": "2025-08-26",
-          "maxHigh": "0.8860",
-          "minLow": "0.5259",
-          "ratio": "1.68",
-          "stableDays": 28,
-          "breakoutDate": "2025-09-25"
-        },
-        {
-          "symbol": "AUCTIONUSDT",
-          "listDate": "2025-02-17",
-          "maxHigh": "20.36",
-          "minLow": "11.19",
-          "ratio": "1.82",
-          "stableDays": 20,
-          "breakoutDate": "2025-03-11"
-        },
-        {
-          "symbol": "FUSDT",
-          "listDate": "2025-06-18",
-          "maxHigh": "0.01173",
-          "minLow": "0.006169",
-          "ratio": "1.90",
-          "stableDays": 85,
-          "breakoutDate": "2025-09-13"
-        },
-        {
-          "symbol": "INXUSDT",
-          "listDate": "2026-01-31",
-          "maxHigh": "0.02036",
-          "minLow": "0.01056",
-          "ratio": "1.93",
-          "stableDays": 71,
-          "breakoutDate": "2026-04-13"
-        },
-        {
-          "symbol": "BANANAS31USDT",
-          "listDate": "2025-03-20",
-          "maxHigh": "0.008420",
-          "minLow": "0.004300",
-          "ratio": "1.96",
-          "stableDays": 93,
-          "breakoutDate": "2025-06-23"
-        },
-        {
-          "symbol": "BASUSDT",
-          "listDate": "2025-08-26",
-          "maxHigh": "0.02692",
-          "minLow": "0.01374",
-          "ratio": "1.96",
-          "stableDays": 46,
-          "breakoutDate": "2025-10-13"
-        },
-        {
-          "symbol": "NAORISUSDT",
-          "listDate": "2025-07-31",
-          "maxHigh": "0.04418",
-          "minLow": "0.02220",
-          "ratio": "1.99",
-          "stableDays": 39,
-          "breakoutDate": "2025-09-10"
-        },
-        {
-          "symbol": "NMRUSDT",
-          "listDate": "2025-03-19",
-          "maxHigh": "12.03",
-          "minLow": "5.871",
-          "ratio": "2.05",
-          "stableDays": 158,
-          "breakoutDate": "2025-08-26"
+          "low": "0.5255",
+          "high": "0.8788",
+          "highPoint": "1.6923",
+          "period": "28天"
         },
         {
           "symbol": "LIGHTUSDT",
-          "listDate": "2025-09-27",
-          "maxHigh": "1.597",
-          "minLow": "0.7700",
-          "ratio": "2.07",
-          "stableDays": 22,
-          "breakoutDate": "2025-10-21"
+          "low": "0.72",
+          "high": "1.32",
+          "highPoint": "2.8410",
+          "period": "20天"
         },
         {
           "symbol": "BSBUSDT",
-          "listDate": "2026-03-25",
-          "maxHigh": "0.2964",
-          "minLow": "0.1396",
-          "ratio": "2.12",
-          "stableDays": 25,
-          "breakoutDate": "2026-04-20"
+          "low": "0.159",
+          "high": "0.29",
+          "highPoint": "0.79",
+          "period": "28天"
+        },
+        {
+          "symbol": "KATUSDT",
+          "low": "0.007",
+          "high": "0.13",
+          "highPoint": "0.03",
+          "period": "32天"
         }
       ]
     }

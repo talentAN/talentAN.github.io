@@ -1,0 +1,486 @@
+[
+  {
+    "symbol": "HFTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "CTKUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ZENUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SLPUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "GRIFFAINUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "SONICUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "PROMUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "PLUMEUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "VTHOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BERAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "LAYERUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SHELLUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "AUCTIONUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "KAITOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "REDUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "EPICUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "NMRUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "FORMUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "BANANAS31USDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "NILUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "PARTIUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "WALUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "MLNUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "GUNUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "STOUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "KERNELUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "WCTUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "BANKUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "HYPERUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "DOLOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SIGNUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "HAEDALUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "PUNDIXUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "B2USDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ASRUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "MYXUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SYRUPUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SXTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "DOODUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SKYAIUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "NXPCUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "AWEUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SOONUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "HUMAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SOPHUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "AUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "HOMEUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "IDOLUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SQDUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "TAGUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SPKUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "FUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "NEWTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SAHARAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ICNTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "AINUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "USELESSUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "VELVETUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ERAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ESPORTSUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "TREEUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "NAORISUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "PROVEUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "TOWNSUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ILVUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "INUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "AIOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BASUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "XPLUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "LINEAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ARIAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SKYUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "GMEUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "HOLOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BARDUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ASTERUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "LIGHTUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "LYNUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "MONUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "EULUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ENSOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "RECALLUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "CLOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ZBTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "APRUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "MEGAUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "ATUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "UAIUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "FOLKSUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "ALLOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "JCTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "IRYSUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "POWERUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "WETUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "CYSUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "ZKPUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "LITUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "MAGMAUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "BREVUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "ZAMAUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "FRAXUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "FOGOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "GWEIUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SENTUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BIRBUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "INXUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "TRIAUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "AZTECUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "ROBOUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "MANTRAUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "BSBUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "COPPERUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "CFGUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "KATUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "EDGEUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "NATGASUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "SOXSUSDT",
+    "willEnter": false
+  },
+  {
+    "symbol": "GENIUSUSDT",
+    "willEnter": true
+  },
+  {
+    "symbol": "JSTUSDT",
+    "willEnter": true
+  }
+]

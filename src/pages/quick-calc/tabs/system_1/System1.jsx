@@ -14,7 +14,7 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/rule', label: '风控规则（数字）' },
     { key: '/quick-calc/system_1/trading-discipline', label: '交易纪律（行为）' },
     { key: '/quick-calc/system_1/pair-selector', label: '币对筛选' },
-    { key: '/quick-calc/system_1/watching', label: '观测中' },
+    // { key: '/quick-calc/system_1/watc]'/hing', label: '观测中' },
     { key: '/quick-calc/system_1/retrospective', label: '复盘' },
     { key: '/quick-calc/system_1/simulate', label: '模拟' },
     { key: '/quick-calc/system_1/simulate-retrospective', label: '模拟盘复盘' },

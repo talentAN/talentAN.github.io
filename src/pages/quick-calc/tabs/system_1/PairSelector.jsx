@@ -12,6 +12,7 @@ import {
   Table,
   Tag,
   Progress,
+  Segmented,
   message,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -19,12 +20,14 @@ import { getTradingPairs, getFutureKlineData } from '../../../../container/bitge
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
-import {
-  SPIKE_FILTER_CONFIG,
-  MARKET_DATA_CONFIG,
-  UI_CONFIG,
-} from '../../../../configs/pairSelectorConfig';
+import { SPIKE_CONFIG, HOLD_CONFIG, MARKET_CONFIG, RATIO_COLOR } from './pairSelectorConfig';
+import { MARKET_DATA_CONFIG } from '../../../../configs/pairSelectorConfig';
+
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
+
+// 筛选模式
+const MODE_SPIKE = 'spike'; // 过去3天单日涨幅 ≥30%
+const MODE_HOLD = 'hold'; // 90天内有暴涨且当前仍高位
 
 const { Title, Text } = Typography;
 
@@ -33,7 +36,9 @@ const PairSelector = () => {
   const [loading, setLoading] = useState(false);
   const [marketData, setMarketData] = useState({ BTC: {}, ETH: {} });
   const [loadingMarket, setLoadingMarket] = useState(true);
+  const [mode, setMode] = useState(MODE_SPIKE);
   const [spikeResults, setSpikeResults] = useState([]);
+  const [holdResults, setHoldResults] = useState([]);
   const [spikeProgress, setSpikeProgress] = useState({ checked: 0, total: 0 });
   const [spikeRunning, setSpikeRunning] = useState(false);
   const abortRef = useRef(false);
@@ -66,35 +71,37 @@ const PairSelector = () => {
     setLoadingMarket(true);
     try {
       const endTime = moment().valueOf();
-      const startTime = moment().subtract(MARKET_DATA_CONFIG.days, 'days').valueOf();
+      const startTime = moment().subtract(MARKET_CONFIG.klineDays, 'days').valueOf();
 
       const [btcData, ethData] = await Promise.all([
         getFutureKlineData({
           symbol: 'BTCUSDT',
-          granularity: MARKET_DATA_CONFIG.granularity,
-          limit: MARKET_DATA_CONFIG.limit,
+          granularity: '1D',
+          limit: MARKET_CONFIG.klineDays,
           startTime,
           endTime,
         }),
         getFutureKlineData({
           symbol: 'ETHUSDT',
-          granularity: MARKET_DATA_CONFIG.granularity,
-          limit: MARKET_DATA_CONFIG.limit,
+          granularity: '1D',
+          limit: MARKET_CONFIG.klineDays,
           startTime,
           endTime,
         }),
       ]);
 
-      const btcStats = {};
-      const ethStats = {};
-      MARKET_DATA_CONFIG.displayPeriods.forEach(days => {
-        btcStats[`day${days}`] = calculatePriceChange(btcData.data, days);
-        ethStats[`day${days}`] = calculatePriceChange(ethData.data, days);
-      });
-
+      const mkChange = (data, days) => calculatePriceChange(data, days);
       setMarketData({
-        BTC: btcStats,
-        ETH: ethStats,
+        BTC: {
+          day3: mkChange(btcData.data, MARKET_CONFIG.periods[0]),
+          day7: mkChange(btcData.data, MARKET_CONFIG.periods[1]),
+          day15: mkChange(btcData.data, MARKET_CONFIG.periods[2]),
+        },
+        ETH: {
+          day3: mkChange(ethData.data, MARKET_CONFIG.periods[0]),
+          day7: mkChange(ethData.data, MARKET_CONFIG.periods[1]),
+          day15: mkChange(ethData.data, MARKET_CONFIG.periods[2]),
+        },
       });
     } catch (error) {
       message.error('获取市场数据失败：' + error.message);
@@ -114,6 +121,7 @@ const PairSelector = () => {
       .finally(() => setLoading(false));
   };
 
+  // 模式一：过去3天单日涨幅 ≥30%
   const runSpikeFilter = async () => {
     abortRef.current = false;
     setSpikeRunning(true);
@@ -124,7 +132,7 @@ const PairSelector = () => {
 
     const startTime = moment
       .utc()
-      .subtract(SPIKE_FILTER_CONFIG.days, 'days')
+      .subtract(SPIKE_CONFIG.windowDays, 'days')
       .startOf('day')
       .valueOf();
     const endTime = moment.utc().valueOf();
@@ -137,8 +145,8 @@ const PairSelector = () => {
       try {
         const res = await getFutureKlineData({
           symbol,
-          granularity: SPIKE_FILTER_CONFIG.granularity,
-          limit: SPIKE_FILTER_CONFIG.limit,
+          granularity: '1Dutc',
+          limit: SPIKE_CONFIG.windowDays + 1,
           startTime,
           endTime,
         });
@@ -146,7 +154,7 @@ const PairSelector = () => {
         const spike = candles.find(c => {
           const open = parseFloat(c[1]),
             close = parseFloat(c[4]);
-          return open > 0 && (close - open) / open >= SPIKE_FILTER_CONFIG.riseThreshold;
+          return open > 0 && (close - open) / open >= SPIKE_CONFIG.riseRatio;
         });
         if (spike && !WATCHING_SYMBOLS.has(symbol)) {
           const open = parseFloat(spike[1]),
@@ -164,6 +172,103 @@ const PairSelector = () => {
     }
     setSpikeRunning(false);
   };
+
+  // 模式二：90天内最近一次暴涨 ≥30%，且当前价仍 ≥ 暴涨收盘价 × 0.9
+  const runHoldFilter = async () => {
+    abortRef.current = false;
+    setSpikeRunning(true);
+    setHoldResults([]);
+
+    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs();
+    if (!tradingPairs.length) setTradingPairs(pairs);
+
+    const endTime = moment.utc().valueOf();
+    setSpikeProgress({ checked: 0, total: pairs.length });
+
+    const matched = [];
+    for (let i = 0; i < pairs.length; i++) {
+      if (abortRef.current) break;
+      const { symbol } = pairs[i];
+      try {
+        // 只传 endTime + limit，避免触发"区间不能超过90天"限制
+        const res = await getFutureKlineData({
+          symbol,
+          granularity: '1Dutc',
+          limit: HOLD_CONFIG.klineLimit,
+          endTime,
+        });
+        const candles = (Array.isArray(res?.data) ? res.data : []).sort(
+          (a, b) => Number(a[0]) - Number(b[0])
+        ); // 升序：oldest → newest
+        if (candles.length < 2) {
+          setSpikeProgress({ checked: i + 1, total: pairs.length });
+          continue;
+        }
+
+        // K线格式: [timestamp, open, high, low, close, ...]
+        // 排序后 candles[last] = 最新，candles[last-1] = 昨日
+        const lastCandle = candles[candles.length - 1];
+        const prevCandle = candles[candles.length - 2];
+        const currentPrice = parseFloat(lastCandle[4]); // 今日最新收盘/现价
+        const yesterdayHigh = parseFloat(prevCandle[2]); // 昨日最高价
+
+        // 从最新往前找第一根暴涨 K（跳过今日未收盘的最后一根）
+        let spikeIdx = -1;
+        for (let j = candles.length - 2; j >= 0; j--) {
+          const open = parseFloat(candles[j][1]);
+          const close = parseFloat(candles[j][4]);
+          if (open > 0 && (close - open) / open >= HOLD_CONFIG.riseRatio) {
+            spikeIdx = j;
+            break;
+          }
+        }
+
+        if (spikeIdx === -1) {
+          setSpikeProgress({ checked: i + 1, total: pairs.length });
+          continue;
+        }
+
+        const sc = candles[spikeIdx];
+        const spikeOpen = parseFloat(sc[1]);
+        const spikeClose = parseFloat(sc[4]);
+
+        // 暴涨日之后（不含今日最后一根）若有更高收盘价，用其作为基准 a
+        let a = spikeClose;
+        for (let j = spikeIdx + 1; j <= candles.length - 2; j++) {
+          const c = parseFloat(candles[j][4]);
+          if (c > a) a = c;
+        }
+
+        const threshold = a * HOLD_CONFIG.priceRatio;
+
+        // 当前价 OR 昨日最高价 超过 a × 50%
+        const hitCurrent = currentPrice >= threshold;
+        const hitYesterday = yesterdayHigh >= threshold;
+
+        if ((hitCurrent || hitYesterday) && !WATCHING_SYMBOLS.has(symbol)) {
+          const daysAgo = candles.length - 1 - spikeIdx;
+          matched.push({
+            key: symbol,
+            symbol,
+            spikeDate: new Date(Number(sc[0])).toISOString().slice(0, 10),
+            spikeRise: (((spikeClose - spikeOpen) / spikeOpen) * 100).toFixed(1),
+            spikeClose,
+            refPrice: a, // 实际基准价（暴涨收盘或后续最高收盘）
+            currentPrice,
+            yesterdayHigh,
+            ratio: ((currentPrice / a) * 100).toFixed(1),
+            trigger: hitCurrent && hitYesterday ? '两者' : hitCurrent ? '当前价' : '昨日高',
+            daysAgo,
+          });
+          setHoldResults([...matched]);
+        }
+      } catch (_) {}
+      setSpikeProgress({ checked: i + 1, total: pairs.length });
+    }
+    setSpikeRunning(false);
+  };
+
+  const handleRun = () => (mode === MODE_SPIKE ? runSpikeFilter() : runHoldFilter());
 
   useEffect(() => {
     loadData();
@@ -201,7 +306,6 @@ const PairSelector = () => {
       </Space>
     </div>
   );
-
   return (
     <>
       {loadingMarket ? (
@@ -257,16 +361,37 @@ const PairSelector = () => {
                 marginBottom: 16,
               }}
             >
-              <Title level={3} style={{ margin: 0 }}>
-                过去{UI_CONFIG.spikeTitleDays}天单日涨幅 &gt;= {UI_CONFIG.spikeTitleThreshold}%
-                的币对
-              </Title>
-              <Space>
+              <Space size={12} align="center">
+                <Segmented
+                  value={mode}
+                  onChange={v => {
+                    setMode(v);
+                    setSpikeProgress({ checked: 0, total: 0 });
+                  }}
+                  options={[
+                    { label: '过去3天暴涨', value: MODE_SPIKE },
+                    { label: '90天内暴涨仍高位', value: MODE_HOLD },
+                  ]}
+                />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {mode === MODE_SPIKE
+                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}%`
+                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}%，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
+                </Text>
+              </Space>
+              <Space align="center">
+                {(mode === MODE_SPIKE ? spikeResults : holdResults).length > 0 && (
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    共{' '}
+                    <Text strong>{(mode === MODE_SPIKE ? spikeResults : holdResults).length}</Text>{' '}
+                    条
+                  </Text>
+                )}
                 <PositionCalculatorButton />
                 <Button
                   type="primary"
                   icon={<ReloadOutlined />}
-                  onClick={runSpikeFilter}
+                  onClick={handleRun}
                   loading={spikeRunning}
                 >
                   {spikeRunning ? '筛选中...' : '开始筛选'}
@@ -283,6 +408,7 @@ const PairSelector = () => {
                 )}
               </Space>
             </div>
+
             {spikeProgress.total > 0 && (
               <Progress
                 percent={Math.round((spikeProgress.checked / spikeProgress.total) * 100)}
@@ -291,36 +417,153 @@ const PairSelector = () => {
                 style={{ marginBottom: 12 }}
               />
             )}
-            <Table
-              size="small"
-              pagination={{ pageSize: 20 }}
-              dataSource={spikeResults}
-              locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
-              columns={[
-                {
-                  title: '币对',
-                  dataIndex: 'symbol',
-                  key: 'symbol',
-                  width: 150,
-                  render: symbol => (
-                    <a
-                      href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {symbol}
-                    </a>
-                  ),
-                },
-                { title: '触发日期', dataIndex: 'date', key: 'date', width: 130 },
-                {
-                  title: '当日涨幅',
-                  dataIndex: 'rise',
-                  key: 'rise',
-                  render: v => <Tag color="green">+{v}%</Tag>,
-                },
-              ]}
-            />
+
+            {mode === MODE_SPIKE ? (
+              <Table
+                size="small"
+                pagination={{ pageSize: 100 }}
+                dataSource={spikeResults}
+                locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
+                columns={[
+                  {
+                    title: '币对',
+                    dataIndex: 'symbol',
+                    key: 'symbol',
+                    width: 150,
+                    render: symbol => (
+                      <a
+                        href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {symbol}
+                      </a>
+                    ),
+                  },
+                  { title: '触发日期', dataIndex: 'date', key: 'date', width: 130 },
+                  {
+                    title: '当日涨幅',
+                    dataIndex: 'rise',
+                    key: 'rise',
+                    render: v => <Tag color="green">+{v}%</Tag>,
+                  },
+                ]}
+              />
+            ) : (
+              <Table
+                size="small"
+                pagination={{ pageSize: 100 }}
+                dataSource={holdResults}
+                locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
+                columns={[
+                  {
+                    title: '币对',
+                    dataIndex: 'symbol',
+                    key: 'symbol',
+                    width: 150,
+                    render: symbol => (
+                      <a
+                        href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {symbol}
+                      </a>
+                    ),
+                  },
+                  {
+                    title: '暴涨日期',
+                    dataIndex: 'spikeDate',
+                    key: 'spikeDate',
+                    width: 110,
+                  },
+                  {
+                    title: '距今(天)',
+                    dataIndex: 'daysAgo',
+                    key: 'daysAgo',
+                    width: 80,
+                    align: 'center',
+                    sorter: (a, b) => a.daysAgo - b.daysAgo,
+                  },
+                  {
+                    title: '暴涨幅度',
+                    dataIndex: 'spikeRise',
+                    key: 'spikeRise',
+                    width: 90,
+                    render: v => <Tag color="volcano">+{v}%</Tag>,
+                    sorter: (a, b) => parseFloat(a.spikeRise) - parseFloat(b.spikeRise),
+                  },
+                  {
+                    title: '暴涨收盘价',
+                    dataIndex: 'spikeClose',
+                    key: 'spikeClose',
+                    width: 110,
+                    render: v => v.toPrecision(5),
+                  },
+                  {
+                    title: '基准价(a)',
+                    dataIndex: 'refPrice',
+                    key: 'refPrice',
+                    width: 110,
+                    render: (v, r) => (
+                      <span style={{ color: v > r.spikeClose ? '#722ed1' : 'inherit' }}>
+                        {v.toPrecision(5)}
+                        {v > r.spikeClose && <span style={{ fontSize: 10, marginLeft: 3 }}>↑</span>}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '当前价',
+                    dataIndex: 'currentPrice',
+                    key: 'currentPrice',
+                    width: 100,
+                    render: v => v.toPrecision(5),
+                  },
+                  {
+                    title: '昨日最高',
+                    dataIndex: 'yesterdayHigh',
+                    key: 'yesterdayHigh',
+                    width: 100,
+                    render: v => v.toPrecision(5),
+                  },
+                  {
+                    title: '当前/暴涨',
+                    dataIndex: 'ratio',
+                    key: 'ratio',
+                    width: 100,
+                    render: v => {
+                      const pct = parseFloat(v);
+                      const color =
+                        pct >= RATIO_COLOR.green
+                          ? '#3f8600'
+                          : pct >= RATIO_COLOR.orange
+                            ? '#fa8c16'
+                            : '#cf1322';
+                      return <span style={{ color, fontWeight: 500 }}>{v}%</span>;
+                    },
+                    sorter: (a, b) => parseFloat(a.ratio) - parseFloat(b.ratio),
+                    defaultSortOrder: 'descend',
+                  },
+                  {
+                    title: '触发方式',
+                    dataIndex: 'trigger',
+                    key: 'trigger',
+                    width: 80,
+                    render: v => (
+                      <Tag color={v === '两者' ? 'green' : v === '当前价' ? 'blue' : 'orange'}>
+                        {v}
+                      </Tag>
+                    ),
+                    filters: [
+                      { text: '当前价', value: '当前价' },
+                      { text: '昨日高', value: '昨日高' },
+                      { text: '两者', value: '两者' },
+                    ],
+                    onFilter: (val, r) => r.trigger === val,
+                  },
+                ]}
+              />
+            )}
           </Card>
         </Col>
       </Row>
