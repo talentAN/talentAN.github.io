@@ -10,6 +10,31 @@
     "content": "- 如当前价格低于历史高点，选择近期第二高点开仓；\n- 如果价格处于历史高点，谨慎开仓，并选取历史最高点开仓，严格设定止损；\n- 注意执行动作是系统驱动还是情绪驱动（比如扛单、比如止损价的设置）；\n- 缩量暴涨看了几个例子，是开仓的好时机；\n- 收益达到2R后的止盈策略要斟酌下，回调5%似乎太谨慎了"
   },
   {
+    "positionId": "1444579662011969541",
+    "symbol": "INUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "0.11145",
+    "closeAvgPrice": "0.09658",
+    "marginMode": "crossed",
+    "openTotalPos": "664",
+    "closeTotalPos": "664",
+    "pnl": "9.8768",
+    "netProfit": "9.91495751",
+    "totalFunding": "0.07564835",
+    "openFee": "-0.01184044",
+    "closeFee": "-0.0256504",
+    "posMode": "hedge_mode",
+    "ctime": "1780140551092",
+    "utime": "1780475602848",
+    "openBestPrice3d": 0.11213,
+    "openPriceDiff": 0.6101390758187529,
+    "closeBestPrice3d": 0.07226,
+    "closePriceDiff": 21.821444593988332,
+    "entryReason": "high_volume_breakout_shrink_stall",
+    "remark": "移动止盈出局，正常交易"
+  },
+  {
     "positionId": "1443621423103488003",
     "symbol": "HUSDT",
     "marginCoin": "USDT",
@@ -27,8 +52,8 @@
     "posMode": "hedge_mode",
     "ctime": "1779912089133",
     "utime": "1779950530164",
-    "openBestPrice3d": 0.29105,
-    "openPriceDiff": 3.1324191205130782,
+    "openBestPrice3d": 0.41128,
+    "openPriceDiff": 45.73544523581729,
     "closeBestPrice3d": 0.19559,
     "closePriceDiff": 15.48846603593069,
     "entryReason": "high_volume_breakout_shrink_stall",
@@ -57,7 +82,7 @@
     "closeBestPrice3d": 74204.7,
     "closePriceDiff": 1.7973296136555306,
     "entryReason": "",
-    "remark": ""
+    "remark": "这笔交易很有意思，一开始看空，但后来价格略微上涨。价格跌回后平仓了，但随后价格就开始暴跌，错过了一次大行情。回头看，如果这次没平，一次大行情的收益远大于平时按照系统做空的操作。之前系统基本是在行情稳定阶段做，遇到这种单边行情，好像还看的不是很准，后续继续观测。"
   },
   {
     "positionId": "1435812802932125702",

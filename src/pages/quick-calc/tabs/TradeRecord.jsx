@@ -15,6 +15,7 @@ const TradeRecord = () => {
   const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
   const [onlyHighlight, setOnlyHighlight] = useState(false);
   const [onlyBurstVolume, setOnlyBurstVolume] = useState(false);
+  const [onlyTrades, setOnlyTrades] = useState(false);
   const [directionFilter, setDirectionFilter] = useState('all');
 
   const recordsToDisplay = useMemo(() => {
@@ -26,8 +27,11 @@ const TradeRecord = () => {
     if (onlyBurstVolume) {
       temp = temp.filter(r => r.entryReason === 'high_volume_breakout_shrink_stall');
     }
+    if (onlyTrades) {
+      temp = temp.filter(r => r.type !== 'summery');
+    }
     return temp;
-  }, [records, directionFilter, onlyHighlight, onlyBurstVolume]);
+  }, [records, directionFilter, onlyHighlight, onlyBurstVolume, onlyTrades]);
 
   const getDiffColor = diff => {
     if (!diff) return undefined;
@@ -446,6 +450,15 @@ const TradeRecord = () => {
           style={{ fontSize: 12, marginLeft: 8 }}
         >
           只展示放量冲关缩量滞涨
+        </Checkbox>
+        <Checkbox
+          checked={onlyTrades}
+          onChange={e => {
+            setOnlyTrades(e.target.checked);
+          }}
+          style={{ fontSize: 12, marginLeft: 8 }}
+        >
+          只展示成交记录
         </Checkbox>
       </div>
 
