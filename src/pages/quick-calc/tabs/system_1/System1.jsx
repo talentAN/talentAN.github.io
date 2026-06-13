@@ -8,6 +8,7 @@ import WatchList from './WatchList';
 import Retrospective from './Retrospective';
 import Simulate from './Simulate';
 import SimulateRetrospective from './SimulateRetrospective';
+import DeathMechanism from './DeathMechanism';
 
 const System1 = ({ location }) => {
   const menuItems = [
@@ -18,6 +19,7 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/retrospective', label: '复盘' },
     { key: '/quick-calc/system_1/simulate', label: '模拟' },
     { key: '/quick-calc/system_1/simulate-retrospective', label: '模拟盘复盘' },
+    { key: '/quick-calc/system_1/death-mechanism', label: '系统死亡机制' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/system_1/watching';
@@ -32,6 +34,7 @@ const System1 = ({ location }) => {
     '/quick-calc/system_1/watching',
     '/quick-calc/system_1/trading-discipline',
     '/quick-calc/system_1/rule',
+    '/quick-calc/system_1/death-mechanism',
   ];
 
   const selectedKey = pathOrder.find(path => cleanPath.startsWith(path)) || defaultKey;
@@ -42,6 +45,7 @@ const System1 = ({ location }) => {
   const showRetrospective = currentPath.includes('/system_1/retrospective');
   const showSimulateRetrospective = currentPath.includes('/system_1/simulate-retrospective');
   const showSimulate = !showSimulateRetrospective && currentPath.includes('/system_1/simulate');
+  const showDeathMechanism = currentPath.includes('/system_1/death-mechanism');
   const showPairSelector = currentPath.includes('/system_1/pair-selector');
   const showDefaultWatchList =
     showWatchList ||
@@ -64,6 +68,7 @@ const System1 = ({ location }) => {
       {showRetrospective && <Retrospective />}
       {showSimulate && <Simulate />}
       {showSimulateRetrospective && <SimulateRetrospective />}
+      {showDeathMechanism && <DeathMechanism />}
     </Card>
   );
 };

@@ -184,54 +184,57 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '平/开仓价',
+      title: '开/平仓价',
       key: 'price',
       width: 100,
+      align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
           <div style={{ whiteSpace: 'pre-wrap' }}>
-            {parseFloat(record.closeAvgPrice).toFixed(4)}
-            {'\n'}
             {parseFloat(record.openAvgPrice).toFixed(4)}
+            {'\n'}
+            {parseFloat(record.closeAvgPrice).toFixed(4)}
           </div>
         );
       },
     },
     {
-      title: '3日最优价',
+      title: '开/3日最优价',
       key: 'bestPrice',
       width: 120,
+      align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
           <div style={{ whiteSpace: 'pre-wrap' }}>
-            {record.closeBestPrice3d ? parseFloat(record.closeBestPrice3d).toFixed(4) : '-'}
-            {'\n'}
             {record.openBestPrice3d ? parseFloat(record.openBestPrice3d).toFixed(4) : '-'}
+            {'\n'}
+            {record.closeBestPrice3d ? parseFloat(record.closeBestPrice3d).toFixed(4) : '-'}
           </div>
         );
       },
     },
     {
-      title: '最优差',
+      title: '开/最优差',
       key: 'priceDiff',
       width: 100,
+      align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
           <div style={{ whiteSpace: 'pre-wrap' }}>
-            {record.closePriceDiff ? (
-              <span style={{ color: getDiffColor(record.closePriceDiff) }}>
-                {parseFloat(record.closePriceDiff).toFixed(2)}%
+            {record.openPriceDiff ? (
+              <span style={{ color: getDiffColor(record.openPriceDiff) }}>
+                {parseFloat(record.openPriceDiff).toFixed(2)}%
               </span>
             ) : (
               '-'
             )}
             {'\n'}
-            {record.openPriceDiff ? (
-              <span style={{ color: getDiffColor(record.openPriceDiff) }}>
-                {parseFloat(record.openPriceDiff).toFixed(2)}%
+            {record.closePriceDiff ? (
+              <span style={{ color: getDiffColor(record.closePriceDiff) }}>
+                {parseFloat(record.closePriceDiff).toFixed(2)}%
               </span>
             ) : (
               '-'
