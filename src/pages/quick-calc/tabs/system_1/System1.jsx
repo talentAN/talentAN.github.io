@@ -5,7 +5,7 @@ import Rule from './Rule';
 import TradingDiscipline from './TradingDiscipline';
 import PairSelector from './PairSelector';
 import WatchList from './WatchList';
-import Retrospective from './Retrospective';
+import Retrospective from './retrospective';
 import Simulate from './Simulate';
 import SimulateRetrospective from './SimulateRetrospective';
 import DeathMechanism from './DeathMechanism';
