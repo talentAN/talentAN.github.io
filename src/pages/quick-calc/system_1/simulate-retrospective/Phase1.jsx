@@ -8,7 +8,7 @@ import {
   CodeBlock,
   RuleCard,
   MetricGrid,
-} from '../../tabs/system_1/retrospective/components';
+} from '../../tabs/system_1/retrospective/_components';
 
 const tradeData = [
   {

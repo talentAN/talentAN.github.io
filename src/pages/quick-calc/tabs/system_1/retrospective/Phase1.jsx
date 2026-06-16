@@ -1,6 +1,6 @@
 import React from 'react';
 import { Table, Tag } from 'antd';
-import { Section, TradeCard, Row, Callout, CodeBlock, RuleCard, MetricGrid } from './components';
+import { Section, TradeCard, Row, Callout, CodeBlock, RuleCard, MetricGrid } from './_components';
 
 const tradeData = [
   {

@@ -16,6 +16,11 @@ const TradingDiscipline = () => {
             '入场判断基于已经收盘的K线形态，不要看未收盘的K线。不要被当前价格波动盘中信号所迷惑。',
         },
         {
+          id: 1.1,
+          title: '缩量至少 2 天以上',
+          description: '刚缩量一天的，不考虑入场（HUSDT）',
+        },
+        {
           id: 2,
           title: '先定止损再算仓位',
           description:
@@ -31,6 +36,11 @@ const TradingDiscipline = () => {
           id: 6,
           title: '检查价格',
           description: '入价格已经破了历史新高，不入或慎入',
+        },
+        {
+          id: 7,
+          title: '不下隔夜委托单',
+          description: '从历史数据看，夜间成交的委托单质量太差，而且经常插针，不考虑',
         },
       ],
     },

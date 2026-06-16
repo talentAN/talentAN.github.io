@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography } from 'antd';
-import { Section, Callout, RuleCard, CodeBlock } from '../system_1/retrospective/components';
+import { Section, Callout, RuleCard, CodeBlock } from '../system_1/retrospective/_components';
 
 const { Text } = Typography;
 
@@ -12,8 +12,8 @@ const Volatility = () => (
         反过来，一段时间行情窄幅震荡，后面几天大概率也继续磨。
       </p>
       <Callout type="info">
-        波动率在时间上是<Text strong>自相关</Text>的——今天的波动率对明天的波动率有预测力。
-        这是 GARCH 类模型的核心假设，也是实盘中"缩量横盘后等信号"逻辑的理论基础。
+        波动率在时间上是<Text strong>自相关</Text>的——今天的波动率对明天的波动率有预测力。 这是
+        GARCH 类模型的核心假设，也是实盘中"缩量横盘后等信号"逻辑的理论基础。
       </Callout>
     </Section>
 
@@ -49,8 +49,8 @@ const Volatility = () => (
       </RuleCard>
 
       <RuleCard no="小币" title="滚动窗口对比（数据不足时）">
-        数据量不够时，退回到滚动窗口对比就够用了。
-        取最近 N 天的波动率与前 N 天对比，判断是否发生结构性变化。
+        数据量不够时，退回到滚动窗口对比就够用了。 取最近 N 天的波动率与前 N
+        天对比，判断是否发生结构性变化。
       </RuleCard>
     </Section>
 

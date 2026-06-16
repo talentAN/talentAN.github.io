@@ -7,7 +7,7 @@ import PairSelector from './PairSelector';
 const NewCoinSystem = ({ location }) => {
   const menuItems = [
     { key: '/quick-calc/newcoin/pair-selector', label: '币对筛选' },
-    { key: '/quick-calc/newcoin/watching', label: '观测中' },
+    // { key: '/quick-calc/newcoin/watching', label: '观测中' },
   ];
 
   const currentPath = location?.pathname || '/quick-calc/newcoin/watching';
@@ -17,8 +17,8 @@ const NewCoinSystem = ({ location }) => {
     ? '/quick-calc/newcoin/pair-selector'
     : '/quick-calc/newcoin/watching';
 
-  const showPairSelector = currentPath.includes('/newcoin/pair-selector');
-  const showWatchList = !showPairSelector;
+  const showPairSelector = currentPath.includes('/newcoin/pair-selector') || true;
+  // const showWatchList = !showPairSelector;
 
   return (
     <Card>
@@ -30,7 +30,7 @@ const NewCoinSystem = ({ location }) => {
         style={{ marginBottom: 16 }}
       />
       {showPairSelector && <PairSelector />}
-      {showWatchList && <WatchList />}
+      {/* {showWatchList && <WatchList />} */}
     </Card>
   );
 };

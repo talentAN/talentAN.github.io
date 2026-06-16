@@ -20,7 +20,12 @@ import { getTradingPairs, getFutureKlineData } from '../../../../container/bitge
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
-import { SPIKE_CONFIG, HOLD_CONFIG, MARKET_CONFIG, RATIO_COLOR } from './pairSelectorConfig';
+import {
+  SPIKE_CONFIG,
+  HOLD_CONFIG,
+  MARKET_CONFIG,
+  RATIO_COLOR,
+} from '../../../../consts/pairSelectorConfig';
 import { MARKET_DATA_CONFIG } from '../../../../configs/pairSelectorConfig';
 
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
