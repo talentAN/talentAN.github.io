@@ -18,6 +18,7 @@ const QuickCalc = ({ children, location }) => {
     // { key: '/quick-calc/pattern', label: '模式' },
     { key: '/quick-calc/meta-system', label: '第一性系统' },
     { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
+    { key: '/quick-calc/system_2', label: '系统-低量高低点抬升' },
     { key: '/quick-calc/newcoin', label: '系统-新币低波动高潜' },
     // { key: '/quick-calc/system_2', label: '开多探索' },
     // { key: '/quick-calc/kang-dan', label: '扛单分析' },

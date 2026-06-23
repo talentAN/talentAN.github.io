@@ -1,33 +1,37 @@
 import React from 'react';
-import { Card, Menu } from 'antd';
+import { Card, Menu, Typography } from 'antd';
 import { navigate } from 'gatsby';
-import Rule from './Rule';
-import Volatility from './Volatility';
-import VolatilityCalc from './VolatilityCalc';
+import PairSelector from './PairSelector';
+import Watching from './Watching';
+
+const { Text } = Typography;
+
+const PATHS = {
+  pairSelector: '/quick-calc/system_2/pair-selector',
+  watching: '/quick-calc/system_2/watching',
+  retrospective: '/quick-calc/system_2/retrospective',
+  notes: '/quick-calc/system_2/notes',
+};
+
+// 路径按特异性从高到低排列，避免 startsWith 歧义
+const PATH_ORDER = [PATHS.pairSelector, PATHS.retrospective, PATHS.watching, PATHS.notes];
+
+const Placeholder = ({ label }) => (
+  <div style={{ padding: '40px 0', textAlign: 'center' }}>
+    <Text type="secondary">「{label}」建设中</Text>
+  </div>
+);
 
 const System2 = ({ location }) => {
+  const currentPath = (location?.pathname || PATHS.pairSelector).split('?')[0];
+  const selectedKey = PATH_ORDER.find(p => currentPath.startsWith(p)) || PATHS.pairSelector;
+
   const menuItems = [
-    { key: '/quick-calc/system_2/rule', label: '第一性原理' },
-    { key: '/quick-calc/system_2/volatility', label: '波动率' },
-    { key: '/quick-calc/system_2/volatility-calc', label: '波动率计算' },
+    { key: PATHS.pairSelector, label: '币对筛选' },
+    { key: PATHS.watching, label: '观测中' },
+    { key: PATHS.retrospective, label: '复盘' },
+    { key: PATHS.notes, label: '笔记' },
   ];
-
-  const currentPath = location?.pathname || '/quick-calc/system_2/rule';
-  const cleanPath = currentPath.split('?')[0];
-
-  const selectedKey = cleanPath.startsWith('/quick-calc/system_2/volatility-calc')
-    ? '/quick-calc/system_2/volatility-calc'
-    : cleanPath.startsWith('/quick-calc/system_2/volatility')
-    ? '/quick-calc/system_2/volatility'
-    : '/quick-calc/system_2/rule';
-
-  const showRule =
-    currentPath.includes('/system_2/rule') ||
-    currentPath === '/quick-calc/system_2' ||
-    currentPath === '/quick-calc/system_2/';
-
-  const showVolatility = currentPath.includes('/system_2/volatility') && !currentPath.includes('calc');
-  const showVolatilityCalc = currentPath.includes('/system_2/volatility-calc');
 
   return (
     <Card>
@@ -38,9 +42,10 @@ const System2 = ({ location }) => {
         onClick={({ key }) => navigate(key)}
         style={{ marginBottom: 16 }}
       />
-      {showRule && <Rule />}
-      {showVolatility && <Volatility />}
-      {showVolatilityCalc && <VolatilityCalc />}
+      {selectedKey === PATHS.pairSelector && <PairSelector />}
+      {selectedKey === PATHS.watching && <Watching />}
+      {selectedKey === PATHS.retrospective && <Placeholder label="复盘" />}
+      {selectedKey === PATHS.notes && <Placeholder label="笔记" />}
     </Card>
   );
 };
