@@ -16,10 +16,10 @@ import {
 } from 'antd';
 import { EyeOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
-import { FILTERS } from './_filters';
-import { getHigherLowsResult } from './_filters/higherLows';
-import { getHighsMetrics } from './_filters/notAtHighs';
-import { getVolumeMetrics } from './_filters/lowVolume';
+import { FILTERS } from './_filters/_index';
+import { getHigherLowsResult } from './_filters/_higherLows';
+import { getHighsMetrics } from './_filters/_notAtHighs';
+import { getVolumeMetrics } from './_filters/_lowVolume';
 
 const { Text } = Typography;
 

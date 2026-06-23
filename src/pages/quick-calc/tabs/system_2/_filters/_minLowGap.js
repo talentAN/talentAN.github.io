@@ -5,7 +5,7 @@
  * 依赖条件1（getHigherLowsResult）的结果；若条件1未通过则本条件也为 false。
  */
 
-import { getHigherLowsResult } from './higherLows';
+import { getHigherLowsResult } from './_higherLows';
 
 export const MIN_GAP_DAYS = 5;
 
