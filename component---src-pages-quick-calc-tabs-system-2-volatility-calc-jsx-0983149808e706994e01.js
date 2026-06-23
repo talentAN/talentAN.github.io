@@ -1,2 +1,0 @@
-"use strict";(self.webpackChunktalentan_gatsby_blog=self.webpackChunktalentan_gatsby_blog||[]).push([[1925],{5467:function(t,a,n){function e(t){return Object.keys(t).reduce((function(a,n){return!n.startsWith("data-")&&!n.startsWith("aria-")&&"role"!==n||n.startsWith("data-__")||(a[n]=t[n]),a}),{})}n.d(a,{Z:function(){return e}})}}]);
-//# sourceMappingURL=component---src-pages-quick-calc-tabs-system-2-volatility-calc-jsx-0983149808e706994e01.js.map
