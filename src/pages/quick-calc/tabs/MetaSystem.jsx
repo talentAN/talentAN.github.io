@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Typography, Table, Tag, Divider, Alert, Tabs } from 'antd';
+import { Card, Typography, Table, Tag, Divider, Alert } from 'antd';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -636,30 +636,7 @@ const PrincipleContent = () => (
 );
 
 const MetaSystem = () => {
-  const tabItems = [
-    {
-      key: 'principle',
-      label: '第一性原理',
-      children: <PrincipleContent />,
-    },
-    {
-      key: 'system1',
-      label: '放量冲关缩量滞涨',
-      children: <System1Content />,
-    },
-    {
-      key: 'system2',
-      label: '开多探索',
-      children: <PlaceholderTab name="开多探索" />,
-    },
-    {
-      key: 'system3',
-      label: '系统3（待定）',
-      children: <PlaceholderTab name="系统3" />,
-    },
-  ];
-
-  return <Tabs defaultActiveKey="principle" items={tabItems} size="large" />;
+  return <PrincipleContent />;
 };
 
 export default MetaSystem;

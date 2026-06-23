@@ -15,7 +15,7 @@ const TradeRecord = () => {
   const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
   const [onlyHighlight, setOnlyHighlight] = useState(false);
   const [onlyBurstVolume, setOnlyBurstVolume] = useState(false);
-  const [onlyTrades, setOnlyTrades] = useState(false);
+  const [onlyTrades, setOnlyTrades] = useState(true);
   const [directionFilter, setDirectionFilter] = useState('all');
 
   const recordsToDisplay = useMemo(() => {
@@ -76,6 +76,10 @@ const TradeRecord = () => {
     let lossCount = 0;
     let totalProfitR = 0;
     let totalLossR = 0;
+    let diffLt10 = 0;
+    let diff10to20 = 0;
+    let diff20to40 = 0;
+    let diffGt40 = 0;
 
     filteredRecords.forEach(record => {
       const profit = parseFloat(record.netProfit);
@@ -88,6 +92,20 @@ const TradeRecord = () => {
       } else {
         lossCount++;
         totalLossR += rMultiple;
+      }
+
+      // 统计 openPriceDiff 分布
+      const diff = parseFloat(record.openPriceDiff);
+      if (!isNaN(diff)) {
+        if (diff < 10) {
+          diffLt10++;
+        } else if (diff < 20) {
+          diff10to20++;
+        } else if (diff < 40) {
+          diff20to40++;
+        } else {
+          diffGt40++;
+        }
       }
     });
 
@@ -107,6 +125,10 @@ const TradeRecord = () => {
       avgProfitR,
       avgLossR,
       expectation,
+      diffLt10,
+      diff10to20,
+      diff20to40,
+      diffGt40,
     };
   };
 
@@ -200,8 +222,8 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '开/3日最优价',
-      key: 'bestPrice',
+      title: '开仓最优价/最优差',
+      key: 'openBestPriceDiff',
       width: 120,
       align: 'right',
       render: (_, record) => {
@@ -210,31 +232,9 @@ const TradeRecord = () => {
           <div style={{ whiteSpace: 'pre-wrap' }}>
             {record.openBestPrice3d ? parseFloat(record.openBestPrice3d).toFixed(4) : '-'}
             {'\n'}
-            {record.closeBestPrice3d ? parseFloat(record.closeBestPrice3d).toFixed(4) : '-'}
-          </div>
-        );
-      },
-    },
-    {
-      title: '开/最优差',
-      key: 'priceDiff',
-      width: 100,
-      align: 'right',
-      render: (_, record) => {
-        if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
             {record.openPriceDiff ? (
               <span style={{ color: getDiffColor(record.openPriceDiff) }}>
                 {parseFloat(record.openPriceDiff).toFixed(2)}%
-              </span>
-            ) : (
-              '-'
-            )}
-            {'\n'}
-            {record.closePriceDiff ? (
-              <span style={{ color: getDiffColor(record.closePriceDiff) }}>
-                {parseFloat(record.closePriceDiff).toFixed(2)}%
               </span>
             ) : (
               '-'
@@ -282,7 +282,7 @@ const TradeRecord = () => {
       title: '入场理由',
       dataIndex: 'entryReason',
       key: 'entryReason',
-      width: 120,
+      width: 150,
       fixed: 'right',
       render: (reason, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
@@ -316,7 +316,28 @@ const TradeRecord = () => {
       fixed: 'right',
       render: (text, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return <div style={{ whiteSpace: 'pre-wrap' }}>{text?.replace(/\\n/g, '\n') || '-'}</div>;
+        const content = text || '-';
+        return (
+          <Tooltip
+            title={<div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>}
+            placement="topLeft"
+            overlayStyle={{ background: '#fff', color: '#000' }}
+          >
+            <div
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'normal',
+                wordBreak: 'break-word',
+              }}
+            >
+              {content}
+            </div>
+          </Tooltip>
+        );
       },
     },
   ];
@@ -470,67 +491,109 @@ const TradeRecord = () => {
         const stats = calculatePatternStats('high_volume_breakout_shrink_stall');
         if (!stats) return null;
 
+        const total = stats.diffLt10 + stats.diff10to20 + stats.diff20to40 + stats.diffGt40;
+        const pct10 = total > 0 ? ((stats.diffLt10 / total) * 100).toFixed(1) : 0;
+        const pct20 = total > 0 ? ((stats.diff10to20 / total) * 100).toFixed(1) : 0;
+        const pct40 = total > 0 ? ((stats.diff20to40 / total) * 100).toFixed(1) : 0;
+        const pctGt = total > 0 ? ((stats.diffGt40 / total) * 100).toFixed(1) : 0;
+
+        const items = [
+          { label: '胜率', value: `${(stats.winRate * 100).toFixed(2)}%`, color: '#1890ff' },
+          {
+            label: '均盈/均亏',
+            value: `${stats.avgProfitR.toFixed(2)}/${stats.avgLossR.toFixed(2)}`,
+            color: '#52c41a',
+          },
+          {
+            label: '期望',
+            value: stats.expectation.toFixed(4),
+            color: '#52c41a',
+            isExpectation: true,
+          },
+          { label: '开仓最优差:', value: '', color: '#666' },
+          { label: '<10%', value: `${stats.diffLt10}(${pct10}%)`, color: '#52c41a' },
+          { label: '10-20%', value: `${stats.diff10to20}(${pct20}%)`, color: '#13c2c2' },
+          { label: '20-40%', value: `${stats.diff20to40}(${pct40}%)`, color: '#faad14' },
+          { label: '>40%', value: `${stats.diffGt40}(${pctGt}%)`, color: '#f5222d' },
+        ];
+
         return (
           <div style={{ marginBottom: 12, fontSize: 13 }}>
-            <span style={{ color: '#666' }}>放量冲关缩量滞涨(1-30): </span>
-            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>{stats.profitCount}</span>
-            <span style={{ color: '#666' }}>/</span>
-            <span style={{ color: '#f5222d', fontWeight: 'bold' }}>{stats.lossCount}</span>
-            <span style={{ color: '#666' }}> 胜率 </span>
-            <span style={{ color: '#1890ff', fontWeight: 'bold' }}>
-              {(stats.winRate * 100).toFixed(2)}%
-            </span>
-            <span style={{ color: '#666' }}> 均盈/均亏 </span>
-            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>
-              {stats.avgProfitR.toFixed(2)}
-            </span>
-            <span style={{ color: '#666' }}>/</span>
-            <span style={{ color: '#f5222d', fontWeight: 'bold' }}>
-              {stats.avgLossR.toFixed(2)}
-            </span>
-            <span style={{ color: '#666' }}> 期望 </span>
-            <Tooltip
-              title={
-                <div style={{ fontSize: 12, lineHeight: '1.8' }}>
-                  <div style={{ marginBottom: 4, fontWeight: 'bold', color: '#fff' }}>
-                    期望值 = 胜率×均盈R − 败率×均亏R
-                  </div>
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6 }}>
-                    <div>
-                      <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
-                      {'　负期望，长期必亏，系统不可用'}
-                    </div>
-                    <div>
-                      <span style={{ color: '#faad14' }}>{'0 ~ 0.1'}</span>
-                      {'　微弱正期望，接近保本，仍在噪音区间'}
-                    </div>
-                    <div>
-                      <span style={{ color: '#73d13d' }}>{'0.1 ~ 0.2'}</span>
-                      {'　轻微正期望，系统基本可行，继续验证'}
-                    </div>
-                    <div>
-                      <span style={{ color: '#52c41a' }}>{'0.2 ~ 0.4'}</span>
-                      {'　良好正期望，系统稳定可用'}
-                    </div>
-                    <div>
-                      <span style={{ color: '#1890ff' }}>{'>  0.4'}</span>
-                      {'　高期望，优质系统（注意样本量是否充足）'}
-                    </div>
-                  </div>
-                </div>
-              }
+            放量冲关缩量滞涨(1-30)
+            {/* 标题行 */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(8, 1fr)',
+                gap: 12,
+                color: '#666',
+                marginBottom: 4,
+              }}
             >
-              <span
-                style={{
-                  color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
-                  fontWeight: 'bold',
-                  borderBottom: '1px dashed currentColor',
-                  cursor: 'help',
-                }}
-              >
-                {stats.expectation.toFixed(4)}
-              </span>
-            </Tooltip>
+              {items.map((item, idx) => (
+                <div key={idx}>{item.label}</div>
+              ))}
+            </div>
+            {/* 数据行 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 12 }}>
+              {items.map((item, idx) => {
+                if (item.isExpectation) {
+                  return (
+                    <Tooltip
+                      key={idx}
+                      title={
+                        <div style={{ fontSize: 12, lineHeight: '1.8' }}>
+                          <div style={{ marginBottom: 4, fontWeight: 'bold', color: '#fff' }}>
+                            期望值 = 胜率×均盈R − 败率×均亏R
+                          </div>
+                          <div
+                            style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6 }}
+                          >
+                            <div>
+                              <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
+                              {'　负期望，长期必亏，系统不可用'}
+                            </div>
+                            <div>
+                              <span style={{ color: '#faad14' }}>{'0 ~ 0.1'}</span>
+                              {'　微弱正期望，接近保本，仍在噪音区间'}
+                            </div>
+                            <div>
+                              <span style={{ color: '#73d13d' }}>{'0.1 ~ 0.2'}</span>
+                              {'　轻微正期望，系统基本可行，继续验证'}
+                            </div>
+                            <div>
+                              <span style={{ color: '#52c41a' }}>{'0.2 ~ 0.4'}</span>
+                              {'　良好正期望，系统稳定可用'}
+                            </div>
+                            <div>
+                              <span style={{ color: '#1890ff' }}>{'>  0.4'}</span>
+                              {'　高期望，优质系统（注意样本量是否充足）'}
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    >
+                      <span
+                        style={{
+                          fontWeight: 'bold',
+                          color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
+                          borderBottom: '1px dashed currentColor',
+                          cursor: 'help',
+                        }}
+                      >
+                        {item.value}
+                      </span>
+                    </Tooltip>
+                  );
+                }
+
+                return (
+                  <div key={idx} style={{ fontWeight: 'bold', color: item.color }}>
+                    {item.value}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
