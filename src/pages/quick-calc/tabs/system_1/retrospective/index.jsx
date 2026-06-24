@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Tag } from 'antd';
 import Phase1 from './Phase1';
+import Phase2 from './Phase2';
 
 const phases = [
   {
@@ -11,15 +12,14 @@ const phases = [
     tag: { label: '已完成', color: 'green' },
     component: <Phase1 />,
   },
-  // 后续复盘在这里追加，例如：
-  // {
-  //   key: 'phase2',
-  //   title: '第二阶段',
-  //   subtitle: '12/30 笔',
-  //   date: '待定',
-  //   tag: { label: '进行中', color: 'blue' },
-  //   component: <Phase2 />,
-  // },
+  {
+    key: 'phase2',
+    title: '第二阶段',
+    subtitle: '12/30 笔',
+    date: '2026-06-24',
+    tag: { label: '进行中', color: 'blue' },
+    component: <Phase2 />,
+  },
 ];
 
 const RetrospectiveIndex = () => {
@@ -45,8 +45,12 @@ const RetrospectiveIndex = () => {
             }}
           >
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 3 }}>{p.title}</div>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 5 }}>{p.subtitle} · {p.date}</div>
-            <Tag color={p.tag.color} style={{ fontSize: 11, padding: '0 5px', lineHeight: '18px' }}>{p.tag.label}</Tag>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 5 }}>
+              {p.subtitle} · {p.date}
+            </div>
+            <Tag color={p.tag.color} style={{ fontSize: 11, padding: '0 5px', lineHeight: '18px' }}>
+              {p.tag.label}
+            </Tag>
           </div>
         ))}
       </div>
