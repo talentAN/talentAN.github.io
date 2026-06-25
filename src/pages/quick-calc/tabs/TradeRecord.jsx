@@ -17,6 +17,9 @@ const TradeRecord = () => {
   const [onlyBurstVolume, setOnlyBurstVolume] = useState(false);
   const [onlyTrades, setOnlyTrades] = useState(true);
   const [directionFilter, setDirectionFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => setCurrentPage(1), [directionFilter, onlyHighlight, onlyBurstVolume, onlyTrades]);
 
   const recordsToDisplay = useMemo(() => {
     let temp =
@@ -603,7 +606,12 @@ const TradeRecord = () => {
         dataSource={recordsToDisplay}
         loading={loading}
         rowKey={record => record.positionId}
-        pagination={{ pageSize: 100 }}
+        pagination={{
+          pageSize: 100,
+          current: currentPage,
+          onChange: page => setCurrentPage(page),
+          showTotal: total => `共 ${total} 条记录`,
+        }}
         scroll={{ x: 'max-content' }}
       />
     </Card>

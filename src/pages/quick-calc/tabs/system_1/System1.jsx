@@ -9,6 +9,7 @@ import Retrospective from './retrospective';
 import Simulate from './Simulate';
 import SimulateRetrospective from './SimulateRetrospective';
 import DeathMechanism from './DeathMechanism';
+import MilestoneWarning from './MilestoneWarning';
 
 const System1 = ({ location }) => {
   const menuItems = [
@@ -17,8 +18,9 @@ const System1 = ({ location }) => {
     { key: '/quick-calc/system_1/pair-selector', label: '币对筛选' },
     // { key: '/quick-calc/system_1/watc]'/hing', label: '观测中' },
     { key: '/quick-calc/system_1/retrospective', label: '复盘' },
-    { key: '/quick-calc/system_1/simulate', label: '模拟' },
-    { key: '/quick-calc/system_1/simulate-retrospective', label: '模拟盘复盘' },
+    // { key: '/quick-calc/system_1/simulate', label: '模拟' },
+    // { key: '/quick-calc/system_1/simulate-retrospective', label: '模拟盘复盘' },
+    { key: '/quick-calc/system_1/milestone-warning', label: '阶段预警' },
     { key: '/quick-calc/system_1/death-mechanism', label: '系统死亡机制' },
   ];
 
@@ -34,6 +36,7 @@ const System1 = ({ location }) => {
     '/quick-calc/system_1/watching',
     '/quick-calc/system_1/trading-discipline',
     '/quick-calc/system_1/rule',
+    '/quick-calc/system_1/milestone-warning',
     '/quick-calc/system_1/death-mechanism',
   ];
 
@@ -45,6 +48,7 @@ const System1 = ({ location }) => {
   const showRetrospective = currentPath.includes('/system_1/retrospective');
   const showSimulateRetrospective = currentPath.includes('/system_1/simulate-retrospective');
   const showSimulate = !showSimulateRetrospective && currentPath.includes('/system_1/simulate');
+  const showMilestoneWarning = currentPath.includes('/system_1/milestone-warning');
   const showDeathMechanism = currentPath.includes('/system_1/death-mechanism');
   const showPairSelector = currentPath.includes('/system_1/pair-selector');
   const showDefaultWatchList =
@@ -68,6 +72,7 @@ const System1 = ({ location }) => {
       {showRetrospective && <Retrospective />}
       {showSimulate && <Simulate />}
       {showSimulateRetrospective && <SimulateRetrospective />}
+      {showMilestoneWarning && <MilestoneWarning />}
       {showDeathMechanism && <DeathMechanism />}
     </Card>
   );

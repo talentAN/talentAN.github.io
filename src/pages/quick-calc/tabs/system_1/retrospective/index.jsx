@@ -5,6 +5,14 @@ import Phase2 from './Phase2';
 
 const phases = [
   {
+    key: 'phase2',
+    title: '第二阶段',
+    subtitle: '12/30 笔',
+    date: '2026-06-24',
+    tag: { label: '已完成', color: 'green' },
+    component: <Phase2 />,
+  },
+  {
     key: 'phase1',
     title: '第一阶段',
     subtitle: '6/30 笔',
@@ -12,18 +20,10 @@ const phases = [
     tag: { label: '已完成', color: 'green' },
     component: <Phase1 />,
   },
-  {
-    key: 'phase2',
-    title: '第二阶段',
-    subtitle: '12/30 笔',
-    date: '2026-06-24',
-    tag: { label: '进行中', color: 'blue' },
-    component: <Phase2 />,
-  },
 ];
 
 const RetrospectiveIndex = () => {
-  const [active, setActive] = useState('phase1');
+  const [active, setActive] = useState('phase2');
   const current = phases.find(p => p.key === active);
 
   return (
