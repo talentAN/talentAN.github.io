@@ -1,0 +1,1550 @@
+import React, { useState } from 'react';
+import { navigate } from 'gatsby';
+import { Tooltip } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
+
+// ── 样式工具 ──────────────────────────────────────────────────────────
+const Section = ({ title, children }) => (
+  <div style={{ marginBottom: 24 }}>
+    <div
+      style={{
+        fontSize: 13,
+        fontWeight: 700,
+        color: '#262626',
+        borderLeft: '3px solid #1677ff',
+        paddingLeft: 10,
+        marginBottom: 12,
+      }}
+    >
+      {title}
+    </div>
+    {children}
+  </div>
+);
+
+const Block = ({ label, children, color = '#f5f5f5', borderColor = '#d9d9d9' }) => (
+  <div
+    style={{
+      background: color,
+      border: `1px solid ${borderColor}`,
+      borderRadius: 6,
+      padding: '10px 14px',
+      marginBottom: 10,
+    }}
+  >
+    {label && (
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#8c8c8c',
+          marginBottom: 6,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+        }}
+      >
+        {label}
+      </div>
+    )}
+    <div style={{ fontSize: 13, color: '#262626', lineHeight: 1.8 }}>{children}</div>
+  </div>
+);
+
+const Pending = ({ label }) => (
+  <div
+    style={{
+      background: '#fafafa',
+      border: '1px dashed #d9d9d9',
+      borderRadius: 6,
+      padding: '10px 14px',
+      marginBottom: 10,
+      fontSize: 12,
+      color: '#bfbfbf',
+      fontStyle: 'italic',
+    }}
+  >
+    {label}（待补充）
+  </div>
+);
+
+const FundamentalCheck = ({
+  num,
+  question,
+  answer,
+  links,
+  embed,
+  color = '#1677ff',
+  bg = '#e6f7ff',
+  border = '#91d5ff',
+}) => (
+  <div
+    style={{
+      background: bg,
+      border: `1px solid ${border}`,
+      borderRadius: 8,
+      padding: '14px 18px',
+      marginBottom: 12,
+    }}
+  >
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: '50%',
+          background: color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 13,
+          fontWeight: 700,
+          flexShrink: 0,
+        }}
+      >
+        {num}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>{question}</div>
+    </div>
+    <div style={{ fontSize: 13, color: '#434343', lineHeight: 1.7, paddingLeft: 36 }}>{answer}</div>
+    {links && (
+      <div style={{ paddingLeft: 36, marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {links.map((link, i) => (
+          <a
+            key={i}
+            href={link.url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontSize: 11,
+              color: color,
+              textDecoration: 'none',
+              border: `1px solid ${border}`,
+              borderRadius: 4,
+              padding: '2px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            ↗ {link.label}
+          </a>
+        ))}
+      </div>
+    )}
+    {embed && (
+      <div style={{ paddingLeft: 36, marginTop: 12 }}>
+        <iframe
+          src={embed}
+          width="100%"
+          height="220"
+          frameBorder="0"
+          scrolling="no"
+          style={{ borderRadius: 6, border: `1px solid ${border}` }}
+        />
+      </div>
+    )}
+  </div>
+);
+
+const CounterQuestion = ({ scenario, result }) => (
+  <div
+    style={{
+      background: '#fff1f0',
+      border: '1px solid #ffa39e',
+      borderLeft: '3px solid #cf1322',
+      borderRadius: 6,
+      padding: '10px 14px',
+      marginBottom: 8,
+      fontSize: 13,
+      color: '#434343',
+      lineHeight: 1.7,
+    }}
+  >
+    <span style={{ fontWeight: 700, color: '#cf1322' }}>什么事发生 = 主张不成立：</span>
+    {scenario}
+    <div style={{ marginTop: 4, color: '#a8071a', fontWeight: 600 }}>{result}</div>
+  </div>
+);
+
+// ── Meta：基本面分析方法论 ─────────────────────────────────────────────
+const TabMeta = () => (
+  <div style={{ padding: '4px 0' }}>
+    <Section title="什么是基本面">
+      <Block color="#f0f5ff" borderColor="#adc6ff">
+        基本面 = 这个东西能不能长期存在、别人为什么需要它。
+        <div style={{ marginTop: 6, color: '#8c8c8c', fontSize: 12 }}>
+          没有收入模型、没有增长率指标、没有宏观经济分析。 只回答最底层的问题——东西本身靠不靠谱。
+        </div>
+      </Block>
+    </Section>
+
+    <Section title="基本面不是什么">
+      <Block label="不是增长率模型" color="#fff1f0" borderColor="#ffa39e">
+        BTC 没有收入、没有利润、没有现金流。对它做贴现现金流、市盈率、增长率预测，
+        是用分析公司的工具套一个不是公司的东西。越算越精确，离真相越远。
+      </Block>
+      <Block label="不是链上数据" color="#fff1f0" borderColor="#ffa39e">
+        交易所流入流出、巨鲸动向、活跃地址数——这些告诉你别人在干什么，
+        不是这东西值多少钱。同一数据可以看涨也可以看跌。
+      </Block>
+      <Block label="不是宏观经济联动" color="#fff1f0" borderColor="#ffa39e">
+        利率、CPI、美元指数——这些影响短期价格波动，不影响 BTC 到底有没有价值。
+      </Block>
+    </Section>
+
+    <Section title="怎么做：两步走">
+      <Block label="第一层：为什么有人需要它" color="#f6ffed" borderColor="#b7eb8f">
+        基本面分析的第一步不是列出属性，是回答：这个东西解决什么问题？谁需要它？为什么？
+        <div style={{ marginTop: 8 }}>
+          比如 BTC：人们需要一种政府没法无限印的硬通货、一种可以不经过银行跨境转移的资产。
+          这就是它的核心主张——不是总量 2100 万这个数字，而是「固定上限 +
+          不依赖信任」解决了什么问题。
+        </div>
+        <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 12 }}>
+          如果连「为什么有人需要」都说不出来，后面的一切都不用做。
+        </div>
+      </Block>
+      <Block label="第二层：支撑主张的条件还在不在" color="#e6f7ff" borderColor="#91d5ff">
+        核心主张依赖一些底层条件。每个条件必须能用「是/否」回答。
+        <div style={{ marginTop: 8 }}>比如 BTC 主张「固定上限的硬通货」依赖这三个条件：</div>
+        <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: '2px solid #91d5ff' }}>
+          <div>1. 总量是否仍然固定 2100 万？（供应端——没有人在偷偷增发）</div>
+          <div>2. 网络是否仍然去中心化运行？（控制端——没有人能单方面关掉）</div>
+          <div>3. 是否仍然可以不经过任何人许可就发送？（使用端——功能还在）</div>
+        </div>
+        <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 12 }}>
+          只要三个答案都是「是」，核心主张就没有动摇。价格跌了、市场恐慌、媒体看空——都不改变这三个答案。
+        </div>
+      </Block>
+    </Section>
+
+    <Section title="反面问：什么事发生 = 不成立">
+      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 10 }}>
+        基本面分析必须配反面问，不然就成了信仰。每个底层问题都要对应「什么事发生说明答案变成了否」。
+      </div>
+      <Block label="反面问的作用" color="#fff7e6" borderColor="#ffd591">
+        <div>· 防止「基本面分析」变成自我安慰——跌了就说价值在，涨了就说判断对了</div>
+        <div>· 给出明确的退出信号——不是价格跌，是底层事实变了</div>
+        <div>· 区分「市场情绪」和「资产本身变了」——前者是机会，后者必须退出</div>
+      </Block>
+      <Block label="反面问怎么写" color="#e6f7ff" borderColor="#91d5ff">
+        <div>对每个底层是/否问题，问：什么事发生会让这个问题的答案变成「否」？</div>
+        <div style={{ marginTop: 4 }}>
+          写的标准：具体到可以验证。不能是「市场不认可了」这种无法证伪的说法。
+        </div>
+      </Block>
+    </Section>
+
+    <Section title="为什么简单是必须的">
+      <Block color="#f0f5ff" borderColor="#adc6ff">
+        第一性原理：一个资产的长期价值只取决于它在最底层功能上有没有人需要。
+        <div style={{ marginTop: 6 }}>
+          黄金值钱不是因为增长率，是因为全世界都认可它作为价值储藏。 BTC 的逻辑一样：固定上限 +
+          全球可转移。
+        </div>
+        <div style={{ marginTop: 6, color: '#8c8c8c', fontSize: 12 }}>
+          你只需要确认底层功能还在不在。复杂的是市场情绪，不是资产本身。
+        </div>
+      </Block>
+    </Section>
+  </div>
+);
+
+// ── BTC 基本面分析 ────────────────────────────────────────────────────
+const TabBTC = () => (
+  <div style={{ padding: '4px 0' }}>
+    <Section title="核心主张（人们为什么需要 BTC）">
+      <Block color="#fff7e6" borderColor="#ffd591">
+        <div style={{ fontSize: 13, color: '#874d00', fontWeight: 600 }}>
+          目前唯一同时满足这三个属性的资产：无需信任任何中介、可全球转移、固定供应。
+          黄金、美元、股票、房产都不行。
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
+          BTC 不是唯一有固定供应量的加密货币，但它是<b style={{ color: '#874d00' }}>主导者</b>：
+          <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: '2px solid #ffd591' }}>
+            <div>· 15 年零变更记录——2100 万上限从未被突破，是其他币没有的历史证明</div>
+            <div>· 最大的网络效应——市值第一、流动性第一、机构和主权基金优先选择</div>
+            <div>· ETF 通过、国家储备——机构世界的合法性认可落在 BTC 而不是其他固定供应币</div>
+            <div>· 最高的去中心化程度——全节点分布和算力分散程度，其他 PoW 链难以匹及</div>
+          </div>
+        </div>
+      </Block>
+      <div
+        style={{
+          background: '#fff1f0',
+          border: '1px solid #ffa39e',
+          borderRadius: 6,
+          padding: '10px 14px',
+          marginBottom: 10,
+          fontSize: 12,
+          color: '#a8071a',
+          lineHeight: 1.7,
+        }}
+      >
+        ⚠ BTC 护城河的本质是网络效应和可信度，不是技术独特性。
+        如果有一天其他固定供应资产的网络效应超过 BTC，主张就会动摇。
+      </div>
+    </Section>
+
+    <Section title="需求来源（谁在用、为什么用）">
+      <Block label="需求 1：抗通胀" color="#f6ffed" borderColor="#b7eb8f">
+        政府持续印钱，法币购买力长期下降。BTC 数量固定，成为对冲法币贬值的工具。
+        只要政府印钱的动机不消失，这类需求就存在。
+      </Block>
+      <Block label="需求 2：财富跨境转移" color="#f6ffed" borderColor="#b7eb8f">
+        在主权管控之外转移财富，无需经过银行或政府审批。这类需求在全球范围内持续存在。
+      </Block>
+      <Block label="需求 3：机构配置（类黄金逻辑）" color="#f6ffed" borderColor="#b7eb8f">
+        ETF 通过后，部分机构和国家主权基金将 BTC 作为另类资产配置。
+      </Block>
+    </Section>
+
+    <Section title="支撑主张的底层条件（这些还在吗？）">
+      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 12 }}>
+        上面的核心主张依赖于这三个条件。如果任何一个变成「否」，主张就动摇了。
+      </div>
+      <FundamentalCheck
+        num={1}
+        question="总量是否仍然固定 2100 万？"
+        answer="是。协议未变，总量上限写在代码里，改变需要全网共识。历史上从未变过。不需要持续监测——如果有变，是世界级新闻。"
+        links={[
+          { label: '当前流通量', url: 'https://www.blockchain.com/explorer/charts/total-bitcoins' },
+          { label: 'Bitcoin 协议源码', url: 'https://github.com/bitcoin/bitcoin' },
+        ]}
+      />
+      <FundamentalCheck
+        num={2}
+        question="网络是否仍然去中心化运行？"
+        answer="是。全球分布的全节点和矿工，没有任何个人或机构可以单方面关掉它。关注：全球节点数量 + 算力是否过度集中于单一矿池。"
+        links={[
+          { label: '全球节点分布 bitnodes.io', url: 'https://bitnodes.io/' },
+          {
+            label: '算力 & 难度 mempool.space',
+            url: 'https://mempool.space/graphs/mining/hashrate-difficulty',
+          },
+          { label: '矿池占比', url: 'https://mempool.space/graphs/mining/pools' },
+        ]}
+      />
+      <FundamentalCheck
+        num={3}
+        question="是否仍然可以不经过任何人许可就发送给对方？"
+        answer="是。只需私钥，不需要银行、政府、任何第三方的许可。网络正常运行即满足条件，可通过 mempool.space 查看实时状态。"
+        links={[{ label: '网络实时状态 mempool.space', url: 'https://mempool.space/' }]}
+      />
+      <FundamentalCheck
+        num={4}
+        question="是否仍然没有出现网络效应超过 BTC 的替代品？"
+        answer="是。不看 BTC.D 走势（受稳定币膨胀和周期波动干扰，很难判断）。只关注三个具体事件信号："
+        links={[
+          {
+            label: 'ETF 资金流向对比',
+            url: 'https://farside.co.uk/bitcoin-etf-flow-all-data-chart/',
+          },
+          { label: '各资产市值排名', url: 'https://coinmarketcap.com/' },
+        ]}
+      />
+      <div style={{ marginTop: 4, marginBottom: 4 }}>
+        {[
+          '某个非 BTC 资产的市值开始持续接近 BTC 市值',
+          '机构 ETF 资金大规模从 BTC 持续转向其他资产（如 ETH ETF 流入持续超过 BTC ETF）',
+          '某个主权国家宣布把非 BTC 加密资产作为战略储备',
+        ].map((signal, i) => (
+          <div
+            key={i}
+            style={{
+              background: '#fff1f0',
+              border: '1px solid #ffa39e',
+              borderRadius: 6,
+              padding: '8px 12px',
+              marginBottom: 6,
+              fontSize: 12,
+              color: '#a8071a',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'flex-start',
+            }}
+          >
+            <span style={{ fontWeight: 700, flexShrink: 0 }}>⚑ 信号 {i + 1}</span>
+            <span>{signal}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 4 }}>
+        目前四个答案都是「是」。三个信号任何一个出现，才需要重新评估。
+      </div>
+    </Section>
+
+    <Section title="反面问（什么事发生 = 主张不成立）">
+      <CounterQuestion
+        scenario="三个具体信号任一出现：① 某资产市值持续接近 BTC；② ETF 资金大规模持续从 BTC 转向其他资产；③ 主权国家宣布非 BTC 加密储备。BTC.D 走势不作为判断依据（受稳定币膨胀和周期波动干扰）。"
+        result="→ 出现上述信号时重新评估，否则不需要行动。"
+      />
+      <CounterQuestion
+        scenario="主要经济体协调禁止持有和交易。注意：国家已开始囤积 BTC，它们变成了利益相关方，推动全球协调禁止会让自身储备归零，动机在下降而非上升。"
+        result="→ 风险在降低。仍需关注，但概率已大幅下降。"
+      />
+      <CounterQuestion
+        scenario="量子计算突破导致私钥安全性崩溃。目前时间表不明确。"
+        result="→ 评估紧迫性后决定是否退出。"
+      />
+      <CounterQuestion
+        scenario="2100 万上限被社区共识修改（几乎不可能，但属于致命信号）。"
+        result="→ 无条件退出，核心主张直接崩塌。"
+      />
+    </Section>
+
+    <Section title="不是风险的事情">
+      <Block color="#f6ffed" borderColor="#b7eb8f">
+        <div>· 价格下跌本身——底层四个条件没变就是机会，不是风险</div>
+        <div>· 某个名人或机构看空——不改变底层需求</div>
+        <div>· 交易所合规、KYC——影响的是入口和出口，不影响协议本身</div>
+        <div>· 国家制裁特定地址——针对违法行为，不影响正常持有者</div>
+        <div>· 国家囤积 BTC——反而是正面信号，最大风险（全球协调禁止）在降低</div>
+      </Block>
+    </Section>
+
+    <Section title="入场时机指标">
+      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 16 }}>
+        四个指标来自两个独立维度——矿工行为 和
+        持有者成本——同时触发说明两个不同群体都在极度痛苦，交叉验证比单维度更可靠。
+      </div>
+
+      {/* ── 最强信号组 ── */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            background: '#f6ffed',
+            border: '2px solid #52c41a',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                background: '#52c41a',
+                borderRadius: 4,
+                padding: '2px 8px',
+              }}
+            >
+              最强信号
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#135200' }}>
+              Hash Ribbons 金叉 + MVRV Z-Score 进入绿区
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#237804', lineHeight: 1.7 }}>
+            矿工投降结束（抛压枯竭）×
+            整体市场低于链上成本（极端恐慌）。两个完全独立的维度同时确认，历史上 2015、2018-19、2022
+            年三次大底全部命中。两个都触发才算，单独一个不够。
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {/* Hash Ribbons */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  Hash Ribbons
+                  <Tooltip title="由两条算力移动均线（30天MA 和 60天MA）构成。当短期算力跌破长期算力，说明矿工大量关机（亏本了）；当短期重新穿越长期向上，说明最弱的矿工已经出清，剩下的是低成本生存者——市场最艰难的阶段结束了。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  算力带：矿工投降结束信号
+                </div>
+              </div>
+              <a
+                href="https://www.lookintobitcoin.com/charts/hash-ribbons/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontSize: 10,
+                  color: '#1677ff',
+                  border: '1px solid #adc6ff',
+                  borderRadius: 4,
+                  padding: '2px 7px',
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                ↗ 图表
+              </a>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              <div
+                style={{
+                  background: '#fff1f0',
+                  border: '1px solid #ffa39e',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#cf1322' }}>死叉</b>：30日MA 跌破 60日MA → 矿工关机，抛压加大
+              </div>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>金叉 ✓</b>：30日MA 上穿 60日MA → 投降结束，底部形成
+              </div>
+            </div>
+            <iframe
+              src="https://www.lookintobitcoin.com/charts/hash-ribbons/"
+              width="100%"
+              height="220"
+              style={{ border: 'none', borderRadius: 6, display: 'block' }}
+              title="Hash Ribbons"
+            />
+          </div>
+
+          {/* MVRV Z-Score */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  MVRV Z-Score
+                  <Tooltip title="市值 ÷ 链上已实现价值（全市场平均买入成本）的标准化比值。Z-Score 进入绿色区域（< 0）= 当前价格低于大多数人的成本，极端恐慌，历史上每次大底都在此区间。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  市值 vs 链上成本：市场极度低估信号
+                </div>
+              </div>
+              <a
+                href="https://www.lookintobitcoin.com/charts/mvrv-zscore/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontSize: 10,
+                  color: '#1677ff',
+                  border: '1px solid #adc6ff',
+                  borderRadius: 4,
+                  padding: '2px 7px',
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                ↗ 图表
+              </a>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>绿区（&lt; 0）✓</b>
+                ：大多数人亏损，历史每次大底都在此
+              </div>
+              <div
+                style={{
+                  background: '#fff1f0',
+                  border: '1px solid #ffa39e',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#cf1322' }}>红区（&gt; 7）</b>：牛市狂热顶部，历史每次顶部都在此
+              </div>
+            </div>
+            <iframe
+              src="https://www.lookintobitcoin.com/charts/mvrv-zscore/"
+              width="100%"
+              height="220"
+              style={{ border: 'none', borderRadius: 6, display: 'block' }}
+              title="MVRV Z-Score"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── 强信号组 ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            background: '#e6f7ff',
+            border: '2px solid #1677ff',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                background: '#1677ff',
+                borderRadius: 4,
+                padding: '2px 8px',
+              }}
+            >
+              强信号
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#003a8c' }}>
+              Puell Multiple &lt; 0.5 + 价格在 Realized Price 附近或以下
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#0050b3', lineHeight: 1.7 }}>
+            矿工收入极低（接近关机临界）×
+            全网平均买入成本附近——两个成本锚点同时显示低估。不必等最强信号（最强信号往往在恐慌最深处才出现，等到时候可能已错过起涨段），适合开始分批建仓。
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {/* Puell Multiple */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  Puell Multiple
+                  <Tooltip title="每日矿工收入 ÷ 过去365天日均矿工收入。低于 0.5 说明矿工收入极低，大量矿工在亏损边缘，抛压即将枯竭；高于 4 说明矿工暴利，减半前后常见。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  矿工收入倍数：量化矿工盈利压力
+                </div>
+              </div>
+              <a
+                href="https://www.lookintobitcoin.com/charts/puell-multiple/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontSize: 10,
+                  color: '#1677ff',
+                  border: '1px solid #adc6ff',
+                  borderRadius: 4,
+                  padding: '2px 7px',
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                ↗ 图表
+              </a>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>&lt; 0.5 ✓</b>：矿工极度亏损，历史级别买入区
+              </div>
+              <div
+                style={{
+                  background: '#e6f7ff',
+                  border: '1px solid #91d5ff',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#096dd9' }}>0.5 – 1</b>：矿工承压，偏好入场区
+              </div>
+              <div
+                style={{
+                  background: '#fff1f0',
+                  border: '1px solid #ffa39e',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#cf1322' }}>&gt; 4</b>：矿工暴利，牛市顶部附近
+              </div>
+            </div>
+            <iframe
+              src="https://www.lookintobitcoin.com/charts/puell-multiple/"
+              width="100%"
+              height="220"
+              style={{ border: 'none', borderRadius: 6, display: 'block' }}
+              title="Puell Multiple"
+            />
+          </div>
+
+          {/* Realized Price */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  Realized Price
+                  <Tooltip title="每枚 BTC 按最后一次链上移动时的价格加权平均，得出全网平均买入成本线。当现货跌破这条线，超过 50% 的持有者处于亏损状态——历史上每次跌破都是极端恐慌底部，持续时间很短。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  全网平均买入成本线
+                </div>
+              </div>
+              <a
+                href="https://www.lookintobitcoin.com/charts/bitcoin-realized-price/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontSize: 10,
+                  color: '#1677ff',
+                  border: '1px solid #adc6ff',
+                  borderRadius: 4,
+                  padding: '2px 7px',
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                ↗ 图表
+              </a>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>价格低于此线 ✓</b>：超过半数持有者亏损，极端底部
+              </div>
+              <div
+                style={{
+                  background: '#e6f7ff',
+                  border: '1px solid #91d5ff',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#096dd9' }}>价格在此线 0–20% 以上 ✓</b>：刚脱离成本线，风险可控
+              </div>
+            </div>
+            <iframe
+              src="https://www.lookintobitcoin.com/charts/bitcoin-realized-price/"
+              width="100%"
+              height="220"
+              style={{ border: 'none', borderRadius: 6, display: 'block' }}
+              title="Realized Price"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: '#fffbe6',
+          border: '1px solid #ffe58f',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 12,
+          color: '#7c4a15',
+          lineHeight: 1.7,
+        }}
+      >
+        ⚠
+        所有指标都是历史归纳，不是预测工具。最强信号也不保证不会继续下跌——它说明的是「在历史上这种位置买入长期不亏」，不是「买完马上涨」。配合分批建仓使用。
+      </div>
+    </Section>
+  </div>
+);
+
+// ── ETH 基本面分析 ────────────────────────────────────────────────────
+const TabETH = () => (
+  <div style={{ padding: '4px 0' }}>
+    <Section title="核心主张（人们为什么需要 ETH）">
+      <Block color="#f0f5ff" borderColor="#adc6ff">
+        <div style={{ fontSize: 13, color: '#1d39c4', fontWeight: 600 }}>
+          目前最成熟的去中心化合约执行平台：把「如果 A 发生则自动执行 B」的逻辑写进代码，
+          部署到没有人能篡改、没有人能阻止的网络上。ETH 是运行这台机器的燃料。
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: '#434343', lineHeight: 1.8 }}>
+          传统合约依赖法院、律师、中介来执行——慢、贵、受地域限制、需要信任人。
+          以太坊上的合约由代码自动执行，不需要信任任何一方，全球可访问，无法被单方面关停。
+        </div>
+      </Block>
+      <div
+        style={{
+          background: '#fff7e6',
+          border: '1px solid #ffd591',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 12,
+          color: '#874d00',
+          lineHeight: 1.7,
+        }}
+      >
+        ⚠ ETH 和 BTC 的本质区别：BTC 的价值不依赖使用量（稀缺性本身有价值）， ETH
+        的价值直接依赖使用量——没人用以太坊，ETH 就是没人要的燃料。
+      </div>
+    </Section>
+
+    <Section title="需求来源（谁在用、为什么用）">
+      <Block label="需求 1：DeFi — 无需许可的金融服务" color="#f6ffed" borderColor="#b7eb8f">
+        借贷（Aave）、交易（Uniswap）、稳定币（DAI）——不需要银行账户、不需要 KYC、不需要信任对方。
+        代码自动管理清算和结算。这是目前以太坊上最清晰的真实需求。
+      </Block>
+      <Block label="需求 2：稳定币结算层" color="#f6ffed" borderColor="#b7eb8f">
+        全球最大的稳定币（USDC、USDT）大量在以太坊上发行和流通。 每一笔稳定币转账都需要消耗 ETH 作为
+        Gas 费。
+      </Block>
+      <Block label="需求 3：RWA — 现实资产上链" color="#f6ffed" borderColor="#b7eb8f">
+        贝莱德、富达等机构开始把国债、基金份额代币化到以太坊上。
+        这是机构世界对以太坊作为结算层的认可，是近年来增长最快的使用场景。
+      </Block>
+      <Block label="需求 4：Layer 2 结算层" color="#f6ffed" borderColor="#b7eb8f">
+        Arbitrum、Optimism、Base 等 L2 链把大量交易批量压缩后提交到以太坊主链做最终确认。 L2
+        越活跃，以太坊收的结算费越多，ETH 消耗越多。
+      </Block>
+    </Section>
+
+    <Section title="支撑主张的底层条件（这些还在吗？）">
+      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 12 }}>
+        核心主张依赖于以下条件。条件 3 是 ETH 特有的高风险项——需要持续关注。
+      </div>
+      <FundamentalCheck
+        num={1}
+        question="以太坊网络是否仍然去中心化运行？"
+        answer="是。全球分布的 PoS 验证节点，没有任何个人或机构可以单方面关掉它。"
+        color="#627eea"
+        bg="#f0f5ff"
+        border="#adc6ff"
+        links={[{ label: '节点分布 ethernodes.org', url: 'https://ethernodes.org/' }]}
+      />
+      <FundamentalCheck
+        num={2}
+        question="是否仍然需要 ETH 作为燃料，且使用量使 ETH 净通缩？"
+        answer="待确认。EIP-1559 销毁机制：Gas 费中基础费用会被销毁，使用量大时 ETH 供应净减少。使用量不足时 ETH 净增发。这个条件不是固定的，需要持续观察。"
+        color="#627eea"
+        bg="#f0f5ff"
+        border="#adc6ff"
+        links={[{ label: 'ETH 实时销毁 ultrasound.money', url: 'https://ultrasound.money/' }]}
+      />
+      <FundamentalCheck
+        num={3}
+        question="以太坊是否仍然是智能合约的首选平台？"
+        answer="目前是。关注指标：锁定在以太坊上的总资产（TVL）vs 竞争链；机构 RWA 部署选择哪条链；开发者新项目首选哪条链。这是 ETH 最核心的风险点。"
+        color="#627eea"
+        bg="#f0f5ff"
+        border="#adc6ff"
+        links={[
+          { label: '各链 TVL 对比 defillama.com', url: 'https://defillama.com/chains' },
+          { label: 'L2 生态健康 l2beat.com', url: 'https://l2beat.com/' },
+          { label: 'RWA 资产分布 rwa.xyz', url: 'https://rwa.xyz/' },
+        ]}
+      />
+      <FundamentalCheck
+        num={4}
+        question="PoS 共识机制是否稳定运行？"
+        answer="是。自 2022 年 Merge 以来，PoS 稳定运行，没有经历过共识层面的中断或重组攻击。"
+        color="#627eea"
+        bg="#f0f5ff"
+        border="#adc6ff"
+      />
+    </Section>
+
+    <Section title="反面问（什么事发生 = 主张不成立）">
+      <CounterQuestion
+        scenario="竞争链（Solana 等）在 DeFi TVL、RWA 部署、稳定币流通量上持续超越以太坊，开发者大规模迁移。"
+        result="→ 核心主张动摇，重新评估是否退出。"
+      />
+      <CounterQuestion
+        scenario="ETH 长期处于净通胀状态（销毁量持续低于新增发行量），意味着使用量不足以支撑其经济模型。"
+        result="→ 观察 ultrasound.money，连续多个季度净通胀则重新评估。"
+      />
+      <CounterQuestion
+        scenario="监管针对 DeFi 的打击导致以太坊核心使用场景（去中心化借贷、稳定币）被迫关停。"
+        result="→ 使用场景被摧毁，ETH 作为燃料失去价值，退出。"
+      />
+      <CounterQuestion
+        scenario="机构的 RWA 项目开始大规模迁移到其他链（如 Solana、私有链），以太坊不再是机构首选结算层。"
+        result="→ 需求 3（RWA）和需求 4（L2）同时动摇，重新评估。"
+      />
+    </Section>
+
+    <Section title="ETH 的发行机制">
+      <Block color="#f0f5ff" borderColor="#adc6ff">
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>
+          ETH 没有固定总量上限，供应量由两个力量对冲：
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div
+            style={{
+              background: '#fff1f0',
+              border: '1px solid #ffa39e',
+              borderRadius: 6,
+              padding: '10px 12px',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: '#cf1322', marginBottom: 4, fontSize: 12 }}>
+              增发 ↑
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+              PoS 验证节点奖励：质押 32 ETH 成为验证者，每年获得约 3-4% ETH 奖励。这是 ETH
+              新增供应的唯一来源。
+            </div>
+          </div>
+          <div
+            style={{
+              background: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: 6,
+              padding: '10px 12px',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: '#389e0d', marginBottom: 4, fontSize: 12 }}>
+              销毁 ↓
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+              EIP-1559
+              基础费销毁：每笔交易的基础手续费直接从供应量里销毁，不进任何人口袋。网络越忙，销毁越多。
+            </div>
+          </div>
+        </div>
+        <div
+          style={{
+            background: '#e6f7ff',
+            border: '1px solid #91d5ff',
+            borderRadius: 6,
+            padding: '10px 12px',
+            fontSize: 12,
+            lineHeight: 1.7,
+          }}
+        >
+          <b>净效果</b>：网络忙 → 销毁 &gt; 增发 → ETH 通缩（变稀缺）
+          <br />
+          网络闲 → 增发 &gt; 销毁 → ETH 通胀（变多）
+          <br />
+          <span style={{ color: '#8c8c8c' }}>
+            与 BTC 的核心区别：BTC 稀缺性由协议固定，ETH 稀缺性由使用量决定。
+          </span>
+        </div>
+      </Block>
+      <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 4 }}>
+        普通持有者不会自动获得新增发的 ETH，只有质押的验证者才有。想参与质押但没有 32 ETH，可以通过
+        Lido 等流动性质押协议以任意数量参与。
+      </div>
+    </Section>
+
+    <Section title="怎么衡量 ETH 的价值">
+      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 12 }}>
+        ETH 更像平台股票，平台用得越多燃料越值钱。可以从以下维度观测：
+      </div>
+      {[
+        {
+          rank: 1,
+          label: '稳定币流通量',
+          desc: 'USDC/USDT 在以太坊上的总量。稳定币每笔转账都消耗 ETH，是最稳定的真实需求来源，最难被投机炒作虚增。',
+          tooltip:
+            '最难造假：稳定币存在本身就产生持续的转账需求，不受市场情绪影响。即使在熊市，企业和个人仍然需要用稳定币结算，反映的是以太坊作为结算层的真实渗透程度。',
+          link: { text: 'defillama stablecoins', url: 'https://defillama.com/stablecoins' },
+        },
+        {
+          rank: 1,
+          label: '机构资产上链（RWA）',
+          desc: '贝莱德等机构把国债、基金代币化到以太坊的规模。增长代表机构级信任在加深，是最重要的长期采用信号。',
+          tooltip:
+            '与稳定币并列第一：机构把真实法律资产放到链上，背后有合规、审计、法律成本——这种信任不会因为市场情绪波动就消失，是结构性采用而非投机行为。',
+          link: { text: 'rwa.xyz', url: 'https://rwa.xyz/' },
+        },
+        {
+          rank: 3,
+          label: '链上资产规模（TVL）',
+          desc: '锁定在以太坊 DeFi 协议中的总资产，代表有多少资本信任以太坊保管资金。',
+          tooltip:
+            '排第三：TVL 是中期信心指标，但有一个缺陷——流动性挖矿会虚增数字（高收益率吸引资本进来，但一旦补贴停止就会撤走）。需要结合是否有真实使用场景来判断。',
+          link: { text: 'defillama.com/chains', url: 'https://defillama.com/chains' },
+        },
+        {
+          rank: 4,
+          label: '网络使用量 → ETH 是否净通缩',
+          desc: '销毁量 > 增发量 = ETH 在变稀缺，说明当前网络使用旺盛。',
+          tooltip:
+            '排第四：销毁量最敏感，也最嘈杂——投机交易同样能推高这个数字。牛市里大家疯狂交易，销毁量很高，但这不代表结构性采用，只能作为辅助信号，不能单独使用。',
+          link: { text: 'ultrasound.money', url: 'https://ultrasound.money/' },
+        },
+        {
+          rank: 5,
+          label: 'L2 生态健康度',
+          desc: 'L2 越活跃，向以太坊主链支付的结算费越多，ETH 消耗越多。',
+          tooltip:
+            '排最后：L2 活跃不直接等于 ETH 价值增长——L2 的目标是降低成本，成功的 L2 反而会减少主链手续费。它更像是生态健康的间接指标，而非直接的 ETH 需求驱动力。',
+          link: { text: 'l2beat.com', url: 'https://l2beat.com/' },
+        },
+      ].map((item, i) => (
+        <div
+          key={i}
+          style={{
+            background: '#fafafa',
+            border: '1px solid #e8e8e8',
+            borderRadius: 6,
+            padding: '10px 14px',
+            marginBottom: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: i < 2 ? '#389e0d' : i < 3 ? '#d46b08' : '#8c8c8c',
+                  background: i < 2 ? '#f6ffed' : i < 3 ? '#fff7e6' : '#f5f5f5',
+                  border: `1px solid ${i < 2 ? '#b7eb8f' : i < 3 ? '#ffd591' : '#d9d9d9'}`,
+                  borderRadius: 4,
+                  padding: '1px 6px',
+                  flexShrink: 0,
+                }}
+              >
+                {i < 2 ? '核心' : i < 3 ? '重要' : '辅助'}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>{item.label}</span>
+              <Tooltip title={item.tooltip}>
+                <InfoCircleOutlined style={{ fontSize: 12, color: '#8c8c8c', cursor: 'pointer' }} />
+              </Tooltip>
+            </div>
+            <a
+              href={item.link.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: 11,
+                color: '#627eea',
+                textDecoration: 'none',
+                border: '1px solid #adc6ff',
+                borderRadius: 4,
+                padding: '2px 8px',
+                flexShrink: 0,
+              }}
+            >
+              ↗ {item.link.text}
+            </a>
+          </div>
+          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.6 }}>{item.desc}</div>
+        </div>
+      ))}
+    </Section>
+
+    <Section title="不是风险的事情">
+      <Block color="#f6ffed" borderColor="#b7eb8f">
+        <div>· 价格下跌——底层条件没变，是机会不是信号</div>
+        <div>· L2 交易量超过主链——这是设计目标，L2 仍然依赖以太坊结算</div>
+        <div>· NFT 市场崩溃——NFT 是一个使用场景，不是以太坊的价值核心</div>
+        <div>· ETH 某段时间净通胀——单季度波动不代表趋势，看多个周期</div>
+        <div>· Solana 交易量更大——高频低价值交易不等于机构级信任，TVL 和 RWA 才是关键</div>
+      </Block>
+    </Section>
+
+    <Section title="入场时机指标">
+      <div
+        style={{
+          background: '#fffbe6',
+          border: '1px solid #ffe58f',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 12,
+          color: '#7c4a15',
+          lineHeight: 1.7,
+          marginBottom: 16,
+        }}
+      >
+        ⚠ ETH 于 2022 年才完成从 PoW 到 PoS 的切换，历史上只经历过 2–3
+        次完整周期。以下信号的可信度分两档标注：已有历史数据支撑的放主区；逻辑合理但样本不足的单独标为「观察中」。
+      </div>
+
+      {/* ── 已验证信号 ── */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            background: '#f6ffed',
+            border: '2px solid #52c41a',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                background: '#52c41a',
+                borderRadius: 4,
+                padding: '2px 8px',
+              }}
+            >
+              有历史支撑
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#135200' }}>
+              ETH MVRV Z-Score 进绿区 + ETH 价格在 Realized Price 附近或以下
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#237804', lineHeight: 1.7 }}>
+            与 BTC 同一逻辑：持有者成本维度。2022 年 11 月（FTX 崩盘后约 $880）两个指标同时触发，是
+            ETH 迄今最清晰的底部数据点。样本只有 2–3 次，但逻辑自洽，是目前最可信的 ETH 入场信号。
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {/* ETH MVRV */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  ETH MVRV Z-Score
+                  <Tooltip title="逻辑与 BTC 完全相同：ETH 市值 ÷ ETH 链上已实现价值（全网平均买入成本）的标准化比值。进入绿区（< 0）= 大多数 ETH 持有者处于亏损状态，历史上是极端底部区间。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  持有者成本：市场是否极度低估
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>绿区（&lt; 0）✓</b>：大多数持有者亏损，历史底部区间
+              </div>
+              <div
+                style={{
+                  background: '#fff1f0',
+                  border: '1px solid #ffa39e',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#cf1322' }}>红区（&gt; 5）</b>：极度高估，历史顶部区间
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[
+                {
+                  label: 'Glassnode：ETH MVRV Z-Score',
+                  url: 'https://studio.glassnode.com/charts/market.MvrvZScore?a=ETH',
+                  desc: '需要免费注册',
+                },
+                {
+                  label: 'Glassnode：ETH MVRV + Realized Price 合并图',
+                  url: 'https://studio.glassnode.com/charts/realizedprice-mvrv?a=ETH',
+                  desc: '两个指标放在一张图里，更直观',
+                },
+              ].map((l, i) => (
+                <a
+                  key={i}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#f0f5ff',
+                    border: '1px solid #adc6ff',
+                    borderRadius: 5,
+                    padding: '7px 10px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1677ff' }}>
+                    ↗ {l.label}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#8c8c8c' }}>{l.desc}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* ETH Realized Price */}
+          <div
+            style={{
+              background: '#fafafa',
+              border: '1px solid #e8e8e8',
+              borderRadius: 8,
+              padding: '12px 14px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#262626' }}>
+                  ETH Realized Price
+                  <Tooltip title="每枚 ETH 按最后一次链上移动时的价格加权平均，得出全网平均买入成本线。当现货低于这条线，超过 50% 的 ETH 持有者处于亏损。2022 年底曾短暂跌破，随后反弹。">
+                    <InfoCircleOutlined
+                      style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                </div>
+                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                  全网平均买入成本线
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              <div
+                style={{
+                  background: '#f6ffed',
+                  border: '1px solid #b7eb8f',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#389e0d' }}>价格低于此线 ✓</b>：超过半数持有者亏损，极端底部
+              </div>
+              <div
+                style={{
+                  background: '#e6f7ff',
+                  border: '1px solid #91d5ff',
+                  borderRadius: 5,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                }}
+              >
+                <b style={{ color: '#096dd9' }}>价格在此线 0–20% 以上 ✓</b>：成本线附近，风险可控
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[
+                {
+                  label: 'Glassnode：ETH Realized Price',
+                  url: 'https://studio.glassnode.com/charts/market.PriceRealizedUsd?a=ETH',
+                  desc: '需要免费注册',
+                },
+                {
+                  label: 'Glassnode：ETH MVRV + Realized Price 合并图',
+                  url: 'https://studio.glassnode.com/charts/realizedprice-mvrv?a=ETH',
+                  desc: '两个指标放在一张图里，更直观',
+                },
+              ].map((l, i) => (
+                <a
+                  key={i}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#f0f5ff',
+                    border: '1px solid #adc6ff',
+                    borderRadius: 5,
+                    padding: '7px 10px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1677ff' }}>
+                    ↗ {l.label}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#8c8c8c' }}>{l.desc}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 观察中（逻辑合理，样本不足） ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            background: '#fff7e6',
+            border: '2px solid #fa8c16',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                background: '#fa8c16',
+                borderRadius: 4,
+                padding: '2px 8px',
+              }}
+            >
+              观察中
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#612500' }}>
+              以下信号：逻辑合理，但缺乏足够历史验证
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#873800', lineHeight: 1.7 }}>
+            ETH 历史太短、结构变化太多（PoS 切换于 2022 年、EIP-1559 于 2021
+            年），下列信号还没有经历过足够多的完整周期来证明可靠性。记录在这里供参考，不与已验证信号等权重使用。
+          </div>
+        </div>
+
+        {[
+          {
+            label: 'ETH 市值 / TVL 比值处于历史低位',
+            tooltip:
+              '相当于平台股票的 P/S（价格/营收）极低：锁定在以太坊上的资产规模相对于 ETH 市值越大，说明平台越便宜。逻辑清晰，但 DeFi TVL 在 2018-19 底部时代基本不存在，无法跨周期验证。',
+            why: '逻辑：平台使用量相对价格高 = 低估。缺陷：DeFi 2020 年才爆发，历史数据不够完整',
+            link: { text: 'defillama.com/chains', url: 'https://defillama.com/chains' },
+          },
+          {
+            label: '质押率高且无大规模解质押退出队列',
+            tooltip:
+              '大量 ETH 锁在 PoS 验证节点 = 长期持有者没有放弃，流动供应减少。逻辑类似 BTC 矿工还在挖矿（没有投降），但 PoS 质押机制 2022 年才开始，只有一个完整熊市周期的数据。',
+            why: '逻辑：长期持有者仍在锁仓 = 没有系统性放弃。缺陷：只有 2022 年后数据，样本极少',
+            link: { text: 'beaconcha.in', url: 'https://beaconcha.in/' },
+          },
+        ].map((item, i) => (
+          <div
+            key={i}
+            style={{
+              background: '#fafafa',
+              border: '1px solid #ffd591',
+              borderRadius: 8,
+              padding: '12px 14px',
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 8,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>
+                {item.label}
+                <Tooltip title={item.tooltip}>
+                  <InfoCircleOutlined
+                    style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 5, cursor: 'pointer' }}
+                  />
+                </Tooltip>
+              </div>
+              <a
+                href={item.link.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  fontSize: 10,
+                  color: '#d46b08',
+                  border: '1px solid #ffd591',
+                  borderRadius: 4,
+                  padding: '2px 7px',
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                ↗ {item.link.text}
+              </a>
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: '#873800',
+                lineHeight: 1.6,
+                background: '#fffbe6',
+                borderRadius: 4,
+                padding: '6px 10px',
+              }}
+            >
+              {item.why}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          background: '#f5f5f5',
+          border: '1px solid #d9d9d9',
+          borderRadius: 6,
+          padding: '10px 14px',
+          fontSize: 11,
+          color: '#595959',
+          lineHeight: 1.7,
+        }}
+      >
+        ETH 入场逻辑和 BTC 的核心差异：BTC 有矿工关机价作为客观成本地板，ETH 没有等价物。ETH
+        的「地板」更模糊，持有者成本（MVRV + Realized
+        Price）是目前唯一经过验证的锚点，但样本仍然偏少。保持更高的不确定性认知，仓位上比 BTC
+        更谨慎是合理的。
+      </div>
+    </Section>
+  </div>
+);
+
+// ── 主组件 ────────────────────────────────────────────────────────────
+const TABS = [
+  { key: 'meta', label: 'Meta', path: '/quick-calc/system_2/fundamentals/meta' },
+  { key: 'btc', label: 'BTC', path: '/quick-calc/system_2/fundamentals/btc' },
+  { key: 'eth', label: 'ETH', path: '/quick-calc/system_2/fundamentals/eth' },
+];
+
+const Fundamentals = ({ location }) => {
+  const currentPath = (location?.pathname || '').split('?')[0];
+  const activeTab = TABS.find(t => currentPath.startsWith(t.path)) || TABS[0];
+
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #f0f0f0',
+          marginBottom: 20,
+        }}
+      >
+        {TABS.map(tab => (
+          <div
+            key={tab.key}
+            onClick={() => navigate(tab.path)}
+            style={{
+              cursor: 'pointer',
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: activeTab.key === tab.key ? 600 : 400,
+              color: activeTab.key === tab.key ? '#1677ff' : '#595959',
+              borderBottom:
+                activeTab.key === tab.key ? '2px solid #1677ff' : '2px solid transparent',
+              marginBottom: -1,
+              transition: 'all 0.15s',
+            }}
+          >
+            {tab.label}
+          </div>
+        ))}
+      </div>
+
+      {activeTab.key === 'meta' && <TabMeta />}
+      {activeTab.key === 'btc' && <TabBTC />}
+      {activeTab.key === 'eth' && <TabETH />}
+    </div>
+  );
+};
+
+export default Fundamentals;
