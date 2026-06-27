@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunktalentan_gatsby_blog=self.webpackChunktalentan_gatsby_blog||[]).push([[3726],{46335:function(a,e,t){t.r(e);var l=t(67294),n=t(14160);e.default=()=>((0,l.useEffect)((()=>{(0,n.navigate)("/quick-calc/system_2/fundamentals/meta",{replace:!0})}),[]),null)}}]);
+//# sourceMappingURL=component---src-pages-quick-calc-system-2-fundamentals-jsx-162f0392c75596c3aef7.js.map
