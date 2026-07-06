@@ -16,7 +16,7 @@ import {
   message,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
+import { getTradingPairs, getFutureKlineData } from '@root/src/container/bitget/api';
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
@@ -25,8 +25,8 @@ import {
   HOLD_CONFIG,
   MARKET_CONFIG,
   RATIO_COLOR,
-} from '../../../../consts/pairSelectorConfig';
-import { MARKET_DATA_CONFIG } from '../../../../configs/pairSelectorConfig';
+} from '@root/src/consts/pairSelectorConfig';
+import { MARKET_DATA_CONFIG } from '@root/src/configs/pairSelectorConfig';
 
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
 
@@ -34,7 +34,7 @@ const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.s
 const MODE_SPIKE = 'spike'; // 过去3天单日涨幅 ≥30%
 const MODE_HOLD = 'hold'; // 90天内有暴涨且当前仍高位
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const PairSelector = () => {
   const [tradingPairs, setTradingPairs] = useState([]);
@@ -280,37 +280,6 @@ const PairSelector = () => {
     fetchMarketData();
   }, []);
 
-  const detailsContent = (
-    <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 4 }}>
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <div>
-          <Text strong>策略：高点缩量横盘</Text>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div>
-          <Text strong>筛选条件：</Text>
-          <ul>
-            <li>价格处于近80日阻力位附近（高点）</li>
-            <li>成交量缩小（相对于之前的水平）</li>
-            <li>价格横盘波动（缺乏明确方向）</li>
-          </ul>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div>
-          <Text strong>交易逻辑：</Text>
-          <ul>
-            <li>这种形态表现为上升乏力，可能即将回调</li>
-            <li>适合寻找空头机会或止盈点</li>
-            <li>需配合其他技术指标确认</li>
-          </ul>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div>
-          <Text type="secondary">下方列表展示符合条件的交易对，点击可查看详情</Text>
-        </div>
-      </Space>
-    </div>
-  );
   return (
     <>
       {loadingMarket ? (
