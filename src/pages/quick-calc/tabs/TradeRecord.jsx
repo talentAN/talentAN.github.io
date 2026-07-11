@@ -513,11 +513,10 @@ const TradeRecord = () => {
             color: '#52c41a',
             isExpectation: true,
           },
-          { label: '开仓最优差:', value: '', color: '#666' },
-          { label: '<10%', value: `${stats.diffLt10}(${pct10}%)`, color: '#52c41a' },
-          { label: '10-20%', value: `${stats.diff10to20}(${pct20}%)`, color: '#13c2c2' },
-          { label: '20-40%', value: `${stats.diff20to40}(${pct40}%)`, color: '#faad14' },
-          { label: '>40%', value: `${stats.diffGt40}(${pctGt}%)`, color: '#f5222d' },
+          { label: '开仓最优差<10%', value: `${stats.diffLt10}(${pct10}%)`, color: '#52c41a' },
+          { label: '开仓最优差10-20%', value: `${stats.diff10to20}(${pct20}%)`, color: '#13c2c2' },
+          { label: '开仓最优差20-40%', value: `${stats.diff20to40}(${pct40}%)`, color: '#faad14' },
+          { label: '开仓最优差>40%', value: `${stats.diffGt40}(${pctGt}%)`, color: '#f5222d' },
         ];
 
         return (

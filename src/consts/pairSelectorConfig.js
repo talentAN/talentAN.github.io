@@ -27,9 +27,10 @@ export const HOLD_CONFIG = {
 /** 市场行情卡片（BTC / ETH 涨跌幅） */
 export const MARKET_CONFIG = {
   /** 拉取历史 K 线天数 */
-  klineDays: 20,
+  // 为了支持 45 天展示，拉取更多历史数据
+  klineDays: 60,
   /** 展示的涨跌幅周期（天） */
-  periods: [3, 7, 15],
+  periods: [7, 15, 45],
 };
 
 /** 表格"当前/基准"比值颜色阈值（单位：%） */

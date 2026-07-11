@@ -19,11 +19,11 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/meta-system', label: '系统-meta' },
     { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
     { key: '/quick-calc/system_2', label: '系统-低量高低点抬升' },
-    { key: '/quick-calc/newcoin', label: <span style={{ textDecoration: 'line-through' }}>🗑系统-新币低波动高潜</span> },
+    // { key: '/quick-calc/newcoin', label: <span style={{ textDecoration: 'line-through' }}>🗑系统-新币低波动高潜</span> },
     // { key: '/quick-calc/system_2', label: '开多探索' },
     // { key: '/quick-calc/kang-dan', label: '扛单分析' },
     // { key: '/quick-calc/bitget-monitor', label: '币对筛选' },
-    { key: '/quick-calc/newcoin-breakout', label: '概率-新币横盘突破' },
+    // { key: '/quick-calc/newcoin-breakout', label: '概率-新币横盘突破' },
     // { key: '/quick-calc/find-pattern', label: '找规律' },
   ];
 

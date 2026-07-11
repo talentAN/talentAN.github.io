@@ -13,14 +13,14 @@ export const SPIKE_FILTER_CONFIG = {
 };
 
 export const MARKET_DATA_CONFIG = {
-  // BTC/ETH市场数据的过去天数
-  days: 20,
+  // BTC/ETH市场数据的过去天数（需要覆盖最长展示周期）
+  days: 60,
   // 市场数据的K线粒度
   granularity: '1D',
   // 市场数据点数量
   limit: 20,
   // 市场统计显示周期（天数）
-  displayPeriods: [3, 7, 15],
+  displayPeriods: [7, 15, 45],
 };
 
 export const UI_CONFIG = {

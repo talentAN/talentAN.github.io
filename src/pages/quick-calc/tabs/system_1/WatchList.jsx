@@ -3,7 +3,7 @@ import { Table, Button, message, Input, Switch, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch.json';
-import { getFutureTicker } from '@root/src/container/bitget/api';
+import { getFutureTicker } from '@root/src/container/market';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
 
 const BODY_SHRINK_TOOLTIP = (

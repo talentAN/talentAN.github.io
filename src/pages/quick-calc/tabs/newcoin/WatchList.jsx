@@ -3,7 +3,7 @@ import { Table, Button, message, Input, Switch, Tag, Spin } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import watchData from '@root/contract-record/watch-newcoin.json';
-import { getSpotTicker, getFutureTicker, getFutureKlineData } from '@root/src/container/bitget/api';
+import { getSpotTicker, getFutureTicker, getFutureKlineData } from '@root/src/container/market';
 
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 

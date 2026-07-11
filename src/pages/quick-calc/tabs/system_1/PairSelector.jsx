@@ -14,9 +14,12 @@ import {
   Progress,
   Segmented,
   message,
+  Select,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getTradingPairs, getFutureKlineData } from '@root/src/container/bitget/api';
+import { getTradingPairs, getFutureKlineData } from '@root/src/container/market';
+import { getTradeUrl } from '@root/src/container/market';
+import { useMarket } from '@root/src/container/market/MarketContext';
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
@@ -47,6 +50,7 @@ const PairSelector = () => {
   const [spikeProgress, setSpikeProgress] = useState({ checked: 0, total: 0 });
   const [spikeRunning, setSpikeRunning] = useState(false);
   const abortRef = useRef(false);
+  const { exchange, setExchange, registerExchange, availableExchanges } = useMarket();
 
   const calculatePriceChange = (klineData, days) => {
     if (!klineData || klineData.length < days) return null;
@@ -55,22 +59,49 @@ const PairSelector = () => {
     return (((latestPrice - pastPrice) / pastPrice) * 100).toFixed(2);
   };
 
-  const renderMarketStats = (symbol, data) => (
-    <Row gutter={16}>
-      {MARKET_DATA_CONFIG.displayPeriods.map(days => (
-        <Col span={24 / MARKET_DATA_CONFIG.displayPeriods.length} key={days}>
-          <Statistic
-            title={`${days}日`}
-            value={data[`day${days}`]}
-            suffix="%"
-            valueStyle={{
-              color: parseFloat(data[`day${days}`]) >= 0 ? '#3f8600' : '#cf1322',
-            }}
-          />
-        </Col>
-      ))}
-    </Row>
-  );
+  const renderMarketStats = (symbol, data) => {
+    // Single-line summary: symbol latestPrice, e.g. "BTC 64,000 7日⬇️3% 15日⬆️13% 45日⬇️2%"
+    const latest = data && data.latest ? Number(data.latest) : null;
+    return (
+      <div
+        style={{
+          fontSize: 13,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div style={{ fontWeight: 700, minWidth: 120 }}>
+          {symbol.replace('USDT', '')}{' '}
+          {latest ? (
+            <a href={getTradeUrl(`${symbol}USDT`, exchange)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
+              {latest.toLocaleString()}
+            </a>
+          ) : (
+            '-'
+          )}
+        </div>
+        {MARKET_DATA_CONFIG.displayPeriods.map(days => {
+          const key = `day${days}`;
+          const raw = data && (data[key] === 0 || data[key] ? data[key] : null);
+          const val = raw !== null ? parseFloat(raw) : null;
+          const up = val !== null && val >= 0;
+          const text = val === null ? '-' : `${val.toFixed(2)}%`;
+          return (
+            <div
+              key={days}
+              style={{ color: val === null ? 'inherit' : up ? '#3f8600' : '#cf1322' }}
+            >
+              {`${days}日 ${text}`}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const fetchMarketData = async () => {
     setLoadingMarket(true);
@@ -79,33 +110,43 @@ const PairSelector = () => {
       const startTime = moment().subtract(MARKET_CONFIG.klineDays, 'days').valueOf();
 
       const [btcData, ethData] = await Promise.all([
-        getFutureKlineData({
-          symbol: 'BTCUSDT',
-          granularity: '1D',
-          limit: MARKET_CONFIG.klineDays,
-          startTime,
-          endTime,
-        }),
-        getFutureKlineData({
-          symbol: 'ETHUSDT',
-          granularity: '1D',
-          limit: MARKET_CONFIG.klineDays,
-          startTime,
-          endTime,
-        }),
+        getFutureKlineData(
+          {
+            symbol: 'BTCUSDT',
+            granularity: '1D',
+            limit: MARKET_CONFIG.klineDays,
+            startTime,
+            endTime,
+          },
+          exchange
+        ),
+        getFutureKlineData(
+          {
+            symbol: 'ETHUSDT',
+            granularity: '1D',
+            limit: MARKET_CONFIG.klineDays,
+            startTime,
+            endTime,
+          },
+          exchange
+        ),
       ]);
 
       const mkChange = (data, days) => calculatePriceChange(data, days);
+      const safeLatest = data =>
+        data && Array.isArray(data) && data.length ? parseFloat(data[data.length - 1][4]) : null;
       setMarketData({
         BTC: {
-          day3: mkChange(btcData.data, MARKET_CONFIG.periods[0]),
-          day7: mkChange(btcData.data, MARKET_CONFIG.periods[1]),
-          day15: mkChange(btcData.data, MARKET_CONFIG.periods[2]),
+          latest: safeLatest(btcData.data),
+          day7: mkChange(btcData.data, MARKET_CONFIG.periods[0]),
+          day15: mkChange(btcData.data, MARKET_CONFIG.periods[1]),
+          day45: mkChange(btcData.data, MARKET_CONFIG.periods[2]),
         },
         ETH: {
-          day3: mkChange(ethData.data, MARKET_CONFIG.periods[0]),
-          day7: mkChange(ethData.data, MARKET_CONFIG.periods[1]),
-          day15: mkChange(ethData.data, MARKET_CONFIG.periods[2]),
+          latest: safeLatest(ethData.data),
+          day7: mkChange(ethData.data, MARKET_CONFIG.periods[0]),
+          day15: mkChange(ethData.data, MARKET_CONFIG.periods[1]),
+          day45: mkChange(ethData.data, MARKET_CONFIG.periods[2]),
         },
       });
     } catch (error) {
@@ -119,7 +160,7 @@ const PairSelector = () => {
     abortRef.current = true;
     setSpikeRunning(false);
     setLoading(true);
-    getTradingPairs()
+    getTradingPairs({}, exchange)
       .then(res => {
         setTradingPairs(res);
       })
@@ -132,7 +173,7 @@ const PairSelector = () => {
     setSpikeRunning(true);
     setSpikeResults([]);
 
-    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs();
+    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs({}, exchange);
     if (!tradingPairs.length) setTradingPairs(pairs);
 
     const startTime = moment
@@ -148,13 +189,16 @@ const PairSelector = () => {
       if (abortRef.current) break;
       const { symbol } = pairs[i];
       try {
-        const res = await getFutureKlineData({
-          symbol,
-          granularity: '1Dutc',
-          limit: SPIKE_CONFIG.windowDays + 1,
-          startTime,
-          endTime,
-        });
+        const res = await getFutureKlineData(
+          {
+            symbol,
+            granularity: '1Dutc',
+            limit: SPIKE_CONFIG.windowDays + 1,
+            startTime,
+            endTime,
+          },
+          exchange
+        );
         const candles = Array.isArray(res?.data) ? res.data : [];
         const spike = candles.find(c => {
           const open = parseFloat(c[1]),
@@ -184,7 +228,7 @@ const PairSelector = () => {
     setSpikeRunning(true);
     setHoldResults([]);
 
-    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs();
+    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs({}, exchange);
     if (!tradingPairs.length) setTradingPairs(pairs);
 
     const endTime = moment.utc().valueOf();
@@ -196,12 +240,15 @@ const PairSelector = () => {
       const { symbol } = pairs[i];
       try {
         // 只传 endTime + limit，避免触发"区间不能超过90天"限制
-        const res = await getFutureKlineData({
-          symbol,
-          granularity: '1Dutc',
-          limit: HOLD_CONFIG.klineLimit,
-          endTime,
-        });
+        const res = await getFutureKlineData(
+          {
+            symbol,
+            granularity: '1Dutc',
+            limit: HOLD_CONFIG.klineLimit,
+            endTime,
+          },
+          exchange
+        );
         const candles = (Array.isArray(res?.data) ? res.data : []).sort(
           (a, b) => Number(a[0]) - Number(b[0])
         ); // 升序：oldest → newest
@@ -275,10 +322,12 @@ const PairSelector = () => {
 
   const handleRun = () => (mode === MODE_SPIKE ? runSpikeFilter() : runHoldFilter());
 
+  // Load data on mount and whenever selected exchange changes
   useEffect(() => {
     loadData();
     fetchMarketData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exchange]);
 
   return (
     <>
@@ -287,42 +336,14 @@ const PairSelector = () => {
           <Spin tip="加载市场数据..." />
         </div>
       ) : (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={12}>
-            <Card
-              size="small"
-              title={
-                <a
-                  href="https://www.bitget.com/zh-CN/futures/usdt/BTCUSDT"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit' }}
-                >
-                  BTC 涨跌幅
-                </a>
-              }
-            >
-              {renderMarketStats('BTC', marketData.BTC)}
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card
-              size="small"
-              title={
-                <a
-                  href="https://www.bitget.com/zh-CN/futures/usdt/ETHUSDT"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit' }}
-                >
-                  ETH 涨跌幅
-                </a>
-              }
-            >
-              {renderMarketStats('ETH', marketData.ETH)}
-            </Card>
-          </Col>
-        </Row>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ padding: '2px 0' }}>{renderMarketStats('BTC', marketData.BTC)}</div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ padding: '2px 0' }}>{renderMarketStats('ETH', marketData.ETH)}</div>
+          </div>
+        </div>
       )}
       <Row gutter={16}>
         <Col span={24}>
@@ -354,6 +375,18 @@ const PairSelector = () => {
                 </Text>
               </Space>
               <Space align="center">
+                <Select
+                  size="small"
+                  value={exchange}
+                  onChange={v => setExchange(v)}
+                  style={{ width: 140 }}
+                >
+                  {(availableExchanges || []).map(e => (
+                    <Select.Option key={e} value={e}>
+                      {e.charAt(0).toUpperCase() + e.slice(1)}
+                    </Select.Option>
+                  ))}
+                </Select>
                 {(mode === MODE_SPIKE ? spikeResults : holdResults).length > 0 && (
                   <Text type="secondary" style={{ fontSize: 13 }}>
                     共{' '}
@@ -405,11 +438,7 @@ const PairSelector = () => {
                     key: 'symbol',
                     width: 150,
                     render: symbol => (
-                      <a
-                        href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
+                      <a href={getTradeUrl(symbol, exchange)} target="_blank" rel="noopener noreferrer">
                         {symbol}
                       </a>
                     ),
@@ -436,11 +465,7 @@ const PairSelector = () => {
                     key: 'symbol',
                     width: 150,
                     render: symbol => (
-                      <a
-                        href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
+                      <a href={getTradeUrl(symbol, exchange)} target="_blank" rel="noopener noreferrer">
                         {symbol}
                       </a>
                     ),

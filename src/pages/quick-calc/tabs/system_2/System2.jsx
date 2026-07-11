@@ -44,10 +44,10 @@ const System2 = ({ location }) => {
     { key: PATHS.background, label: '背景' },
     { key: PATHS.fundamentals, label: '基本面' },
     { key: PATHS.pairSelector, label: '币对筛选' },
-    { key: PATHS.watching, label: '观测中' },
-    { key: PATHS.retrospective, label: '复盘' },
-    { key: PATHS.notes, label: '笔记' },
-    { key: PATHS.valueAnalysis, label: '价值分析' },
+    // { key: PATHS.watching, label: '观测中' },
+    // { key: PATHS.retrospective, label: '复盘' },
+    // { key: PATHS.notes, label: '笔记' },
+    // { key: PATHS.valueAnalysis, label: '价值分析' },
   ];
 
   return (

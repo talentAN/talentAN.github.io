@@ -3,7 +3,7 @@ import { Tabs, Table, Button, Input, message, Modal } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import patternData from '@root/contract-record/find-pattern.json';
-import { getFutureTicker } from '@root/src/container/bitget/api';
+import { getFutureTicker } from '@root/src/container/market';
 
 const FindPattern = () => {
   const [tabs, setTabs] = useState(patternData.tabs || []);
@@ -54,49 +54,50 @@ const FindPattern = () => {
         </a>
       ),
     },
-    activeKey === "tab_1777012187647" &&{
-        title: '横盘天数',
-        dataIndex: 'period',
-        key: 'period',
-        width: 90,
-        render: (v, r) => r.stableDays ? `${r.stableDays}天` : (v || '-'),
+    activeKey === 'tab_1777012187647' && {
+      title: '横盘天数',
+      dataIndex: 'period',
+      key: 'period',
+      width: 90,
+      render: (v, r) => (r.stableDays ? `${r.stableDays}天` : v || '-'),
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '下沿/上沿/最高点',
       dataIndex: 'sum',
       key: 'sum',
       width: 150,
-      render: (_, r) => (r.low && r.high && r.highPoint) ? `${r.low} / ${r.high} / ${r.highPoint}` : '-',
+      render: (_, r) =>
+        r.low && r.high && r.highPoint ? `${r.low} / ${r.high} / ${r.highPoint}` : '-',
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '上架日期',
       dataIndex: 'listDate',
       key: 'listDate',
       width: 110,
       render: v => v || '-',
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '区间最高',
       dataIndex: 'maxHigh',
       key: 'maxHigh',
       width: 100,
       render: v => v || '-',
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '区间最低',
       dataIndex: 'minLow',
       key: 'minLow',
       width: 100,
       render: v => v || '-',
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '最高/最低',
       dataIndex: 'ratio',
       key: 'ratio',
       width: 90,
-      render: v => v ? `${v}x` : '-',
+      render: v => (v ? `${v}x` : '-'),
     },
-    activeKey === "tab_1777012187647" && {
+    activeKey === 'tab_1777012187647' && {
       title: '跳出日期',
       dataIndex: 'breakoutDate',
       key: 'breakoutDate',
@@ -110,7 +111,7 @@ const FindPattern = () => {
       width: 120,
       render: text => text || '-',
     },
-    activeKey === 'tab1' &&{
+    activeKey === 'tab1' && {
       title: '添加日期',
       dataIndex: 'addDate',
       key: 'addDate',
