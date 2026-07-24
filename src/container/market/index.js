@@ -69,8 +69,7 @@ export function getTradeUrl(symbol, exchangeName = defaultExchange, marketType =
 
   // Default to bitget pattern
   if (ex.startsWith('bitget')) {
-    const base = full.replace(/USDT$/i, '');
-    return `https://www.bitget.com/zh-CN/futures/usdt/${base}`;
+    return `https://www.bitget.com/zh-CN/futures/usdt/${full}`;
   }
 
   // Fallback: no-exchange-specific link — point to Binance futures by default

@@ -30,12 +30,13 @@ import {
   RATIO_COLOR,
 } from '@root/src/consts/pairSelectorConfig';
 import { MARKET_DATA_CONFIG } from '@root/src/configs/pairSelectorConfig';
+import { getSingleDaySpike, getWindowPeakSignal, getHoldReference } from './_pairSelectorRules';
 
 const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.symbol));
 
 // 筛选模式
-const MODE_SPIKE = 'spike'; // 过去3天单日涨幅 ≥30%
-const MODE_HOLD = 'hold'; // 90天内有暴涨且当前仍高位
+const MODE_SPIKE = 'spike'; // 过去4天内单日涨幅 ≥30% 或最高价高于最远一天开盘价的40%
+const MODE_HOLD = 'hold'; // 90天内最近一次暴涨 ≥30% 或连续 4 天最高价高于第一天开盘价 50%，且当前价仍高位
 
 const { Text } = Typography;
 
@@ -77,7 +78,12 @@ const PairSelector = () => {
         <div style={{ fontWeight: 700, minWidth: 120 }}>
           {symbol.replace('USDT', '')}{' '}
           {latest ? (
-            <a href={getTradeUrl(`${symbol}USDT`, exchange)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
+            <a
+              href={getTradeUrl(`${symbol}USDT`, exchange)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'inherit' }}
+            >
               {latest.toLocaleString()}
             </a>
           ) : (
@@ -167,7 +173,7 @@ const PairSelector = () => {
       .finally(() => setLoading(false));
   };
 
-  // 模式一：过去3天单日涨幅 ≥30%
+  // 模式一：过去 4 天内单日涨幅 ≥30% 或过去 4 天最高价高于最远一天开盘价的 40%
   const runSpikeFilter = async () => {
     abortRef.current = false;
     setSpikeRunning(true);
@@ -199,20 +205,30 @@ const PairSelector = () => {
           },
           exchange
         );
-        const candles = Array.isArray(res?.data) ? res.data : [];
-        const spike = candles.find(c => {
-          const open = parseFloat(c[1]),
-            close = parseFloat(c[4]);
-          return open > 0 && (close - open) / open >= SPIKE_CONFIG.riseRatio;
-        });
-        if (spike && !WATCHING_SYMBOLS.has(symbol)) {
-          const open = parseFloat(spike[1]),
-            close = parseFloat(spike[4]);
+        const candles = (Array.isArray(res?.data) ? res.data : []).sort(
+          (a, b) => Number(a[0]) - Number(b[0])
+        );
+
+        if (candles.length < 2) {
+          setSpikeProgress({ checked: i + 1, total: pairs.length });
+          continue;
+        }
+
+        const spikeSignal = getSingleDaySpike(candles);
+        const peakSignal = getWindowPeakSignal(candles);
+        const qualified = Boolean(spikeSignal) || Boolean(peakSignal);
+
+        if (qualified && !WATCHING_SYMBOLS.has(symbol)) {
+          const trigger = spikeSignal ? (peakSignal ? '两者' : '单日暴涨') : '窗口峰值';
           matched.push({
             key: symbol,
             symbol,
-            date: new Date(Number(spike[0])).toISOString().slice(0, 10),
-            rise: (((close - open) / open) * 100).toFixed(1),
+            date: spikeSignal?.date || peakSignal?.date,
+            rise: spikeSignal?.rise,
+            firstOpen: peakSignal?.firstOpen,
+            maxHigh: peakSignal?.maxHigh,
+            peakRatio: peakSignal?.ratio,
+            trigger,
           });
           setSpikeResults([...matched]);
         }
@@ -222,7 +238,7 @@ const PairSelector = () => {
     setSpikeRunning(false);
   };
 
-  // 模式二：90天内最近一次暴涨 ≥30%，且当前价仍 ≥ 暴涨收盘价 × 0.9
+  // 模式二：90天内最近一次暴涨 ≥30% 或存在连续 4 天，4 天内最高价高于第一天开盘价 50%，且当前价仍 ≥ 基准价 × 95%
   const runHoldFilter = async () => {
     abortRef.current = false;
     setSpikeRunning(true);
@@ -257,60 +273,25 @@ const PairSelector = () => {
           continue;
         }
 
-        // K线格式: [timestamp, open, high, low, close, ...]
-        // 排序后 candles[last] = 最新，candles[last-1] = 昨日
-        const lastCandle = candles[candles.length - 1];
-        const prevCandle = candles[candles.length - 2];
-        const currentPrice = parseFloat(lastCandle[4]); // 今日最新收盘/现价
-        const yesterdayHigh = parseFloat(prevCandle[2]); // 昨日最高价
-
-        // 从最新往前找第一根暴涨 K（跳过今日未收盘的最后一根）
-        let spikeIdx = -1;
-        for (let j = candles.length - 2; j >= 0; j--) {
-          const open = parseFloat(candles[j][1]);
-          const close = parseFloat(candles[j][4]);
-          if (open > 0 && (close - open) / open >= HOLD_CONFIG.riseRatio) {
-            spikeIdx = j;
-            break;
-          }
-        }
-
-        if (spikeIdx === -1) {
+        const holdSignal = getHoldReference(candles);
+        if (!holdSignal) {
           setSpikeProgress({ checked: i + 1, total: pairs.length });
           continue;
         }
 
-        const sc = candles[spikeIdx];
-        const spikeOpen = parseFloat(sc[1]);
-        const spikeClose = parseFloat(sc[4]);
-
-        // 暴涨日之后（不含今日最后一根）若有更高收盘价，用其作为基准 a
-        let a = spikeClose;
-        for (let j = spikeIdx + 1; j <= candles.length - 2; j++) {
-          const c = parseFloat(candles[j][4]);
-          if (c > a) a = c;
-        }
-
-        const threshold = a * HOLD_CONFIG.priceRatio;
-
-        // 当前价 OR 昨日最高价 超过 a × 50%
-        const hitCurrent = currentPrice >= threshold;
-        const hitYesterday = yesterdayHigh >= threshold;
-
-        if ((hitCurrent || hitYesterday) && !WATCHING_SYMBOLS.has(symbol)) {
-          const daysAgo = candles.length - 1 - spikeIdx;
+        const hitCurrent = holdSignal.currentPrice >= holdSignal.threshold;
+        if (hitCurrent && !WATCHING_SYMBOLS.has(symbol)) {
           matched.push({
             key: symbol,
             symbol,
-            spikeDate: new Date(Number(sc[0])).toISOString().slice(0, 10),
-            spikeRise: (((spikeClose - spikeOpen) / spikeOpen) * 100).toFixed(1),
-            spikeClose,
-            refPrice: a, // 实际基准价（暴涨收盘或后续最高收盘）
-            currentPrice,
-            yesterdayHigh,
-            ratio: ((currentPrice / a) * 100).toFixed(1),
-            trigger: hitCurrent && hitYesterday ? '两者' : hitCurrent ? '当前价' : '昨日高',
-            daysAgo,
+            spikeDate: holdSignal.referenceDate,
+            spikeRise: holdSignal.referenceRise || '—',
+            spikeClose: holdSignal.baseline,
+            refPrice: holdSignal.baseline,
+            currentPrice: holdSignal.currentPrice,
+            ratio: ((holdSignal.currentPrice / holdSignal.baseline) * 100).toFixed(1),
+            trigger: holdSignal.trigger,
+            daysAgo: holdSignal.daysAgo,
           });
           setHoldResults([...matched]);
         }
@@ -364,14 +345,14 @@ const PairSelector = () => {
                     setSpikeProgress({ checked: 0, total: 0 });
                   }}
                   options={[
-                    { label: '过去3天暴涨', value: MODE_SPIKE },
+                    { label: '过去4天暴涨', value: MODE_SPIKE },
                     { label: '90天内暴涨仍高位', value: MODE_HOLD },
                   ]}
                 />
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {mode === MODE_SPIKE
-                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}%`
-                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}%，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
+                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}% 或过去 ${SPIKE_CONFIG.windowDays} 天的最高价高于最远一天开盘价的 ${SPIKE_CONFIG.peakRatio * 100}%`
+                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}% 或存在连续 4 天，4 天内最高价高于第一天开盘价的 ${HOLD_CONFIG.fourDayRunRatio * 100}% ，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
                 </Text>
               </Space>
               <Space align="center">
@@ -438,18 +419,49 @@ const PairSelector = () => {
                     key: 'symbol',
                     width: 150,
                     render: symbol => (
-                      <a href={getTradeUrl(symbol, exchange)} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={getTradeUrl(symbol, exchange)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         {symbol}
                       </a>
                     ),
                   },
                   { title: '触发日期', dataIndex: 'date', key: 'date', width: 130 },
-                  {
-                    title: '当日涨幅',
-                    dataIndex: 'rise',
-                    key: 'rise',
-                    render: v => <Tag color="green">+{v}%</Tag>,
-                  },
+                  ...(spikeResults.some(r => r.trigger === '单日暴涨' || r.trigger === '两者')
+                    ? [
+                        {
+                          title: '当日涨幅',
+                          dataIndex: 'rise',
+                          key: 'rise',
+                          width: 100,
+                          render: v => (v ? <Tag color="green">+{v}%</Tag> : '—'),
+                        },
+                      ]
+                    : []),
+                  ...(spikeResults.some(r => r.trigger === '窗口峰值' || r.trigger === '两者')
+                    ? [
+                        {
+                          title: '开盘价/最高价',
+                          key: 'openHigh',
+                          width: 180,
+                          render: (_, r) =>
+                            r.firstOpen != null && r.maxHigh != null ? (
+                              <span>
+                                {r.firstOpen.toPrecision(5)} / {r.maxHigh.toPrecision(5)}
+                                {r.peakRatio != null && (
+                                  <Tag color="green" style={{ marginLeft: 6 }}>
+                                    +{r.peakRatio}%
+                                  </Tag>
+                                )}
+                              </span>
+                            ) : (
+                              '—'
+                            ),
+                        },
+                      ]
+                    : []),
                 ]}
               />
             ) : (
@@ -465,7 +477,11 @@ const PairSelector = () => {
                     key: 'symbol',
                     width: 150,
                     render: symbol => (
-                      <a href={getTradeUrl(symbol, exchange)} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={getTradeUrl(symbol, exchange)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         {symbol}
                       </a>
                     ),

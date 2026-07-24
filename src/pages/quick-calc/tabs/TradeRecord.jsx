@@ -12,7 +12,7 @@ const { RangePicker } = DatePicker;
 const TradeRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
+  const [dateRange, setDateRange] = useState(null);
   const [onlyHighlight, setOnlyHighlight] = useState(false);
   const [onlyBurstVolume, setOnlyBurstVolume] = useState(false);
   const [onlyTrades, setOnlyTrades] = useState(true);
@@ -351,13 +351,31 @@ const TradeRecord = () => {
       const localData = (localRecords || []).filter(r => !r.ignore);
       console.log(`本地数据: ${localData.length} 条`);
 
-      const response = await authenticatedRequest('GET', '/api/v2/mix/position/history-position', {
-        startTime: dateRange[0].valueOf().toString(),
-        endTime: dateRange[1].valueOf().toString(),
-      });
+      const requestParams = {};
+      if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
+        const latestAllowedEnd = moment().subtract(1, 'day').startOf('day').valueOf();
+        const safeEndTime = Math.min(dateRange[1].startOf('day').valueOf(), latestAllowedEnd);
+        const safeStartTime = Math.min(dateRange[0].startOf('day').valueOf(), safeEndTime);
+        requestParams.startTime = safeStartTime.toString();
+        requestParams.endTime = safeEndTime.toString();
+      }
 
-      if (response.code !== '00000') {
-        message.error(`API 错误: ${response.msg}`);
+      let response = null;
+      try {
+        response = await authenticatedRequest(
+          'GET',
+          '/api/v2/mix/position/history-position',
+          requestParams
+        );
+      } catch (remoteError) {
+        console.warn('Bitget history-position 请求失败，使用本地数据回退', remoteError);
+        setRecords(localData);
+        return;
+      }
+
+      if (response?.code !== '00000') {
+        console.warn('Bitget history-position API 返回错误，使用本地数据回退', response);
+        setRecords(localData);
         return;
       }
 
@@ -400,8 +418,8 @@ const TradeRecord = () => {
       setRecords(mergedData);
       message.success(`合并成功，共 ${mergedData.length} 条记录`);
     } catch (error) {
-      // message.error('获取失败：' + error.message);
-      setRecords(localRecords.filter(r => !r.ignore));
+      console.warn('TradeRecord fetchData 异常，使用本地数据回退', error);
+      setRecords((localRecords || []).filter(r => !r.ignore));
     } finally {
       setLoading(false);
     }
@@ -433,31 +451,39 @@ const TradeRecord = () => {
   }, []);
 
   return (
-    <Card>
-      <div style={{ marginBottom: 16 }}>
+    <Card bodyStyle={{ padding: 6 }}>
+      <div
+        style={{
+          marginBottom: 0,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 4,
+          alignItems: 'center',
+        }}
+      >
         <Radio.Group
           value={directionFilter}
           onChange={e => setDirectionFilter(e.target.value)}
           optionType="button"
           buttonStyle="solid"
-          size="middle"
-          style={{ marginRight: 8 }}
+          size="small"
+          style={{ marginRight: 0 }}
         >
           <Radio.Button value="all">全部</Radio.Button>
           <Radio.Button value="long">做多</Radio.Button>
           <Radio.Button value="short">做空</Radio.Button>
         </Radio.Group>
-        <RangePicker value={dateRange} onChange={setDateRange} style={{ marginRight: 8 }} />
+        <RangePicker value={dateRange} onChange={setDateRange} size="small" />
         <Button
           type="primary"
           icon={<ReloadOutlined />}
           onClick={fetchData}
           loading={loading}
-          style={{ marginRight: 8 }}
+          size="small"
         >
           查询合并
         </Button>
-        <Button icon={<CopyOutlined />} onClick={handleCopy}>
+        <Button icon={<CopyOutlined />} onClick={handleCopy} size="small">
           复制数据
         </Button>
         <Checkbox
@@ -465,7 +491,7 @@ const TradeRecord = () => {
           onChange={e => {
             setOnlyHighlight(e.target.checked);
           }}
-          style={{ fontSize: 12, marginLeft: 8 }}
+          style={{ fontSize: 12 }}
         >
           只展示标杆
         </Checkbox>
@@ -474,7 +500,7 @@ const TradeRecord = () => {
           onChange={e => {
             setOnlyBurstVolume(e.target.checked);
           }}
-          style={{ fontSize: 12, marginLeft: 8 }}
+          style={{ fontSize: 12 }}
         >
           只展示放量冲关缩量滞涨
         </Checkbox>
@@ -483,7 +509,7 @@ const TradeRecord = () => {
           onChange={e => {
             setOnlyTrades(e.target.checked);
           }}
-          style={{ fontSize: 12, marginLeft: 8 }}
+          style={{ fontSize: 12 }}
         >
           只展示成交记录
         </Checkbox>
@@ -520,16 +546,16 @@ const TradeRecord = () => {
         ];
 
         return (
-          <div style={{ marginBottom: 12, fontSize: 13 }}>
+          <div style={{ marginBottom: 0, fontSize: 12 }}>
             放量冲关缩量滞涨(1-30)
             {/* 标题行 */}
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(8, 1fr)',
-                gap: 12,
+                gap: 4,
                 color: '#666',
-                marginBottom: 4,
+                marginBottom: 0,
               }}
             >
               {items.map((item, idx) => (
@@ -537,7 +563,7 @@ const TradeRecord = () => {
               ))}
             </div>
             {/* 数据行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4 }}>
               {items.map((item, idx) => {
                 if (item.isExpectation) {
                   return (
@@ -545,11 +571,11 @@ const TradeRecord = () => {
                       key={idx}
                       title={
                         <div style={{ fontSize: 12, lineHeight: '1.8' }}>
-                          <div style={{ marginBottom: 4, fontWeight: 'bold', color: '#fff' }}>
+                          <div style={{ marginBottom: 2, fontWeight: 'bold', color: '#fff' }}>
                             期望值 = 胜率×均盈R − 败率×均亏R
                           </div>
                           <div
-                            style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6 }}
+                            style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}
                           >
                             <div>
                               <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
@@ -604,12 +630,14 @@ const TradeRecord = () => {
         columns={columns}
         dataSource={recordsToDisplay}
         loading={loading}
+        size="small"
         rowKey={record => record.positionId}
         pagination={{
           pageSize: 100,
           current: currentPage,
           onChange: page => setCurrentPage(page),
           showTotal: total => `共 ${total} 条记录`,
+          size: 'small',
         }}
         scroll={{ x: 'max-content' }}
       />

@@ -9,7 +9,7 @@ import CryptoJS from 'crypto-js';
  * @param {string} secretKey - API Secret Key
  * @returns {string} Base64 编码的签名
  */
- const generateSignature = (timestamp, method, requestPath, body, secretKey) => {
+const generateSignature = (timestamp, method, requestPath, body, secretKey) => {
   const message = timestamp + method + requestPath + body;
   const hmac = CryptoJS.HmacSHA256(message, secretKey);
   return CryptoJS.enc.Base64.stringify(hmac);
@@ -26,16 +26,24 @@ import CryptoJS from 'crypto-js';
  * @param {string} [config.body=''] - 请求体（可选，默认为空字符串）
  * @returns {Object} 请求头对象
  */
-export const generateHeaders = ({ apiKey, apiSecret, passphrase, method, requestPath, body = '' }) => {
-  const timestamp = Date.now().toString();
-  const signature = generateSignature(timestamp, method, requestPath, body, apiSecret);
+export const generateHeaders = ({
+  apiKey,
+  apiSecret,
+  passphrase,
+  method,
+  requestPath,
+  body = '',
+  timestamp,
+}) => {
+  const signTimestamp = timestamp || Date.now().toString();
+  const signature = generateSignature(signTimestamp, method, requestPath, body, apiSecret);
 
   return {
     'ACCESS-KEY': apiKey,
     'ACCESS-SIGN': signature,
-    'ACCESS-TIMESTAMP': timestamp,
+    'ACCESS-TIMESTAMP': signTimestamp,
     'ACCESS-PASSPHRASE': passphrase,
     'Content-Type': 'application/json',
-    'locale': 'zh-CN'
+    locale: 'zh-CN',
   };
 };

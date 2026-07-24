@@ -8,15 +8,15 @@ export const getApiConfig = () => {
   return { apiKey, apiSecret, passphrase };
 };
 
-
 // 发送认证请求 - 目前只用于获取历史仓位信息
 export const authenticatedRequest = async (method, endpoint, params = {}) => {
   const { apiKey, apiSecret, passphrase } = getApiConfig();
-  
+
   if (!apiKey || !apiSecret || !passphrase) {
     throw new Error('请先配置 API Key');
   }
 
+  const timestamp = Date.now().toString();
   const queryString = new URLSearchParams(params).toString();
   const requestPath = queryString ? `${endpoint}?${queryString}` : endpoint;
 
@@ -26,7 +26,8 @@ export const authenticatedRequest = async (method, endpoint, params = {}) => {
     passphrase,
     method,
     requestPath,
-    body: ''
+    body: '',
+    timestamp,
   });
 
   const url = `https://api.bitget.com${requestPath}`;

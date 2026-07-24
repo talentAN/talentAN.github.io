@@ -82,7 +82,7 @@ const Rule = () => {
           size="small"
         />
 
-        <Title level={4} style={{ marginTop: 24 }}>
+        <Title level={4} style={{ marginTop: 12 }}>
           规则 R5：阶段熔断
         </Title>
         <Table
@@ -91,12 +91,12 @@ const Rule = () => {
           pagination={false}
           size="small"
         />
-        <Paragraph style={{ marginTop: 16 }}>
+        <Paragraph style={{ marginTop: 8 }}>
           <Text strong>熔断的意义</Text>
           ：不是惩罚，而是保护。连续亏损时，心态已经不正常了。继续交易大概率是"报复性交易"，只会加速亏损。
         </Paragraph>
         <Divider />
-        <Paragraph type="secondary" style={{ fontStyle: 'italic', marginTop: 32 }}>
+        <Paragraph type="secondary" style={{ fontStyle: 'italic', marginTop: 16 }}>
           本规则为
           v1.1，随实盘经验积累可微调参数，但核心框架（单笔2%、必须止损、熔断机制）不可动摇。
         </Paragraph>
