@@ -40,6 +40,8 @@ const MODE_HOLD = 'hold'; // 90天内最近一次暴涨 ≥30% 或连续 4 天�
 
 const { Text } = Typography;
 
+const fmtPrice = v => (v != null && Number.isFinite(v) ? v.toPrecision(5) : '—');
+
 const PairSelector = () => {
   const [tradingPairs, setTradingPairs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -274,21 +276,18 @@ const PairSelector = () => {
         }
 
         const holdSignal = getHoldReference(candles);
-        if (!holdSignal) {
-          setSpikeProgress({ checked: i + 1, total: pairs.length });
-          continue;
-        }
-
-        const hitCurrent = holdSignal.currentPrice >= holdSignal.threshold;
-        if (hitCurrent && !WATCHING_SYMBOLS.has(symbol)) {
+        if (holdSignal && !WATCHING_SYMBOLS.has(symbol)) {
+          const yesterdayHigh =
+            candles.length >= 2 ? parseFloat(candles[candles.length - 2][2]) : null;
           matched.push({
             key: symbol,
             symbol,
             spikeDate: holdSignal.referenceDate,
             spikeRise: holdSignal.referenceRise || '—',
-            spikeClose: holdSignal.baseline,
+            spikeClose: holdSignal.spikeClose,
             refPrice: holdSignal.baseline,
             currentPrice: holdSignal.currentPrice,
+            yesterdayHigh: Number.isFinite(yesterdayHigh) ? yesterdayHigh : null,
             ratio: ((holdSignal.currentPrice / holdSignal.baseline) * 100).toFixed(1),
             trigger: holdSignal.trigger,
             daysAgo: holdSignal.daysAgo,
@@ -334,7 +333,6 @@ const PairSelector = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: 16,
               }}
             >
               <Space size={12} align="center">
@@ -349,11 +347,6 @@ const PairSelector = () => {
                     { label: '90天内暴涨仍高位', value: MODE_HOLD },
                   ]}
                 />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {mode === MODE_SPIKE
-                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}% 或过去 ${SPIKE_CONFIG.windowDays} 天的最高价高于最远一天开盘价的 ${SPIKE_CONFIG.peakRatio * 100}%`
-                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}% 或存在连续 4 天，4 天内最高价高于第一天开盘价的 ${HOLD_CONFIG.fourDayRunRatio * 100}% ，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
-                </Text>
               </Space>
               <Space align="center">
                 <Select
@@ -368,13 +361,6 @@ const PairSelector = () => {
                     </Select.Option>
                   ))}
                 </Select>
-                {(mode === MODE_SPIKE ? spikeResults : holdResults).length > 0 && (
-                  <Text type="secondary" style={{ fontSize: 13 }}>
-                    共{' '}
-                    <Text strong>{(mode === MODE_SPIKE ? spikeResults : holdResults).length}</Text>{' '}
-                    条
-                  </Text>
-                )}
                 <PositionCalculatorButton />
                 <Button
                   type="primary"
@@ -396,16 +382,28 @@ const PairSelector = () => {
                 )}
               </Space>
             </div>
-
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text type="secondary" style={{ fontSize: 12, marginBottom: 12, marginTop: 12 }}>
+                  {mode === MODE_SPIKE
+                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}% 或过去 ${SPIKE_CONFIG.windowDays} 天的最高价高于最远一天开盘价的 ${SPIKE_CONFIG.peakRatio * 100}%`
+                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}% 或存在连续 4 天，4 天内最高价高于第一天开盘价的 ${HOLD_CONFIG.fourDayRunRatio * 100}% ，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
+                </Text>
+                {(mode === MODE_SPIKE ? spikeResults : holdResults).length > 0 && (
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    共{' '}
+                    <Text strong>{(mode === MODE_SPIKE ? spikeResults : holdResults).length}</Text>{' '}
+                    条
+                  </Text>
+                )}
+            </div>
             {spikeProgress.total > 0 && (
               <Progress
                 percent={Math.round((spikeProgress.checked / spikeProgress.total) * 100)}
                 status={spikeRunning ? 'active' : 'normal'}
                 format={() => `${spikeProgress.checked} / ${spikeProgress.total}`}
-                style={{ marginBottom: 12 }}
+                style={{ marginBottom: 12, width:'95%' }}
               />
             )}
-
             {mode === MODE_SPIKE ? (
               <Table
                 size="small"
@@ -505,7 +503,8 @@ const PairSelector = () => {
                     dataIndex: 'spikeRise',
                     key: 'spikeRise',
                     width: 90,
-                    render: v => <Tag color="volcano">+{v}%</Tag>,
+                    render: v =>
+                      v && v !== '—' ? <Tag color="volcano">+{v}%</Tag> : '—',
                     sorter: (a, b) => parseFloat(a.spikeRise) - parseFloat(b.spikeRise),
                   },
                   {
@@ -513,33 +512,28 @@ const PairSelector = () => {
                     dataIndex: 'spikeClose',
                     key: 'spikeClose',
                     width: 110,
-                    render: v => v.toPrecision(5),
+                    render: fmtPrice,
                   },
                   {
                     title: '基准价(a)',
                     dataIndex: 'refPrice',
                     key: 'refPrice',
                     width: 110,
-                    render: (v, r) => (
-                      <span style={{ color: v > r.spikeClose ? '#722ed1' : 'inherit' }}>
-                        {v.toPrecision(5)}
-                        {v > r.spikeClose && <span style={{ fontSize: 10, marginLeft: 3 }}>↑</span>}
-                      </span>
-                    ),
+                    render: fmtPrice,
                   },
                   {
                     title: '当前价',
                     dataIndex: 'currentPrice',
                     key: 'currentPrice',
                     width: 100,
-                    render: v => v.toPrecision(5),
+                    render: fmtPrice,
                   },
                   {
                     title: '昨日最高',
                     dataIndex: 'yesterdayHigh',
                     key: 'yesterdayHigh',
                     width: 100,
-                    render: v => v.toPrecision(5),
+                    render: fmtPrice,
                   },
                   {
                     title: '当前/暴涨',
@@ -565,13 +559,15 @@ const PairSelector = () => {
                     key: 'trigger',
                     width: 80,
                     render: v => (
-                      <Tag color={v === '两者' ? 'green' : v === '当前价' ? 'blue' : 'orange'}>
+                      <Tag
+                        color={v === '两者' ? 'green' : v === '暴涨' ? 'blue' : 'orange'}
+                      >
                         {v}
                       </Tag>
                     ),
                     filters: [
-                      { text: '当前价', value: '当前价' },
-                      { text: '昨日高', value: '昨日高' },
+                      { text: '暴涨', value: '暴涨' },
+                      { text: '连续4天', value: '连续4天' },
                       { text: '两者', value: '两者' },
                     ],
                     onFilter: (val, r) => r.trigger === val,

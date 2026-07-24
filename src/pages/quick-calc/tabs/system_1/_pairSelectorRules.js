@@ -70,7 +70,7 @@ export const findFourDayRunWindow = candles => {
     if (maxHigh >= firstOpen * (1 + HOLD_CONFIG.fourDayRunRatio)) {
       return {
         startIdx: start,
-        basePrice: Math.max(...window.map(c => parseFloat(c[4]))),
+        basePrice: Math.max(...window.map(c => parseFloat(c[4]))), // 4 天内最高收盘价
       };
     }
   }
@@ -78,47 +78,45 @@ export const findFourDayRunWindow = candles => {
   return null;
 };
 
-/** 计算 HOLD 模式的基准价与阈值：优先用暴涨 K，否则用 4 天连续上涨窗口 */
+/** 计算 HOLD 模式基准价：暴涨 / 连续4天 两条路径独立判断，任一满足当前价 ≥ 基准价 × 95% 即入选 */
 export const getHoldReference = candles => {
   const lastCandle = candles[candles.length - 1];
   const currentPrice = parseFloat(lastCandle[4]);
   const spikeSignal = findLatestSpikeCandidate(candles);
   const fourDayRun = findFourDayRunWindow(candles);
 
-  if (!spikeSignal && !fourDayRun) {
+  const spikeBaseline = spikeSignal?.close ?? null;
+  const fourDayBaseline = fourDayRun?.basePrice ?? null;
+  const spikeHit =
+    spikeBaseline != null && currentPrice >= spikeBaseline * HOLD_CONFIG.priceRatio;
+  const fourDayHit =
+    fourDayBaseline != null && currentPrice >= fourDayBaseline * HOLD_CONFIG.priceRatio;
+
+  if (!spikeHit && !fourDayHit) {
     return null;
   }
 
-  let baseline = null;
-  let daysAgo = null;
-  let trigger = '当前价';
-  let referenceDate = null;
-  let referenceRise = null;
-
-  if (spikeSignal) {
-    baseline = spikeSignal.close;
-    for (let j = spikeSignal.idx + 1; j <= candles.length - 2; j++) {
-      const nextClose = parseFloat(candles[j][4]);
-      if (nextClose > baseline) baseline = nextClose;
-    }
-
-    daysAgo = candles.length - 1 - spikeSignal.idx;
-    referenceDate = spikeSignal.date;
-    referenceRise = spikeSignal.rise;
-  } else {
-    baseline = fourDayRun.basePrice;
-    daysAgo = candles.length - 1 - fourDayRun.startIdx;
-    referenceDate = new Date(Number(candles[fourDayRun.startIdx][0])).toISOString().slice(0, 10);
-    trigger = '连续4天';
+  if (spikeHit) {
+    return {
+      currentPrice,
+      baseline: spikeBaseline,
+      spikeClose: spikeBaseline,
+      threshold: spikeBaseline * HOLD_CONFIG.priceRatio,
+      daysAgo: candles.length - 1 - spikeSignal.idx,
+      trigger: fourDayHit ? '两者' : '暴涨',
+      referenceDate: spikeSignal.date,
+      referenceRise: spikeSignal.rise,
+    };
   }
 
   return {
     currentPrice,
-    baseline,
-    threshold: baseline * HOLD_CONFIG.priceRatio,
-    daysAgo,
-    trigger,
-    referenceDate,
-    referenceRise,
+    baseline: fourDayBaseline,
+    spikeClose: null,
+    threshold: fourDayBaseline * HOLD_CONFIG.priceRatio,
+    daysAgo: candles.length - 1 - fourDayRun.startIdx,
+    trigger: '连续4天',
+    referenceDate: new Date(Number(candles[fourDayRun.startIdx][0])).toISOString().slice(0, 10),
+    referenceRise: null,
   };
 };
