@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, {useEffect} from 'react';
 import { Card, Menu } from 'antd';
 import { navigate } from 'gatsby';
 import Rule from './Rule';
@@ -10,7 +10,7 @@ import Simulate from './Simulate';
 import SimulateRetrospective from './SimulateRetrospective';
 import DeathMechanism from './DeathMechanism';
 import MilestoneWarning from './MilestoneWarning';
-
+import SurgeAlert from './SurgeAlert';
 const SYSTEM1_BASE_PATH = '/quick-calc/system_1';
 const SYSTEM1_PATHS = {
   rule: `${SYSTEM1_BASE_PATH}/rule`,
@@ -76,24 +76,27 @@ const System1 = ({ location }) => {
   }, [cleanPath]);
 
   return (
-    <Card>
-      <Menu
-        mode="horizontal"
-        selectedKeys={[selectedKey]}
-        items={menuItems}
-        onClick={({ key }) => navigate(key)}
-        style={{ marginBottom: 16 }}
-      />
-      {showRule && <Rule />}
-      {showTradingDiscipline && <TradingDiscipline />}
-      {showDefaultPairSelector && <PairSelector />}
-      {showWatchList && <WatchList />}
-      {showRetrospective && <Retrospective />}
-      {showSimulate && <Simulate />}
-      {showSimulateRetrospective && <SimulateRetrospective />}
-      {showMilestoneWarning && <MilestoneWarning />}
-      {showDeathMechanism && <DeathMechanism />}
-    </Card>
+    <>
+      <SurgeAlert />
+      <Card>
+        <Menu
+          mode="horizontal"
+          selectedKeys={[selectedKey]}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
+          style={{ marginBottom: 16 }}
+        />
+        {showRule && <Rule />}
+        {showTradingDiscipline && <TradingDiscipline />}
+        {showDefaultPairSelector && <PairSelector />}
+        {showWatchList && <WatchList />}
+        {showRetrospective && <Retrospective />}
+        {showSimulate && <Simulate />}
+        {showSimulateRetrospective && <SimulateRetrospective />}
+        {showMilestoneWarning && <MilestoneWarning />}
+        {showDeathMechanism && <DeathMechanism />}
+      </Card>
+    </>
   );
 };
 
