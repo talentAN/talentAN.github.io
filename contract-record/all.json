@@ -10,6 +10,110 @@
     "content": "做空：\n\n- 如当前价格低于历史高点，选择近期第二高点开仓；\n- 如果价格处于历史高点，谨慎开仓，并选取历史最高点开仓，严格设定止损；\n- 注意执行动作是系统驱动还是情绪驱动（比如扛单、比如止损价的设置）；\n- 缩量暴涨看了几个例子，是开仓的好时机；\n- 收益达到2R后的止盈策略要斟酌下，回调5%似乎太谨慎了; \n 做多：\n\n - 永远不着急入场，甚至可以考虑每次都等回调后再入场"
   },
   {
+    "positionId": "1466609300120698882",
+    "symbol": "EPICUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "0.86",
+    "closeAvgPrice": "0.8505",
+    "marginMode": "crossed",
+    "openTotalPos": "172.1",
+    "closeTotalPos": "172.1",
+    "pnl": "1.65105",
+    "netProfit": "1.58839121",
+    "totalFunding": "0.01956415",
+    "openFee": "-0.02368096",
+    "closeFee": "-0.05854198",
+    "posMode": "hedge_mode",
+    "cashDividend": "0.00000000",
+    "utime": "1785421935959",
+    "ctime": "1785392826108",
+    "openBestPrice3d": 0.9646,
+    "openPriceDiff": 12.162790697674422,
+    "closeBestPrice3d": 0.6472,
+    "closePriceDiff": 23.639534883720934,
+    "entryReason": "high_volume_breakout_shrink_stall",
+    "remark": "触发移动止损出场"
+  },
+  {
+    "positionId": "1465519817094758421",
+    "symbol": "龙虾USDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "0.02",
+    "closeAvgPrice": "0.019844",
+    "marginMode": "crossed",
+    "openTotalPos": "7403",
+    "closeTotalPos": "7403",
+    "pnl": "1.156474",
+    "netProfit": "2.09552832",
+    "totalFunding": "1.02150533",
+    "openFee": "-0.0236896",
+    "closeFee": "-0.05876141",
+    "posMode": "hedge_mode",
+    "cashDividend": "0.00000000",
+    "utime": "1785365160630",
+    "ctime": "1785133073113",
+    "openBestPrice3d": 0.022443,
+    "openPriceDiff": 12.215000000000003,
+    "closeBestPrice3d": 0.016511,
+    "closePriceDiff": 16.664999999999996,
+    "entryReason": "high_volume_breakout_shrink_stall",
+    "remark": "触发移动止损出场"
+  },
+  {
+    "positionId": "1464949301388673027",
+    "symbol": "BEATUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "long",
+    "openAvgPrice": "3.375",
+    "closeAvgPrice": "3.4042",
+    "marginMode": "isolated",
+    "openTotalPos": "2",
+    "closeTotalPos": "2",
+    "pnl": "0.0584",
+    "netProfit": "0.05182011",
+    "totalFunding": "-0.00277652",
+    "openFee": "-0.00108",
+    "closeFee": "-0.00272336",
+    "posMode": "hedge_mode",
+    "cashDividend": "0.00000000",
+    "utime": "1785178904767",
+    "ctime": "1784997051569",
+    "openBestPrice3d": 2.4437,
+    "openPriceDiff": 27.594074074074065,
+    "closeBestPrice3d": 4.7197,
+    "closePriceDiff": 38.97777777777777,
+    "entryReason": "",
+    "remark": "小成本尝试做多"
+  },
+  {
+    "positionId": "1461107723846955010",
+    "symbol": "AMZNUSDT",
+    "marginCoin": "USDT",
+    "holdSide": "short",
+    "openAvgPrice": "247.94",
+    "closeAvgPrice": "246.93",
+    "marginMode": "isolated",
+    "openTotalPos": "0.37",
+    "closeTotalPos": "0.37",
+    "pnl": "0.3737",
+    "netProfit": "0.3285371",
+    "totalFunding": "0.02807786",
+    "openFee": "-0.03669512",
+    "closeFee": "-0.03654564",
+    "posMode": "hedge_mode",
+    "cashDividend": "0.00000000",
+    "utime": "1784685950062",
+    "ctime": "1784081148110",
+    "openBestPrice3d": 258.57,
+    "openPriceDiff": 4.287327579253043,
+    "closeBestPrice3d": 231.37,
+    "closePriceDiff": 6.275711865773978,
+    "entryReason": "",
+    "remark": "测试，忽略"
+  },
+  {
     "positionId": "1452764001757442051",
     "symbol": "SYNUSDT",
     "marginCoin": "USDT",
@@ -134,7 +238,9 @@
     "closeBestPrice3d": 0.09682,
     "closePriceDiff": 16.39344262295081,
     "entryReason": "high_volume_breakout_shrink_stall",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "remark": "缩量第三天高位开仓，移动止盈出场，标杆操作。最高盈利 4.6R，从近 2 次的交易看，盈利达到 4R 后可以考虑直接止盈，继续观测"
   },
   {
@@ -197,7 +303,9 @@
     "openAvgPrice": "10.52",
     "closeAvgPrice": "7.45528",
     "marginMode": "crossed",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "openTotalPos": "10",
     "closeTotalPos": "10",
     "pnl": "30.6472",
@@ -245,7 +353,9 @@
     "symbol": "INUSDT",
     "marginCoin": "USDT",
     "holdSide": "short",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "openAvgPrice": "0.11145",
     "closeAvgPrice": "0.09658",
     "marginMode": "crossed",
@@ -280,7 +390,9 @@
     "netProfit": "14.93430153",
     "totalFunding": "0.00726618",
     "openFee": "-0.0157586",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "closeFee": "-0.03340603",
     "posMode": "hedge_mode",
     "ctime": "1779912089133",
@@ -353,7 +465,9 @@
     "openTotalPos": "20.2",
     "entryReason": "high_volume_breakout_shrink_stall",
     "closeTotalPos": "20.2",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "pnl": "18.20828",
     "netProfit": "18.4401964",
     "totalFunding": "0.25246061",
@@ -378,7 +492,9 @@
     "marginMode": "isolated",
     "openTotalPos": "2642",
     "closeTotalPos": "2642",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "pnl": "0.15852",
     "netProfit": "0.12696817",
     "totalFunding": "0",
@@ -448,7 +564,9 @@
     "positionId": "1430072885505568769",
     "symbol": "SKYAIUSDT",
     "marginCoin": "USDT",
-    "tags": ["record"],
+    "tags": [
+      "record"
+    ],
     "holdSide": "long",
     "openAvgPrice": "0.18137",
     "closeAvgPrice": "0.18808",
@@ -532,7 +650,9 @@
     "marginMode": "isolated",
     "openTotalPos": "20145",
     "closeTotalPos": "20145",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "pnl": "7.09104",
     "netProfit": "7.06364179",
     "totalFunding": "0.01398768",
@@ -628,7 +748,9 @@
     "positionId": "1423467873081896963",
     "symbol": "STGUSDT",
     "marginCoin": "USDT",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "holdSide": "short",
     "openAvgPrice": "0.272",
     "closeAvgPrice": "0.211",
@@ -1070,7 +1192,9 @@
   {
     "positionId": "1389490974127435781",
     "symbol": "ICNTUSDT",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "marginCoin": "USDT",
     "holdSide": "short",
     "openAvgPrice": "0.544",
@@ -1402,7 +1526,9 @@
     "positionId": "36b9dsfor",
     "remark": "260507: 回头看，第二次尝试破前高，马上被放量打回，第三次尝试突破前高，刚破就十字星，然后入场；吃到了下跌，成交量不满足我们的需求，但走势很符合充不上去。这种算是上涨后立刻可以入场的例子么？后续观测\n\n开仓和平仓节奏都很好。一开始看多，势头不对，反手做空。及时止盈保住了利润。这段时间交易转变风格，对多空走势的判断，自己有点混乱。最近得出几个可以尝试验证的纪律。空，持仓短，30%可止盈，50%必须清空；多，持仓可稍长，控制开仓成本",
     "symbol": "USELESSUSDT",
-    "tags": ["highlight"],
+    "tags": [
+      "highlight"
+    ],
     "holdSide": "short",
     "openTotalPos": "213",
     "leverage": "3",
