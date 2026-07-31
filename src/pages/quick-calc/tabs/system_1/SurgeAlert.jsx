@@ -20,8 +20,6 @@ const todayKey = () => {
   return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
 };
 
-const alertKey = (exchange, symbol) => `${todayKey()}:${exchange}:${symbol}`;
-
 const loadPct = () => {
   if (typeof window === 'undefined') return DEFAULT_PCT;
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -136,7 +134,9 @@ const fetchBitgetSurges = async (threshold) => {
   const list = Array.isArray(json?.data) ? json.data : [];
   return list
     .map(t => {
-      const open = parseFloat(t.openUtc);
+      // 必须用同一时间窗口：high24h / open24h
+      // 不要用 openUtc：UTC 开盘可能已大跌，而 high24h 仍含跌前高点 → 假暴涨
+      const open = parseFloat(t.open24h);
       const high = parseFloat(t.high24h);
       if (!open || open <= 0 || !high) return null;
       const ratio = high / open;
@@ -291,13 +291,17 @@ const SurgeAlert = () => {
           }),
         ]);
 
-        const merged = [...bitget, ...binance].sort((a, b) => b.ratio - a.ratio);
+        // 同币对两边都命中时只保留 Binance
+        const binanceSymbols = new Set(binance.map(i => i.symbol));
+        const bitgetOnly = bitget.filter(i => !binanceSymbols.has(i.symbol));
+        const merged = [...binance, ...bitgetOnly].sort((a, b) => b.ratio - a.ratio);
         setAlerts(merged);
         setLastPoll(new Date());
         setStatus(merged.length ? `命中 ${merged.length} 个` : '监控中 · 无命中');
 
+        // 按币对去重告警，避免 Bitget→Binance 切换时重复响铃
         const fresh = merged.filter(item => {
-          const key = alertKey(item.exchange, item.symbol);
+          const key = `${todayKey()}:${item.symbol}`;
           if (notifiedRef.current.has(key)) return false;
           notifiedRef.current.add(key);
           return true;

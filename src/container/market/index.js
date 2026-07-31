@@ -64,7 +64,7 @@ export function getTradeUrl(symbol, exchangeName = defaultExchange, marketType =
 
   if (ex.startsWith('binance')) {
     // Binance futures link
-    return `https://www.binance.com/en/futures/${full}`;
+    return `https://www.binance.com/zh-CN/futures/${full}`;
   }
 
   // Default to bitget pattern
@@ -73,7 +73,7 @@ export function getTradeUrl(symbol, exchangeName = defaultExchange, marketType =
   }
 
   // Fallback: no-exchange-specific link — point to Binance futures by default
-  return `https://www.binance.com/en/futures/${full}`;
+  return `https://www.binance.com/zh-CN/futures/${full}`;
 }
 
 export default {
