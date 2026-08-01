@@ -38,6 +38,10 @@ const WATCHING_SYMBOLS = new Set(watchData.filter(d => !d.achieved).map(d => d.s
 const MODE_SPIKE = 'spike'; // 过去4天内单日涨幅 ≥30% 或最高价高于最远一天开盘价的40%
 const MODE_HOLD = 'hold'; // 90天内最近一次暴涨 ≥30% 或连续 4 天最高价高于第一天开盘价 50%，且当前价仍高位
 
+const rowStripeProps = (_, index) => ({
+  style: (index+1) % 5 === 0 ? { backgroundColor: '#f5f5f5' } : {},
+});
+
 const { Text } = Typography;
 
 const fmtPrice = v => (v != null && Number.isFinite(v) ? v.toPrecision(5) : '—');
@@ -408,6 +412,7 @@ const PairSelector = () => {
               <Table
                 size="small"
                 pagination={{ pageSize: 100 }}
+                onRow={rowStripeProps}
                 dataSource={spikeResults}
                 locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
                 columns={[
@@ -466,6 +471,7 @@ const PairSelector = () => {
               <Table
                 size="small"
                 pagination={{ pageSize: 100 }}
+                onRow={rowStripeProps}
                 dataSource={holdResults}
                 locale={{ emptyText: spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据' }}
                 columns={[
