@@ -4,8 +4,11 @@ const POLL_MS = 15000;
 const DEFAULT_PCT = 90;
 const STORAGE_KEY = 'surge-alert-threshold-pct';
 const POS_KEY = 'surge-alert-pos';
+const HITS_KEY = 'surge-alert-hits-v1';
+const DISMISS_KEY = 'surge-alert-dismiss-v1';
 const PANEL_W = 220;
 const TITLE_FLASH_MS = 8000;
+const FETCH_TIMEOUT_MS = 12000;
 
 const BITGET_TICKERS = 'https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES';
 const BINANCE_TICKERS = 'https://fapi.binance.com/fapi/v1/ticker/24hr';
@@ -18,6 +21,37 @@ const linkOf = (exchange, symbol) =>
 const todayKey = () => {
   const d = new Date();
   return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+};
+
+const fetchJson = async (url) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const loadDayMap = (key) => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const all = JSON.parse(localStorage.getItem(key) || '{}');
+    const day = todayKey();
+    // 只保留当天，顺带清掉旧日期
+    const today = all[day] && typeof all[day] === 'object' ? all[day] : {};
+    if (Object.keys(all).length > 1 || !all[day]) {
+      localStorage.setItem(key, JSON.stringify({ [day]: today }));
+    }
+    return today;
+  } catch (_) {
+    return {};
+  }
+};
+
+const saveDayMap = (key, map) => {
+  localStorage.setItem(key, JSON.stringify({ [todayKey()]: map }));
 };
 
 const loadPct = () => {
@@ -129,15 +163,14 @@ const bringTabToFront = (label) => {
 };
 
 const fetchBitgetSurges = async (threshold) => {
-  const res = await fetch(BITGET_TICKERS);
-  const json = await res.json();
+  const json = await fetchJson(BITGET_TICKERS);
   const list = Array.isArray(json?.data) ? json.data : [];
   return list
     .map(t => {
-      // 必须用同一时间窗口：high24h / open24h
-      // 不要用 openUtc：UTC 开盘可能已大跌，而 high24h 仍含跌前高点 → 假暴涨
+      // 同一时间窗口：high24h / open24h（峰值涨幅）
       const open = parseFloat(t.open24h);
       const high = parseFloat(t.high24h);
+      const last = parseFloat(t.lastPr);
       if (!open || open <= 0 || !high) return null;
       const ratio = high / open;
       if (ratio < threshold) return null;
@@ -146,8 +179,9 @@ const fetchBitgetSurges = async (threshold) => {
         symbol: t.symbol,
         open,
         high,
+        last: last || high,
         ratio,
-        last: parseFloat(t.lastPr) || high,
+        lastRatio: last > 0 ? last / open : ratio,
         link: linkOf('bitget', t.symbol),
       };
     })
@@ -155,14 +189,14 @@ const fetchBitgetSurges = async (threshold) => {
 };
 
 const fetchBinanceSurges = async (threshold) => {
-  const res = await fetch(BINANCE_TICKERS);
-  const list = await res.json();
+  const list = await fetchJson(BINANCE_TICKERS);
   if (!Array.isArray(list)) return [];
   return list
     .filter(t => typeof t.symbol === 'string' && t.symbol.endsWith('USDT'))
     .map(t => {
       const open = parseFloat(t.openPrice);
       const high = parseFloat(t.highPrice);
+      const last = parseFloat(t.lastPrice);
       if (!open || open <= 0 || !high) return null;
       const ratio = high / open;
       if (ratio < threshold) return null;
@@ -171,8 +205,9 @@ const fetchBinanceSurges = async (threshold) => {
         symbol: t.symbol,
         open,
         high,
+        last: last || high,
         ratio,
-        last: parseFloat(t.lastPrice) || high,
+        lastRatio: last > 0 ? last / open : ratio,
         link: linkOf('binance', t.symbol),
       };
     })
@@ -203,6 +238,19 @@ const SurgeAlert = () => {
     setPctInput(String(initial));
     pctRef.current = initial;
     setPos(loadPos());
+
+    // 刷新后先恢复当日已命中记录，避免「一刷新就没了」
+    const threshold = 1 + initial / 100;
+    const hitsMap = loadDayMap(HITS_KEY);
+    const dismissMap = loadDayMap(DISMISS_KEY);
+    const restored = Object.values(hitsMap)
+      .filter(i => !dismissMap[i.symbol] && i.ratio >= threshold)
+      .map(i => ({ ...i, live: false }))
+      .sort((a, b) => b.ratio - a.ratio);
+    if (restored.length) {
+      setAlerts(restored);
+      setStatus(`命中 ${restored.length} 个（缓存，刷新中…）`);
+    }
   }, []);
 
   useEffect(() => {
@@ -294,295 +342,371 @@ const SurgeAlert = () => {
         // 同币对两边都命中时只保留 Binance
         const binanceSymbols = new Set(binance.map(i => i.symbol));
         const bitgetOnly = bitget.filter(i => !binanceSymbols.has(i.symbol));
-        const merged = [...binance, ...bitgetOnly].sort((a, b) => b.ratio - a.ratio);
-        setAlerts(merged);
-        setLastPoll(new Date());
-        setStatus(merged.length ? `命中 ${merged.length} 个` : '监控中 · 无命中');
+        const live = [...binance, ...bitgetOnly];
 
-        // 按币对去重告警，避免 Bitget→Binance 切换时重复响铃
-        const fresh = merged.filter(item => {
-          const key = `${todayKey()}:${item.symbol}`;
-          if (notifiedRef.current.has(key)) return false;
-          notifiedRef.current.add(key);
-          return true;
-        });
-
-        if (fresh.length) {
-          const label = fresh
-            .slice(0, 3)
-            .map(i => `${i.symbol}(+${((i.ratio - 1) * 100).toFixed(0)}%)`)
-            .join(' ');
-          setExpanded(true);
-          playAlertSound();
-          bringTabToFront(label);
-        }
-      } catch (e) {
-        console.error('[SurgeAlert]', e);
-        setStatus('拉取失败，重试中…');
-      } finally {
-        runningRef.current = false;
-      }
-    };
-
-    pollRef.current = poll;
-    poll();
-    const timer = setInterval(poll, POLL_MS);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
-      document.title = originalTitleRef.current;
-    };
-  }, []);
-
-  const applyPct = (raw) => {
-    const n = parseFloat(raw);
-    if (!Number.isFinite(n) || n <= 0) {
-      setPctInput(String(pct));
-      return;
-    }
-    setPct(n);
-    setPctInput(String(n));
-    pctRef.current = n;
-    localStorage.setItem(STORAGE_KEY, String(n));
-    // 阈值变了立刻重扫一轮
-    if (pollRef.current) pollRef.current();
+        const hitsMap = loadDayMap(HITS_KEY);
+        const dismissMap = loadDayMap(DISMISS_KEY);
+        const fresh = [];
+for (const item of live) {
+  const prev = hitsMap[item.symbol];
+  const isNew = !prev;
+  hitsMap[item.symbol] = {
+    symbol: item.symbol,
+    exchange: item.exchange,
+    link: item.link,
+    open: item.open,
+    high: item.high,
+    last: item.last,
+    // 锁定当日见过的最大峰值涨幅
+    ratio: Math.max(prev?.ratio || 0, item.ratio),
+    lastRatio: item.lastRatio,
+    firstSeen: prev?.firstSeen || Date.now(),
+    lastSeen: Date.now(),
+    live: true,
   };
-
-  const dismiss = (exchange, symbol) => {
-    setAlerts(prev => prev.filter(a => !(a.exchange === exchange && a.symbol === symbol)));
-  };
-
-  const hasHits = alerts.length > 0;
-
-  // 收起态：小角标，位置跟随拖拽坐标
-  if (!expanded) {
-    return (
-      <button
-        type="button"
-        onPointerDown={startDrag}
-        onClick={() => {
-          if (movedRef.current) return;
-          setExpanded(true);
-        }}
-        title={`${status}（可拖拽）`}
-        style={{
-          position: 'fixed',
-          left: pos.x,
-          top: pos.y,
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          height: 40,
-          padding: '0 14px',
-          border: hasHits ? '1px solid #ff4d4f' : '1px solid #d9d9d9',
-          borderRadius: 20,
-          background: hasHits ? '#fff1f0' : '#fff',
-          color: hasHits ? '#cf1322' : '#595959',
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: 'grab',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-          userSelect: 'none',
-          touchAction: 'none',
-        }}
-      >
-        暴涨
-        {hasHits ? (
-          <span
-            style={{
-              minWidth: 20,
-              height: 20,
-              borderRadius: 10,
-              background: '#ff4d4f',
-              color: '#fff',
-              fontSize: 12,
-              lineHeight: '20px',
-              textAlign: 'center',
-              padding: '0 6px',
-            }}
-          >
-            {alerts.length}
-          </span>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 400, color: '#8c8c8c' }}>监控中</span>
-        )}
-      </button>
-    );
+  if (isNew && !dismissMap[item.symbol]) {
+    fresh.push(hitsMap[item.symbol]);
   }
+}
 
-  return (
+// 已不在阈值内的历史命中：保留卡片，标记已回落
+const liveSet = new Set(live.map(i => i.symbol));
+Object.keys(hitsMap).forEach(sym => {
+  if (!liveSet.has(sym)) {
+    hitsMap[sym] = { ...hitsMap[sym], live: false };
+  }
+});
+
+saveDayMap(HITS_KEY, hitsMap);
+
+const merged = Object.values(hitsMap)
+  .filter(i => !dismissMap[i.symbol])
+  // 只展示峰值曾达到当前阈值的
+  .filter(i => i.ratio >= threshold)
+  .sort((a, b) => b.ratio - a.ratio);
+
+setAlerts(merged);
+setLastPoll(new Date());
+const liveCount = merged.filter(i => i.live).length;
+const cooledCount = merged.length - liveCount;
+const hiddenHint = typeof document !== 'undefined' && document.hidden
+  ? ' · 后台节流中'
+  : '';
+setStatus(
+  merged.length
+    ? `命中 ${merged.length} 个` +
+      (cooledCount ? `（回落 ${cooledCount}）` : '') +
+      hiddenHint
+    : `监控中 · 无命中${hiddenHint}`
+);
+
+// 按币对去重告警
+const toNotify = fresh.filter(item => {
+  const key = `${todayKey()}:${item.symbol}`;
+  if (notifiedRef.current.has(key)) return false;
+  notifiedRef.current.add(key);
+  return true;
+});
+
+if (toNotify.length) {
+  const label = toNotify
+    .slice(0, 3)
+    .map(i => `${i.symbol}(+${((i.ratio - 1) * 100).toFixed(0)}%)`)
+    .join(' ');
+  setExpanded(true);
+  playAlertSound();
+  bringTabToFront(label);
+}
+} catch (e) {
+console.error('[SurgeAlert]', e);
+setStatus('拉取失败，重试中…');
+} finally {
+runningRef.current = false;
+}
+};
+
+pollRef.current = poll;
+poll();
+const timer = setInterval(poll, POLL_MS);
+
+// 从后台切回前台时立刻扫一轮（避免 setInterval 被浏览器挂起）
+const onVisible = () => {
+if (document.visibilityState === 'visible' && pollRef.current) {
+pollRef.current();
+}
+};
+document.addEventListener('visibilitychange', onVisible);
+
+return () => {
+clearInterval(timer);
+document.removeEventListener('visibilitychange', onVisible);
+window.removeEventListener('click', unlockAudio);
+window.removeEventListener('keydown', unlockAudio);
+document.title = originalTitleRef.current;
+};
+}, []);
+
+const applyPct = (raw) => {
+const n = parseFloat(raw);
+if (!Number.isFinite(n) || n <= 0) {
+setPctInput(String(pct));
+return;
+}
+setPct(n);
+setPctInput(String(n));
+pctRef.current = n;
+localStorage.setItem(STORAGE_KEY, String(n));
+// 阈值变了立刻重扫一轮
+if (pollRef.current) pollRef.current();
+};
+
+const dismiss = (_exchange, symbol) => {
+const dismissMap = loadDayMap(DISMISS_KEY);
+dismissMap[symbol] = Date.now();
+saveDayMap(DISMISS_KEY, dismissMap);
+setAlerts(prev => prev.filter(a => a.symbol !== symbol));
+};
+
+const hasHits = alerts.length > 0;
+
+// 收起态：小角标，位置跟随拖拽坐标
+if (!expanded) {
+return (
+<button
+type="button"
+onPointerDown={startDrag}
+onClick={() => {
+  if (movedRef.current) return;
+  setExpanded(true);
+}}
+title={`${status}（可拖拽）`}
+style={{
+  position: 'fixed',
+  left: pos.x,
+  top: pos.y,
+  zIndex: 1000,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  height: 40,
+  padding: '0 14px',
+  border: hasHits ? '1px solid #ff4d4f' : '1px solid #d9d9d9',
+  borderRadius: 20,
+  background: hasHits ? '#fff1f0' : '#fff',
+  color: hasHits ? '#cf1322' : '#595959',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'grab',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+  userSelect: 'none',
+  touchAction: 'none',
+}}
+>
+暴涨
+{hasHits ? (
+  <span
+    style={{
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      background: '#ff4d4f',
+      color: '#fff',
+      fontSize: 12,
+      lineHeight: '20px',
+      textAlign: 'center',
+      padding: '0 6px',
+    }}
+  >
+    {alerts.length}
+  </span>
+) : (
+  <span style={{ fontSize: 11, fontWeight: 400, color: '#8c8c8c' }}>监控中</span>
+)}
+</button>
+);
+}
+
+return (
+<div
+style={{
+position: 'fixed',
+left: pos.x,
+top: pos.y,
+width: PANEL_W,
+maxHeight: '70vh',
+zIndex: 1000,
+display: 'flex',
+flexDirection: 'column',
+gap: 8,
+pointerEvents: 'auto',
+boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+borderRadius: 10,
+background: '#fff',
+border: '1px solid #ffa39e',
+overflow: 'hidden',
+userSelect: 'none',
+touchAction: 'none',
+}}
+>
+<div
+onPointerDown={startDrag}
+style={{
+  background: '#fff1f0',
+  padding: '10px 12px',
+  fontSize: 11,
+  color: '#a8071a',
+  lineHeight: 1.5,
+  borderBottom: '1px solid #ffccc7',
+  cursor: 'grab',
+}}
+title="按住拖拽"
+>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+  <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨监控</div>
+  <button
+    type="button"
+    onClick={() => setExpanded(false)}
+    style={{
+      border: 'none',
+      background: 'transparent',
+      color: '#8c8c8c',
+      cursor: 'pointer',
+      fontSize: 16,
+      lineHeight: 1,
+      padding: 0,
+    }}
+    title="收起"
+  >
+    −
+  </button>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#cf1322' }}>
+  <span>峰值 &gt;</span>
+  <input
+    type="number"
+    min="1"
+    step="1"
+    value={pctInput}
+    onChange={e => setPctInput(e.target.value)}
+    onBlur={() => applyPct(pctInput)}
+    onKeyDown={e => {
+      if (e.key === 'Enter') {
+        e.target.blur();
+      }
+    }}
+    style={{
+      width: 48,
+      height: 22,
+      border: '1px solid #ffa39e',
+      borderRadius: 4,
+      padding: '0 4px',
+      fontSize: 12,
+      color: '#a8071a',
+      background: '#fff',
+      outline: 'none',
+      cursor: 'text',
+    }}
+  />
+  <span>%</span>
+</div>
+<div style={{ color: '#8c8c8c', marginTop: 4, fontSize: 10 }}>
+  24h最高/开盘 · 须保持页面前台
+</div>
+<div style={{ color: '#8c8c8c', marginTop: 2 }}>{status}</div>
+{lastPoll && (
+  <div style={{ color: '#bfbfbf', fontSize: 10 }}>
+    {lastPoll.toLocaleTimeString()}
+  </div>
+)}
+</div>
+
+<div
+style={{
+  flex: 1,
+  overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  padding: '0 10px 10px',
+  maxHeight: 'calc(70vh - 110px)',
+  touchAction: 'auto',
+}}
+>
+{alerts.length === 0 ? (
+  <div
+    style={{
+      background: '#fafafa',
+      border: '1px dashed #d9d9d9',
+      borderRadius: 6,
+      padding: '10px 8px',
+      fontSize: 11,
+      color: '#bfbfbf',
+      textAlign: 'center',
+    }}
+  >
+    暂无命中
+  </div>
+) : (
+  alerts.map(item => (
     <div
+      key={item.symbol}
       style={{
-        position: 'fixed',
-        left: pos.x,
-        top: pos.y,
-        width: PANEL_W,
-        maxHeight: '70vh',
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        pointerEvents: 'auto',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-        borderRadius: 10,
         background: '#fff',
-        border: '1px solid #ffa39e',
-        overflow: 'hidden',
-        userSelect: 'none',
-        touchAction: 'none',
+        border: `1px solid ${item.live === false ? '#d9d9d9' : '#ffa39e'}`,
+        borderRadius: 6,
+        padding: '8px 8px 6px',
+        opacity: item.live === false ? 0.75 : 1,
       }}
     >
-      <div
-        onPointerDown={startDrag}
-        style={{
-          background: '#fff1f0',
-          padding: '10px 12px',
-          fontSize: 11,
-          color: '#a8071a',
-          lineHeight: 1.5,
-          borderBottom: '1px solid #ffccc7',
-          cursor: 'grab',
-        }}
-        title="按住拖拽"
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨监控</div>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: '#8c8c8c',
-              cursor: 'pointer',
-              fontSize: 16,
-              lineHeight: 1,
-              padding: 0,
-            }}
-            title="收起"
-          >
-            −
-          </button>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#cf1322' }}>
-          <span>涨幅 &gt;</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={pctInput}
-            onChange={e => setPctInput(e.target.value)}
-            onBlur={() => applyPct(pctInput)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.target.blur();
-              }
-            }}
-            style={{
-              width: 48,
-              height: 22,
-              border: '1px solid #ffa39e',
-              borderRadius: 4,
-              padding: '0 4px',
-              fontSize: 12,
-              color: '#a8071a',
-              background: '#fff',
-              outline: 'none',
-              cursor: 'text',
-            }}
-          />
-          <span>%</span>
-        </div>
-        <div style={{ color: '#8c8c8c', marginTop: 4 }}>{status}</div>
-        {lastPoll && (
-          <div style={{ color: '#bfbfbf', fontSize: 10 }}>
-            {lastPoll.toLocaleTimeString()}
-          </div>
-        )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <a
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: '#cf1322',
+            textDecoration: 'none',
+          }}
+        >
+          {item.symbol}
+        </a>
+        <button
+          type="button"
+          onClick={() => dismiss(item.exchange, item.symbol)}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#bfbfbf',
+            cursor: 'pointer',
+            fontSize: 12,
+            padding: 0,
+            lineHeight: 1,
+          }}
+          title="关闭"
+        >
+          ×
+        </button>
       </div>
-
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          padding: '0 10px 10px',
-          maxHeight: 'calc(70vh - 110px)',
-          touchAction: 'auto',
-        }}
-      >
-        {alerts.length === 0 ? (
-          <div
-            style={{
-              background: '#fafafa',
-              border: '1px dashed #d9d9d9',
-              borderRadius: 6,
-              padding: '10px 8px',
-              fontSize: 11,
-              color: '#bfbfbf',
-              textAlign: 'center',
-            }}
-          >
-            暂无命中
-          </div>
-        ) : (
-          alerts.map(item => (
-            <div
-              key={`${item.exchange}-${item.symbol}`}
-              style={{
-                background: '#fff',
-                border: '1px solid #ffa39e',
-                borderRadius: 6,
-                padding: '8px 8px 6px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <a
-                  href={item.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: '#cf1322',
-                    textDecoration: 'none',
-                  }}
-                >
-                  {item.symbol}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => dismiss(item.exchange, item.symbol)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#bfbfbf',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    padding: 0,
-                    lineHeight: 1,
-                  }}
-                  title="关闭"
-                >
-                  ×
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: '#389e0d', fontWeight: 600, marginTop: 2 }}>
-                +{((item.ratio - 1) * 100).toFixed(1)}%
-              </div>
-              <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
-                {item.exchange === 'binance' ? 'Binance' : 'Bitget'}
-              </div>
-            </div>
-          ))
-        )}
+      <div style={{ fontSize: 11, color: '#389e0d', fontWeight: 600, marginTop: 2 }}>
+        峰值 +{((item.ratio - 1) * 100).toFixed(1)}%
+      </div>
+      {item.lastRatio != null && (
+        <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 1 }}>
+          现价 +{((item.lastRatio - 1) * 100).toFixed(1)}%
+          {item.live === false ? ' · 已回落' : ''}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+        {item.exchange === 'binance' ? 'Binance' : 'Bitget'}
       </div>
     </div>
-  );
+  ))
+)}
+</div>
+</div>
+);
 };
 
 export default SurgeAlert;
