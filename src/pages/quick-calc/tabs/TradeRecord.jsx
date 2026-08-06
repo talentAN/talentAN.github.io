@@ -1,25 +1,173 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio, Tooltip } from 'antd';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio, Tooltip, Input } from 'antd';
 import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
-import { authenticatedRequest } from '../../../container/bitget/utils/auth';
-import { enrichRecordsWithBestPrices } from '../../../container/bitget/utils/record';
+import {
+  fetchAllTradeRecords,
+  getTradeLink,
+  EXCHANGE_LABEL,
+  ensureNotionals,
+} from '../../../container/trade-record/_index';
 import localRecords from '@root/contract-record/all.json';
-import { PATTERN_Array } from '@root/src/consts';
+import { PATTERN, PATTERN_Array } from '@root/src/consts';
 import moment from 'moment';
 
 const { RangePicker } = DatePicker;
+const { TextArea } = Input;
+
+/** 双击进入编辑，失焦写回并恢复文本展示 */
+const EditableTextCell = ({ value, multiline = false, emptyText = '-', onCommit }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? '');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(value ?? '');
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      // antd Input / TextArea
+      const el = inputRef.current?.resizableTextArea?.textArea || inputRef.current?.input || inputRef.current;
+      el?.focus?.();
+      if (el && typeof el.select === 'function' && !multiline) el.select();
+    }
+  }, [editing, multiline]);
+
+  const commit = () => {
+    onCommit(draft);
+    setEditing(false);
+  };
+
+  if (editing) {
+    if (multiline) {
+      return (
+        <TextArea
+          ref={inputRef}
+          value={draft}
+          autoSize={{ minRows: 2, maxRows: 8 }}
+          style={{ fontSize: 12 }}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+        />
+      );
+    }
+    return (
+      <Input
+        ref={inputRef}
+        size="small"
+        value={draft}
+        style={{ fontSize: 12, padding: '0 4px' }}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onPressEnter={commit}
+      />
+    );
+  }
+
+  const text = value != null && String(value).trim() !== '' ? String(value) : emptyText;
+  const body = (
+    <div
+      onDoubleClick={() => {
+        setDraft(value ?? '');
+        setEditing(true);
+      }}
+      title="双击编辑"
+      style={
+        multiline
+          ? {
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'normal',
+              wordBreak: 'break-word',
+              cursor: 'text',
+              minHeight: 18,
+            }
+          : {
+              cursor: 'text',
+              minHeight: 18,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }
+      }
+    >
+      {text}
+    </div>
+  );
+
+  if (multiline && text !== emptyText) {
+    return (
+      <Tooltip
+        title={<div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</div>}
+        placement="topLeft"
+        overlayStyle={{ background: '#fff', color: '#000' }}
+      >
+        {body}
+      </Tooltip>
+    );
+  }
+  return body;
+};
+
+/** 系统统计表展示的入场模式（按此顺序） */
+const STAT_SYSTEMS = [
+  {
+    key: PATTERN.high_volume_breakout_shrink_stall,
+    label: '放量冲关缩量滞涨',
+  },
+  {
+    key: PATTERN.surge_100_pullback,
+    label: '爆100回调',
+  },
+];
+
+const expectationTooltip = (
+  <div style={{ fontSize: 12, lineHeight: '1.8' }}>
+    <div style={{ marginBottom: 2, fontWeight: 'bold', color: '#fff' }}>
+      期望值 = 胜率×均盈R − 败率×均亏R
+    </div>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}>
+      <div>
+        <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
+        {'　负期望，长期必亏，系统不可用'}
+      </div>
+      <div>
+        <span style={{ color: '#faad14' }}>{'0 ~ 0.1'}</span>
+        {'　微弱正期望，接近保本，仍在噪音区间'}
+      </div>
+      <div>
+        <span style={{ color: '#73d13d' }}>{'0.1 ~ 0.2'}</span>
+        {'　轻微正期望，系统基本可行，继续验证'}
+      </div>
+      <div>
+        <span style={{ color: '#52c41a' }}>{'0.2 ~ 0.4'}</span>
+        {'　良好正期望，系统稳定可用'}
+      </div>
+      <div>
+        <span style={{ color: '#1890ff' }}>{'>  0.4'}</span>
+        {'　高期望，优质系统（注意样本量是否充足）'}
+      </div>
+    </div>
+  </div>
+);
 
 const TradeRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState(null);
   const [onlyHighlight, setOnlyHighlight] = useState(false);
-  const [onlyBurstVolume, setOnlyBurstVolume] = useState(false);
+  const [entryReasonFilter, setEntryReasonFilter] = useState(null);
   const [onlyTrades, setOnlyTrades] = useState(true);
   const [directionFilter, setDirectionFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => setCurrentPage(1), [directionFilter, onlyHighlight, onlyBurstVolume, onlyTrades]);
+  useEffect(
+    () => setCurrentPage(1),
+    [directionFilter, onlyHighlight, entryReasonFilter, onlyTrades]
+  );
 
   const recordsToDisplay = useMemo(() => {
     let temp =
@@ -27,14 +175,14 @@ const TradeRecord = () => {
     if (onlyHighlight) {
       temp = temp.filter(r => r.tags?.includes?.('highlight'));
     }
-    if (onlyBurstVolume) {
-      temp = temp.filter(r => r.entryReason === 'high_volume_breakout_shrink_stall');
+    if (entryReasonFilter) {
+      temp = temp.filter(r => r.entryReason === entryReasonFilter);
     }
     if (onlyTrades) {
       temp = temp.filter(r => r.type !== 'summery');
     }
     return temp;
-  }, [records, directionFilter, onlyHighlight, onlyBurstVolume, onlyTrades]);
+  }, [records, directionFilter, onlyHighlight, entryReasonFilter, onlyTrades]);
 
   const getDiffColor = diff => {
     if (!diff) return undefined;
@@ -43,10 +191,24 @@ const TradeRecord = () => {
     return 'red';
   };
 
-  const getProfitRateColor = rate => {
-    if (rate > 0) return 'green';
-    if (rate >= -50) return 'orange';
-    return 'red';
+  /** 尾部去 0；≥1000 → K，≥100万 → M */
+  const formatCompactNumber = value => {
+    const n = parseFloat(value);
+    if (value == null || value === '' || Number.isNaN(n)) return '-';
+    const sign = n < 0 ? '-' : '';
+    const abs = Math.abs(n);
+    let scaled = abs;
+    let suffix = '';
+    if (abs >= 1e6) {
+      scaled = abs / 1e6;
+      suffix = 'M';
+    } else if (abs >= 1e3) {
+      scaled = abs / 1e3;
+      suffix = 'K';
+    }
+    const decimals = suffix ? 2 : 8;
+    let text = scaled.toFixed(decimals).replace(/\.?0+$/, '');
+    return `${sign}${text}${suffix}`;
   };
 
   const getEntryReasonLabel = reason => {
@@ -83,6 +245,7 @@ const TradeRecord = () => {
     let diff10to20 = 0;
     let diff20to40 = 0;
     let diffGt40 = 0;
+    let maxDrawdown = null;
 
     filteredRecords.forEach(record => {
       const profit = parseFloat(record.netProfit);
@@ -110,6 +273,13 @@ const TradeRecord = () => {
           diffGt40++;
         }
       }
+
+      // 取各笔手填最大回撤的峰值（按绝对值）
+      const dd = parseFloat(record.maxDrawdown);
+      if (!Number.isNaN(dd)) {
+        const mag = Math.abs(dd);
+        if (maxDrawdown == null || mag > maxDrawdown) maxDrawdown = mag;
+      }
     });
 
     const totalCount = filteredRecords.length;
@@ -128,12 +298,154 @@ const TradeRecord = () => {
       avgProfitR,
       avgLossR,
       expectation,
+      maxDrawdown,
       diffLt10,
       diff10to20,
       diff20to40,
       diffGt40,
     };
   };
+
+  const systemStatsRows = useMemo(() => {
+    return STAT_SYSTEMS.map(system => {
+      const stats = calculatePatternStats(system.key);
+      const name = `${system.label}（${stats ? stats.totalCount : 0}）`;
+      if (!stats) {
+        return {
+          key: system.key,
+          patternKey: system.key,
+          name,
+          winRate: '-',
+          avgPL: '-',
+          expectation: '-',
+          expectationNum: null,
+          maxDrawdown: '-',
+          diffLt10: '-',
+          diff10to20: '-',
+          diff20to40: '-',
+          diffGt40: '-',
+        };
+      }
+      const total = stats.diffLt10 + stats.diff10to20 + stats.diff20to40 + stats.diffGt40;
+      const pct = n => (total > 0 ? ((n / total) * 100).toFixed(1) : '0');
+      return {
+        key: system.key,
+        patternKey: system.key,
+        name,
+        winRate: `${(stats.winRate * 100).toFixed(2)}%`,
+        avgPL: `${stats.avgProfitR.toFixed(2)}/${stats.avgLossR.toFixed(2)}`,
+        expectation: stats.expectation.toFixed(4),
+        expectationNum: stats.expectation,
+        maxDrawdown:
+          stats.maxDrawdown == null ? '-' : Number(stats.maxDrawdown).toFixed(2)+'%',
+        diffLt10: `${stats.diffLt10}(${pct(stats.diffLt10)}%)`,
+        diff10to20: `${stats.diff10to20}(${pct(stats.diff10to20)}%)`,
+        diff20to40: `${stats.diff20to40}(${pct(stats.diff20to40)}%)`,
+        diffGt40: `${stats.diffGt40}(${pct(stats.diffGt40)}%)`,
+      };
+    });
+  }, [records, directionFilter]);
+
+  const toggleEntryReasonFilter = reason => {
+    setEntryReasonFilter(prev => (prev === reason ? null : reason));
+  };
+
+  const systemStatsColumns = [
+    {
+      title: '系统',
+      dataIndex: 'name',
+      key: 'name',
+      width: 160,
+      render: (name, row) => (
+        <span
+          style={{
+            cursor: 'pointer',
+            color: '#1890ff',
+            borderBottom: '1px dashed #1890ff',
+            fontWeight: entryReasonFilter === row.patternKey ? 'bold' : 'normal',
+          }}
+          title={entryReasonFilter === row.patternKey ? '点击取消筛选' : '点击只展示此类'}
+          onClick={() => toggleEntryReasonFilter(row.patternKey)}
+        >
+          {name}
+        </span>
+      ),
+    },
+    {
+      title: '胜率',
+      dataIndex: 'winRate',
+      key: 'winRate',
+      width: 72,
+      render: v => <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{v}</span>,
+    },
+    {
+      title: '均盈/均亏',
+      dataIndex: 'avgPL',
+      key: 'avgPL',
+      width: 88,
+      render: v => <span style={{ fontWeight: 'bold', color: '#52c41a' }}>{v}</span>,
+    },
+    {
+      title: '期望',
+      dataIndex: 'expectation',
+      key: 'expectation',
+      width: 72,
+      render: (v, row) =>
+        v === '-' ? (
+          '-'
+        ) : (
+          <Tooltip title={expectationTooltip}>
+            <span
+              style={{
+                fontWeight: 'bold',
+                color: row.expectationNum >= 0 ? '#52c41a' : '#f5222d',
+                borderBottom: '1px dashed currentColor',
+                cursor: 'help',
+              }}
+            >
+              {v}
+            </span>
+          </Tooltip>
+        ),
+    },
+    {
+      title: '最大回撤',
+      dataIndex: 'maxDrawdown',
+      key: 'maxDrawdown',
+      width: 72,
+      render: v => (
+        <span style={{ fontWeight: 'bold', color: v === '-' ? undefined : '#f5222d' }}>{v}</span>
+      ),
+    },
+    {
+      title: '开仓最优差<10%',
+      dataIndex: 'diffLt10',
+      key: 'diffLt10',
+      width: 96,
+      render: v => <span style={{ fontWeight: 'bold', color: '#52c41a' }}>{v}</span>,
+    },
+    {
+      title: '10-20%',
+      dataIndex: 'diff10to20',
+      key: 'diff10to20',
+      width: 80,
+      render: v => <span style={{ fontWeight: 'bold', color: '#13c2c2' }}>{v}</span>,
+    },
+    {
+      title: '20-40%',
+      dataIndex: 'diff20to40',
+      key: 'diff20to40',
+      width: 80,
+      render: v => <span style={{ fontWeight: 'bold', color: '#faad14' }}>{v}</span>,
+    },
+    {
+      title: '>40%',
+      dataIndex: 'diffGt40',
+      key: 'diffGt40',
+      width: 80,
+      render: v => <span style={{ fontWeight: 'bold', color: '#f5222d' }}>{v}</span>,
+    },
+  ];
 
   const columns = [
     {
@@ -149,7 +461,7 @@ const TradeRecord = () => {
                 {record.content}
               </div>
             ),
-            props: { colSpan: 14 },
+            props: { colSpan: 11 },
           };
         }
         return (
@@ -169,11 +481,7 @@ const TradeRecord = () => {
       render: (symbol, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <a
-            href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a href={getTradeLink(record)} target="_blank" rel="noopener noreferrer">
             {symbol}
           </a>
         );
@@ -192,20 +500,19 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '数量',
-      dataIndex: 'openTotalPos',
-      key: 'openTotalPos',
-      width: 80,
-      render: (_, record) => (record.type === 'summery' ? { props: { colSpan: 0 } } : _),
-    },
-    {
-      title: '杠杆',
-      dataIndex: 'leverage',
-      key: 'leverage',
-      width: 80,
-      render: (lev, record) => {
+      title: '开/平仓价值',
+      key: 'notional',
+      width: 100,
+      align: 'right',
+      render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        return lev ? `${lev}x` : '-';
+        return (
+          <div style={{ whiteSpace: 'pre-wrap' }}>
+            {formatCompactNumber(record.openNotional)}
+            {'\n'}
+            {formatCompactNumber(record.closeNotional)}
+          </div>
+        );
       },
     },
     {
@@ -217,15 +524,15 @@ const TradeRecord = () => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
           <div style={{ whiteSpace: 'pre-wrap' }}>
-            {parseFloat(record.openAvgPrice).toFixed(4)}
+            {formatCompactNumber(record.openAvgPrice)}
             {'\n'}
-            {parseFloat(record.closeAvgPrice).toFixed(4)}
+            {formatCompactNumber(record.closeAvgPrice)}
           </div>
         );
       },
     },
     {
-      title: '开仓最优价/最优差',
+      title: '开仓最优差',
       key: 'openBestPriceDiff',
       width: 120,
       align: 'right',
@@ -233,7 +540,7 @@ const TradeRecord = () => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
           <div style={{ whiteSpace: 'pre-wrap' }}>
-            {record.openBestPrice3d ? parseFloat(record.openBestPrice3d).toFixed(4) : '-'}
+            {record.openBestPrice3d != null ? formatCompactNumber(record.openBestPrice3d) : '-'}
             {'\n'}
             {record.openPriceDiff ? (
               <span style={{ color: getDiffColor(record.openPriceDiff) }}>
@@ -247,19 +554,53 @@ const TradeRecord = () => {
       },
     },
     {
-      title: '收益比',
-      dataIndex: 'profitRate',
-      key: 'profitRate',
+      title: '最大回撤',
+      dataIndex: 'maxDrawdown',
+      key: 'maxDrawdown',
+      width: 88,
+      
+      render: (val, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        const display =
+          val != null && String(val).trim() !== ''
+            ? String(val).includes('%')
+              ? String(val)
+              : `${val}%`
+            : undefined;
+        return (
+          <EditableTextCell
+            value={display}
+            emptyText="-"
+            onCommit={next => {
+              // 存纯数字，展示时再加 %
+              const cleaned = String(next).replace(/%/g, '').trim();
+              setRecords(prev =>
+                prev.map(r =>
+                  r.positionId === record.positionId ? { ...r, maxDrawdown: cleaned } : r
+                )
+              );
+            }}
+          />
+        );
+      },
+    },
+    {
+      title: '收益率',
+      key: 'returnRate',
       width: 80,
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        const openPrice = parseFloat(record.openAvgPrice);
-        const closePrice = parseFloat(record.closeAvgPrice);
-        const direction = record.holdSide === 'long' ? 1 : -1;
-        const profitRate =
-          ((closePrice - openPrice) / openPrice) * direction * (record.leverage || 3) * 100;
+        const openN = parseFloat(record.openNotional);
+        const closeN = parseFloat(record.closeNotional);
+        if (!openN || Number.isNaN(openN) || Number.isNaN(closeN)) return '-';
+        // （开仓价值 - 平仓价值）/ 开仓价值 × 开仓方向
+        // 开仓方向：做多 -1、做空 +1，保证顺向盈利为正
+        const openDirection = record.holdSide === 'long' ? -1 : 1;
+        const returnRate = ((openN - closeN) / openN) * openDirection * 100;
         return (
-          <span style={{ color: getProfitRateColor(profitRate) }}>{profitRate.toFixed(2)}%</span>
+          <span style={{ color: returnRate >= 0 ? 'green' : 'red' }}>
+            {returnRate.toFixed(2)}%
+          </span>
         );
       },
     },
@@ -290,19 +631,21 @@ const TradeRecord = () => {
       render: (reason, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const label = getEntryReasonLabel(reason);
-        if (reason === 'high_volume_breakout_shrink_stall') {
+        const isStatSystem = STAT_SYSTEMS.some(s => s.key === reason);
+        if (isStatSystem) {
+          const active = entryReasonFilter === reason;
           return (
             <span
-              style={{ cursor: 'pointer', borderBottom: '1px dashed #1890ff', color: '#1890ff' }}
-              onClick={() => {
-                const filtered = records.filter(
-                  r => r.type !== 'summery' && r.entryReason === 'high_volume_breakout_shrink_stall'
-                );
-                navigator.clipboard
-                  .writeText(JSON.stringify(filtered, null, 2))
-                  .then(() => message.success(`已复制 ${filtered.length} 条记录`))
-                  .catch(() => message.error('复制失败'));
+              style={{
+                cursor: 'pointer',
+                borderBottom: '1px dashed #1890ff',
+                color: '#1890ff',
+                fontWeight: active ? 'bold' : 'normal',
+                background: active ? 'rgba(24,144,255,0.08)' : undefined,
+                padding: active ? '0 2px' : undefined,
               }}
+              title={active ? '点击取消筛选' : '点击只展示此类'}
+              onClick={() => toggleEntryReasonFilter(reason)}
             >
               {label}
             </span>
@@ -319,27 +662,17 @@ const TradeRecord = () => {
       fixed: 'right',
       render: (text, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
-        const content = text || '-';
         return (
-          <Tooltip
-            title={<div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>}
-            placement="topLeft"
-            overlayStyle={{ background: '#fff', color: '#000' }}
-          >
-            <div
-              style={{
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'normal',
-                wordBreak: 'break-word',
-              }}
-            >
-              {content}
-            </div>
-          </Tooltip>
+          <EditableTextCell
+            value={text}
+            multiline
+            emptyText="-"
+            onCommit={next => {
+              setRecords(prev =>
+                prev.map(r => (r.positionId === record.positionId ? { ...r, remark: next } : r))
+              );
+            }}
+          />
         );
       },
     },
@@ -348,9 +681,6 @@ const TradeRecord = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const localData = (localRecords || []).filter(r => !r.ignore);
-      console.log(`本地数据: ${localData.length} 条`);
-
       const requestParams = {};
       if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
         const latestAllowedEnd = moment().subtract(1, 'day').startOf('day').valueOf();
@@ -360,66 +690,30 @@ const TradeRecord = () => {
         requestParams.endTime = safeEndTime.toString();
       }
 
-      let response = null;
-      try {
-        response = await authenticatedRequest(
-          'GET',
-          '/api/v2/mix/position/history-position',
-          requestParams
-        );
-      } catch (remoteError) {
-        console.warn('Bitget history-position 请求失败，使用本地数据回退', remoteError);
-        setRecords(localData);
-        return;
-      }
-
-      if (response?.code !== '00000') {
-        console.warn('Bitget history-position API 返回错误，使用本地数据回退', response);
-        setRecords(localData);
-        return;
-      }
-
-      const remoteList = response.data?.list || [];
-      console.log(`远程数据: ${remoteList.length} 条`);
-
-      const enrichedRemote = await enrichRecordsWithBestPrices(remoteList);
-
-      const localMap = new Map(localData.map(r => [r.positionId, r]));
-      const remoteMap = new Map(enrichedRemote.map(r => [r.positionId, r]));
-      const mergedData = [];
-
-      // 第一步：加入 enrichedRemote 中不在 localMap 里的新数据（优先展示在前面）
-      enrichedRemote.forEach(remote => {
-        if (!localMap.has(remote.positionId)) {
-          mergedData.push({
-            ...remote,
-            entryReason: remote.entryReason || '',
-            remark: remote.remark || '',
-          });
-        }
-      });
-
-      // 第二步：按 localData 的原始顺序遍历，如果 enrichedRemote 有对应数据就替换，否则保持原样
-      localData.forEach(local => {
-        if (remoteMap.has(local.positionId)) {
-          const remote = remoteMap.get(local.positionId);
-          mergedData.push({
-            ...local,
-            openBestPrice3d: remote.openBestPrice3d,
-            openPriceDiff: remote.openPriceDiff,
-            closeBestPrice3d: remote.closeBestPrice3d,
-            closePriceDiff: remote.closePriceDiff,
-          });
-        } else {
-          mergedData.push(local);
-        }
-      });
-
+      const { records: mergedData, stats, errors, fallback } = await fetchAllTradeRecords(
+        requestParams
+      );
       setRecords(mergedData);
-      message.success(`合并成功，共 ${mergedData.length} 条记录`);
+
+      const parts = Object.entries(stats || {})
+        .map(([ex, n]) => `${EXCHANGE_LABEL[ex] || ex} ${n}`)
+        .join(' / ');
+
+      if (fallback) {
+        message.warning(
+          `远程拉取失败，已回退本地 ${mergedData.length} 条${errors?.length ? `（${errors.map(e => e.message).join('; ')}）` : ''}`
+        );
+      } else if (errors?.length) {
+        message.warning(
+          `合并 ${mergedData.length} 条（${parts}）；部分失败：${errors.map(e => `${EXCHANGE_LABEL[e.exchange] || e.exchange} ${e.message}`).join('; ')}`
+        );
+      } else {
+        message.success(`合并成功，共 ${mergedData.length} 条（${parts}）`);
+      }
     } catch (error) {
       console.warn('TradeRecord fetchData 异常，使用本地数据回退', error);
-      setRecords((localRecords || []).filter(r => !r.ignore));
+      setRecords((localRecords || []).filter(r => !r.ignore).map(ensureNotionals));
+      message.error(error?.message || '拉取失败，已回退本地数据');
     } finally {
       setLoading(false);
     }
@@ -451,14 +745,15 @@ const TradeRecord = () => {
   }, []);
 
   return (
-    <Card bodyStyle={{ padding: 6 }}>
+    <Card bodyStyle={{ padding: 6, fontSize: 12 }}>
       <div
         style={{
-          marginBottom: 0,
+          marginBottom: 8,
           display: 'flex',
           flexWrap: 'wrap',
           gap: 4,
           alignItems: 'center',
+          fontSize: 12,
         }}
       >
         <Radio.Group
@@ -491,146 +786,37 @@ const TradeRecord = () => {
           onChange={e => {
             setOnlyHighlight(e.target.checked);
           }}
-          style={{ fontSize: 12 }}
         >
           只展示标杆
-        </Checkbox>
-        <Checkbox
-          checked={onlyBurstVolume}
-          onChange={e => {
-            setOnlyBurstVolume(e.target.checked);
-          }}
-          style={{ fontSize: 12 }}
-        >
-          只展示放量冲关缩量滞涨
         </Checkbox>
         <Checkbox
           checked={onlyTrades}
           onChange={e => {
             setOnlyTrades(e.target.checked);
           }}
-          style={{ fontSize: 12 }}
         >
           只展示成交记录
         </Checkbox>
       </div>
 
-      {/* 统计信息 */}
-      {(() => {
-        const stats = calculatePatternStats('high_volume_breakout_shrink_stall');
-        if (!stats) return null;
-
-        const total = stats.diffLt10 + stats.diff10to20 + stats.diff20to40 + stats.diffGt40;
-        const pct10 = total > 0 ? ((stats.diffLt10 / total) * 100).toFixed(1) : 0;
-        const pct20 = total > 0 ? ((stats.diff10to20 / total) * 100).toFixed(1) : 0;
-        const pct40 = total > 0 ? ((stats.diff20to40 / total) * 100).toFixed(1) : 0;
-        const pctGt = total > 0 ? ((stats.diffGt40 / total) * 100).toFixed(1) : 0;
-
-        const items = [
-          { label: '胜率', value: `${(stats.winRate * 100).toFixed(2)}%`, color: '#1890ff' },
-          {
-            label: '均盈/均亏',
-            value: `${stats.avgProfitR.toFixed(2)}/${stats.avgLossR.toFixed(2)}`,
-            color: '#52c41a',
-          },
-          {
-            label: '期望',
-            value: stats.expectation.toFixed(4),
-            color: '#52c41a',
-            isExpectation: true,
-          },
-          { label: '开仓最优差<10%', value: `${stats.diffLt10}(${pct10}%)`, color: '#52c41a' },
-          { label: '开仓最优差10-20%', value: `${stats.diff10to20}(${pct20}%)`, color: '#13c2c2' },
-          { label: '开仓最优差20-40%', value: `${stats.diff20to40}(${pct40}%)`, color: '#faad14' },
-          { label: '开仓最优差>40%', value: `${stats.diffGt40}(${pctGt}%)`, color: '#f5222d' },
-        ];
-
-        return (
-          <div style={{ marginBottom: 0, fontSize: 12 }}>
-            放量冲关缩量滞涨(1-30)
-            {/* 标题行 */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(8, 1fr)',
-                gap: 4,
-                color: '#666',
-                marginBottom: 0,
-              }}
-            >
-              {items.map((item, idx) => (
-                <div key={idx}>{item.label}</div>
-              ))}
-            </div>
-            {/* 数据行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4 }}>
-              {items.map((item, idx) => {
-                if (item.isExpectation) {
-                  return (
-                    <Tooltip
-                      key={idx}
-                      title={
-                        <div style={{ fontSize: 12, lineHeight: '1.8' }}>
-                          <div style={{ marginBottom: 2, fontWeight: 'bold', color: '#fff' }}>
-                            期望值 = 胜率×均盈R − 败率×均亏R
-                          </div>
-                          <div
-                            style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}
-                          >
-                            <div>
-                              <span style={{ color: '#ff4d4f' }}>{'< 0'}</span>
-                              {'　负期望，长期必亏，系统不可用'}
-                            </div>
-                            <div>
-                              <span style={{ color: '#faad14' }}>{'0 ~ 0.1'}</span>
-                              {'　微弱正期望，接近保本，仍在噪音区间'}
-                            </div>
-                            <div>
-                              <span style={{ color: '#73d13d' }}>{'0.1 ~ 0.2'}</span>
-                              {'　轻微正期望，系统基本可行，继续验证'}
-                            </div>
-                            <div>
-                              <span style={{ color: '#52c41a' }}>{'0.2 ~ 0.4'}</span>
-                              {'　良好正期望，系统稳定可用'}
-                            </div>
-                            <div>
-                              <span style={{ color: '#1890ff' }}>{'>  0.4'}</span>
-                              {'　高期望，优质系统（注意样本量是否充足）'}
-                            </div>
-                          </div>
-                        </div>
-                      }
-                    >
-                      <span
-                        style={{
-                          fontWeight: 'bold',
-                          color: stats.expectation >= 0 ? '#52c41a' : '#f5222d',
-                          borderBottom: '1px dashed currentColor',
-                          cursor: 'help',
-                        }}
-                      >
-                        {item.value}
-                      </span>
-                    </Tooltip>
-                  );
-                }
-
-                return (
-                  <div key={idx} style={{ fontWeight: 'bold', color: item.color }}>
-                    {item.value}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
+      {/* 系统统计 */}
+      <Table
+        columns={systemStatsColumns}
+        dataSource={systemStatsRows}
+        pagination={false}
+        size="small"
+        style={{ marginBottom: 8, fontSize: 12, width: 'max-content', maxWidth: '100%' }}
+        className="trade-record-table trade-record-stats-table"
+        rowKey="key"
+      />
 
       <Table
         columns={columns}
         dataSource={recordsToDisplay}
         loading={loading}
         size="small"
+        style={{ fontSize: 12 }}
+        className="trade-record-table"
         rowKey={record => record.positionId}
         pagination={{
           pageSize: 100,
@@ -641,6 +827,23 @@ const TradeRecord = () => {
         }}
         scroll={{ x: 'max-content' }}
       />
+      <style>{`
+        .trade-record-table,
+        .trade-record-table .ant-table,
+        .trade-record-table .ant-table-thead > tr > th,
+        .trade-record-table .ant-table-tbody > tr > td,
+        .trade-record-table .ant-pagination {
+          font-size: 12px !important;
+        }
+        .trade-record-stats-table .ant-table-thead > tr > th,
+        .trade-record-stats-table .ant-table-tbody > tr > td {
+          padding: 2px 6px !important;
+          white-space: nowrap;
+        }
+        .trade-record-stats-table .ant-table-container table {
+          width: max-content !important;
+        }
+      `}</style>
     </Card>
   );
 };
