@@ -14,12 +14,9 @@ import {
   Progress,
   Segmented,
   message,
-  Select,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getTradingPairs, getFutureKlineData } from '@root/src/container/market';
-import { getTradeUrl } from '@root/src/container/market';
-import { useMarket } from '@root/src/container/market/MarketContext';
+import { getMergedTradingPairs, getFutureKlineData, getTradeUrl } from '@root/src/container/market';
 import watchData from '@root/contract-record/watch.json';
 import moment from 'moment';
 import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
@@ -57,7 +54,6 @@ const PairSelector = () => {
   const [spikeProgress, setSpikeProgress] = useState({ checked: 0, total: 0 });
   const [spikeRunning, setSpikeRunning] = useState(false);
   const abortRef = useRef(false);
-  const { exchange, setExchange, registerExchange, availableExchanges } = useMarket();
 
   const calculatePriceChange = (klineData, days) => {
     if (!klineData || klineData.length < days) return null;
@@ -85,7 +81,7 @@ const PairSelector = () => {
           {symbol.replace('USDT', '')}{' '}
           {latest ? (
             <a
-              href={getTradeUrl(`${symbol}USDT`, exchange)}
+              href={getTradeUrl(`${symbol}USDT`, 'binance')}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: 'inherit' }}
@@ -130,7 +126,7 @@ const PairSelector = () => {
             startTime,
             endTime,
           },
-          exchange
+          'binance'
         ),
         getFutureKlineData(
           {
@@ -140,7 +136,7 @@ const PairSelector = () => {
             startTime,
             endTime,
           },
-          exchange
+          'binance'
         ),
       ]);
 
@@ -172,7 +168,7 @@ const PairSelector = () => {
     abortRef.current = true;
     setSpikeRunning(false);
     setLoading(true);
-    getTradingPairs({}, exchange)
+    getMergedTradingPairs()
       .then(res => {
         setTradingPairs(res);
       })
@@ -185,7 +181,7 @@ const PairSelector = () => {
     setSpikeRunning(true);
     setSpikeResults([]);
 
-    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs({}, exchange);
+    const pairs = tradingPairs.length ? tradingPairs : await getMergedTradingPairs();
     if (!tradingPairs.length) setTradingPairs(pairs);
 
     const startTime = moment
@@ -199,7 +195,7 @@ const PairSelector = () => {
     const matched = [];
     for (let i = 0; i < pairs.length; i++) {
       if (abortRef.current) break;
-      const { symbol } = pairs[i];
+      const { symbol, exchange: pairExchange } = pairs[i];
       try {
         const res = await getFutureKlineData(
           {
@@ -209,7 +205,7 @@ const PairSelector = () => {
             startTime,
             endTime,
           },
-          exchange
+          pairExchange
         );
         const candles = (Array.isArray(res?.data) ? res.data : []).sort(
           (a, b) => Number(a[0]) - Number(b[0])
@@ -227,8 +223,9 @@ const PairSelector = () => {
         if (qualified && !WATCHING_SYMBOLS.has(symbol)) {
           const trigger = spikeSignal ? (peakSignal ? '两者' : '单日暴涨') : '窗口峰值';
           matched.push({
-            key: symbol,
+            key: `${pairExchange}:${symbol}`,
             symbol,
+            exchange: pairExchange,
             date: spikeSignal?.date || peakSignal?.date,
             rise: spikeSignal?.rise,
             firstOpen: peakSignal?.firstOpen,
@@ -250,7 +247,7 @@ const PairSelector = () => {
     setSpikeRunning(true);
     setHoldResults([]);
 
-    const pairs = tradingPairs.length ? tradingPairs : await getTradingPairs({}, exchange);
+    const pairs = tradingPairs.length ? tradingPairs : await getMergedTradingPairs();
     if (!tradingPairs.length) setTradingPairs(pairs);
 
     const endTime = moment.utc().valueOf();
@@ -259,7 +256,7 @@ const PairSelector = () => {
     const matched = [];
     for (let i = 0; i < pairs.length; i++) {
       if (abortRef.current) break;
-      const { symbol } = pairs[i];
+      const { symbol, exchange: pairExchange } = pairs[i];
       try {
         // 只传 endTime + limit，避免触发"区间不能超过90天"限制
         const res = await getFutureKlineData(
@@ -269,7 +266,7 @@ const PairSelector = () => {
             limit: HOLD_CONFIG.klineLimit,
             endTime,
           },
-          exchange
+          pairExchange
         );
         const candles = (Array.isArray(res?.data) ? res.data : []).sort(
           (a, b) => Number(a[0]) - Number(b[0])
@@ -284,8 +281,9 @@ const PairSelector = () => {
           const yesterdayHigh =
             candles.length >= 2 ? parseFloat(candles[candles.length - 2][2]) : null;
           matched.push({
-            key: symbol,
+            key: `${pairExchange}:${symbol}`,
             symbol,
+            exchange: pairExchange,
             spikeDate: holdSignal.referenceDate,
             spikeRise: holdSignal.referenceRise || '—',
             spikeClose: holdSignal.spikeClose,
@@ -306,12 +304,12 @@ const PairSelector = () => {
 
   const handleRun = () => (mode === MODE_SPIKE ? runSpikeFilter() : runHoldFilter());
 
-  // Load data on mount and whenever selected exchange changes
+  // 合并拉取两所币对 + 大盘数据（不再切换交易所）
   useEffect(() => {
     loadData();
     fetchMarketData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exchange]);
+  }, []);
 
   return (
     <>
@@ -353,18 +351,6 @@ const PairSelector = () => {
                 />
               </Space>
               <Space align="center">
-                <Select
-                  size="small"
-                  value={exchange}
-                  onChange={v => setExchange(v)}
-                  style={{ width: 140 }}
-                >
-                  {(availableExchanges || []).map(e => (
-                    <Select.Option key={e} value={e}>
-                      {e.charAt(0).toUpperCase() + e.slice(1)}
-                    </Select.Option>
-                  ))}
-                </Select>
                 <PositionCalculatorButton />
                 <Button
                   type="primary"
@@ -421,9 +407,9 @@ const PairSelector = () => {
                     dataIndex: 'symbol',
                     key: 'symbol',
                     width: 150,
-                    render: symbol => (
+                    render: (symbol, row) => (
                       <a
-                        href={getTradeUrl(symbol, exchange)}
+                        href={getTradeUrl(symbol, row.exchange)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -439,6 +425,7 @@ const PairSelector = () => {
                           dataIndex: 'rise',
                           key: 'rise',
                           width: 100,
+                          sorter: (a, b) => (parseFloat(a.rise) || 0) - (parseFloat(b.rise) || 0),
                           render: v => (v ? <Tag color="green">+{v}%</Tag> : '—'),
                         },
                       ]
@@ -449,6 +436,8 @@ const PairSelector = () => {
                           title: '开盘价/最高价',
                           key: 'openHigh',
                           width: 180,
+                          sorter: (a, b) =>
+                            (parseFloat(a.peakRatio) || 0) - (parseFloat(b.peakRatio) || 0),
                           render: (_, r) =>
                             r.firstOpen != null && r.maxHigh != null ? (
                               <span>
@@ -480,9 +469,9 @@ const PairSelector = () => {
                     dataIndex: 'symbol',
                     key: 'symbol',
                     width: 150,
-                    render: symbol => (
+                    render: (symbol, row) => (
                       <a
-                        href={getTradeUrl(symbol, exchange)}
+                        href={getTradeUrl(symbol, row.exchange)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

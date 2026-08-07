@@ -33,6 +33,30 @@ export async function getTradingPairs(opts = {}, exchange) {
   return api.getTradingPairs(opts);
 }
 
+/**
+ * 合并 Binance + Bitget USDT 合约币对。
+ * 两所都有的 symbol 只保留 Binance；仅 Bitget 有的保留 Bitget。
+ * @returns {Promise<Array<{ symbol: string, exchange: 'binance'|'bitget' }>>}
+ */
+export async function getMergedTradingPairs(opts = {}) {
+  const [binancePairs, bitgetPairs] = await Promise.all([
+    getTradingPairs(opts, 'binance'),
+    getTradingPairs(opts, 'bitget'),
+  ]);
+
+  const normalize = p => String(p?.symbol || '').trim();
+  const binanceList = (binancePairs || [])
+    .map(p => ({ symbol: normalize(p), exchange: 'binance' }))
+    .filter(p => p.symbol);
+  const binanceSet = new Set(binanceList.map(p => p.symbol));
+
+  const bitgetOnly = (bitgetPairs || [])
+    .map(p => ({ symbol: normalize(p), exchange: 'bitget' }))
+    .filter(p => p.symbol && !binanceSet.has(p.symbol));
+
+  return [...binanceList, ...bitgetOnly];
+}
+
 export async function getFutureKlineData(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getFutureKlineData !== 'function')
@@ -80,7 +104,9 @@ export default {
   registerExchange,
   setDefaultExchange,
   getTradingPairs,
+  getMergedTradingPairs,
   getFutureKlineData,
   getFutureTicker,
   getSpotTicker,
+  getTradeUrl,
 };
