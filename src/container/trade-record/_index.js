@@ -1,5 +1,6 @@
 import localRecords from '@root/contract-record/all.json';
-import { enrichRecordsWithBestPrices } from './_enrich';
+import { enrichRecordsWithBestPrices, fillMissingBestPrices } from './_enrich';
+import { fillMaxDrawdowns } from './_maxDrawdown';
 import { mergeRemoteWithLocal } from './_merge';
 import { EXCHANGE, EXCHANGE_LABEL, ensureNotionals } from './_schema';
 import { fetchBitgetTradeRecords } from './exchanges/_bitget';
@@ -19,7 +20,15 @@ const EXCHANGE_FETCHERS = [
 ];
 
 /**
- * 依次获取各所交易数据 → 标准格式 → 最优价 enrich → 与本地合并排序
+ * 缺开仓最优差 / 最大回撤时，按记录来源交易所拉 K 线补齐
+ */
+async function fillMissingMetrics(records) {
+  const withBest = await fillMissingBestPrices(records);
+  return fillMaxDrawdowns(withBest);
+}
+
+/**
+ * 依次获取各所交易数据 → 标准格式 → 最优价 enrich → 与本地合并排序 → 缺值补齐
  * @param {{ startTime?: string, endTime?: string }} params
  * @returns {Promise<{ records: object[], stats: object, errors: object[] }>}
  */
@@ -44,8 +53,9 @@ export async function fetchAllTradeRecords(params = {}) {
   }
 
   if (remoteAll.length === 0) {
+    const filled = await fillMissingMetrics(localData);
     return {
-      records: localData,
+      records: filled.map(ensureNotionals),
       stats,
       errors,
       fallback: true,
@@ -54,9 +64,10 @@ export async function fetchAllTradeRecords(params = {}) {
 
   const enriched = await enrichRecordsWithBestPrices(remoteAll);
   const merged = mergeRemoteWithLocal(enriched, localData).map(ensureNotionals);
+  const filled = await fillMissingMetrics(merged);
 
   return {
-    records: merged,
+    records: filled.map(ensureNotionals),
     stats,
     errors,
     fallback: false,
@@ -64,4 +75,6 @@ export async function fetchAllTradeRecords(params = {}) {
 }
 
 export { EXCHANGE, EXCHANGE_LABEL, EXCHANGE_FETCHERS };
-export { getTradeLink, ensureNotionals } from './_schema';
+export { getTradeLink, ensureNotionals, resolveExchange } from './_schema';
+export { fillMaxDrawdowns } from './_maxDrawdown';
+export { fillMissingBestPrices } from './_enrich';

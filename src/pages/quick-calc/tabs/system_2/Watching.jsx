@@ -13,7 +13,7 @@ import {
   message,
 } from 'antd';
 import { DeleteOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
-import { getFutureKlineData } from '../../../../container/bitget/api';
+import { getFutureKlineData, getTradeUrl } from '@root/src/container/market';
 
 const { Text } = Typography;
 
@@ -98,13 +98,17 @@ const Watching = () => {
     const endTime = Date.now();
 
     for (const item of list) {
+      const itemKey = item.key || `${item.exchange || 'bitget'}:${item.symbol}`;
       try {
-        const res = await getFutureKlineData({
-          symbol: item.symbol,
-          granularity: '1D',
-          limit: KLINE_DAYS,
-          endTime,
-        });
+        const res = await getFutureKlineData(
+          {
+            symbol: item.symbol,
+            granularity: '1D',
+            limit: KLINE_DAYS,
+            endTime,
+          },
+          item.exchange || 'bitget'
+        );
         const candles = (Array.isArray(res?.data) ? res.data : []).sort(
           (a, b) => Number(a[0]) - Number(b[0])
         );
@@ -121,10 +125,10 @@ const Watching = () => {
         // 逐条实时更新，不等全部完成
         setEnriched(prev => ({
           ...prev,
-          [item.symbol]: Object.keys(result).length ? result : null,
+          [itemKey]: Object.keys(result).length ? result : null,
         }));
       } catch (_) {
-        setEnriched(prev => ({ ...prev, [item.symbol]: null }));
+        setEnriched(prev => ({ ...prev, [itemKey]: null }));
       }
     }
 
@@ -135,7 +139,11 @@ const Watching = () => {
   const loadList = async () => {
     try {
       const raw = JSON.parse(localStorage.getItem(WATCHLIST_KEY)) || [];
-      const list = raw.map(r => ({ ...r, key: r.symbol }));
+      const list = raw.map(r => {
+        const exchange = r.exchange || 'bitget';
+        const key = r.key || `${exchange}:${r.symbol}`;
+        return { ...r, exchange, key };
+      });
       setWatchlist(list);
       setEnriched({});
       await doRefresh(list); // 加载后立即自动计算
@@ -149,13 +157,13 @@ const Watching = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 删除单条 ─────────────────────────────────────────────────
-  const removeItem = symbol => {
-    const next = watchlist.filter(r => r.symbol !== symbol);
+  const removeItem = (symbol, key) => {
+    const next = watchlist.filter(r => (r.key || `${r.exchange || 'bitget'}:${r.symbol}`) !== key);
     setWatchlist(next);
     localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
     setEnriched(prev => {
       const n = { ...prev };
-      delete n[symbol];
+      delete n[key];
       return n;
     });
     message.success(`已移除 ${symbol}`);
@@ -185,16 +193,19 @@ const Watching = () => {
       title: '币对',
       dataIndex: 'symbol',
       key: 'symbol',
-      width: 130,
+      width: 150,
       fixed: 'left',
-      render: symbol => (
-        <a
-          href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {symbol.replace('USDT', '')} <RightOutlined style={{ fontSize: 10 }} />
-        </a>
+      render: (symbol, r) => (
+        <Space size={4}>
+          <a
+            href={getTradeUrl(symbol, r.exchange || 'bitget')}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {symbol.replace('USDT', '')} <RightOutlined style={{ fontSize: 10 }} />
+          </a>
+          <Tag style={{ margin: 0, fontSize: 10 }}>{r.exchange === 'binance' ? 'BN' : 'BG'}</Tag>
+        </Space>
       ),
     },
     {
@@ -281,7 +292,7 @@ const Watching = () => {
       width: 130,
       align: 'right',
       render: (_, r) => {
-        const e = enriched[r.symbol];
+        const e = enriched[r.key];
         if (!r.l3) return <Text type="secondary">无L3</Text>;
         if (!e) return <Text type="secondary">—</Text>;
         if (e === null) return <Text type="danger">获取失败</Text>;
@@ -301,7 +312,7 @@ const Watching = () => {
       width: 110,
       align: 'right',
       render: (_, r) => {
-        const e = enriched[r.symbol];
+        const e = enriched[r.key];
         if (!r.savedAt || !r.currentPrice || !e || e.watchGain == null)
           return <Text type="secondary">—</Text>;
         return (
@@ -323,8 +334,8 @@ const Watching = () => {
         );
       },
       sorter: (a, b) => {
-        const ga = enriched[a.symbol]?.watchGain ?? -Infinity;
-        const gb = enriched[b.symbol]?.watchGain ?? -Infinity;
+        const ga = enriched[a.key]?.watchGain ?? -Infinity;
+        const gb = enriched[b.key]?.watchGain ?? -Infinity;
         return ga - gb;
       },
     },
@@ -336,7 +347,7 @@ const Watching = () => {
       render: (_, r) => (
         <Popconfirm
           title="从观测列表移除？"
-          onConfirm={() => removeItem(r.symbol)}
+          onConfirm={() => removeItem(r.symbol, r.key)}
           okText="移除"
           cancelText="取消"
         >

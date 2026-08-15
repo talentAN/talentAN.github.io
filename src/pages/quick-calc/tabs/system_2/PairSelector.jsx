@@ -15,7 +15,7 @@ import {
   message,
 } from 'antd';
 import { EyeOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
-import { getTradingPairs, getFutureKlineData } from '../../../../container/bitget/api';
+import { getMergedTradingPairs, getFutureKlineData, getTradeUrl } from '@root/src/container/market';
 import { FILTERS } from './_filters/_index';
 import { getHigherLowsResult } from './_filters/_higherLows';
 import { getHighsMetrics } from './_filters/_notAtHighs';
@@ -51,10 +51,11 @@ const PairSelector = () => {
     abortRef.current = false;
     setRunning(true);
     setAllData([]);
+    setSelectedKeys([]);
 
     let pairs;
     try {
-      pairs = await getTradingPairs();
+      pairs = await getMergedTradingPairs();
     } catch (_) {
       message.error('获取交易对失败');
       setRunning(false);
@@ -67,15 +68,18 @@ const PairSelector = () => {
 
     for (let i = 0; i < pairs.length; i++) {
       if (abortRef.current) break;
-      const { symbol } = pairs[i];
+      const { symbol, exchange: pairExchange } = pairs[i];
 
       try {
-        const res = await getFutureKlineData({
-          symbol,
-          granularity: '1Dutc',
-          limit: KLINE_DAYS,
-          endTime,
-        });
+        const res = await getFutureKlineData(
+          {
+            symbol,
+            granularity: '1Dutc',
+            limit: KLINE_DAYS,
+            endTime,
+          },
+          pairExchange
+        );
         const candles = (Array.isArray(res?.data) ? res.data : []).sort(
           (a, b) => Number(a[0]) - Number(b[0])
         );
@@ -105,8 +109,9 @@ const PairSelector = () => {
         const vMetrics = getVolumeMetrics(candles); // { vol15, vol100, volRatio } | null
 
         results.push({
-          key: symbol,
+          key: `${pairExchange}:${symbol}`,
           symbol,
+          exchange: pairExchange,
           f1,
           f2,
           f3,
@@ -143,8 +148,10 @@ const PairSelector = () => {
     setRunning(false);
   };
 
+  const rowKeyOf = r => r.key || `${r.exchange || 'bitget'}:${r.symbol}`;
+
   const saveToWatchlist = () => {
-    const toSave = displayData.filter(r => selectedKeys.includes(r.symbol));
+    const toSave = displayData.filter(r => selectedKeys.includes(rowKeyOf(r)));
     if (!toSave.length) {
       message.warning('请先勾选要加入观测的币对');
       return;
@@ -156,14 +163,16 @@ const PairSelector = () => {
         return [];
       }
     })();
-    const map = Object.fromEntries(existing.map(it => [it.symbol, it]));
+    const map = Object.fromEntries(existing.map(it => [rowKeyOf(it), it]));
     const now = Date.now();
     toSave.forEach(r => {
-      if (!map[r.symbol]) map[r.symbol] = { ...r, savedAt: now };
+      const key = rowKeyOf(r);
+      if (!map[key]) map[key] = { ...r, key, savedAt: now };
     });
     const merged = Object.values(map);
     localStorage.setItem(WATCHLIST_KEY, JSON.stringify(merged));
-    const added = toSave.filter(r => !existing.find(e => e.symbol === r.symbol)).length;
+    const existingKeys = new Set(existing.map(rowKeyOf));
+    const added = toSave.filter(r => !existingKeys.has(rowKeyOf(r))).length;
     const skipped = toSave.length - added;
     const hint = skipped > 0 ? `，${skipped} 个已存在跳过` : '';
     message.success(`新增 ${added} 个币对至观测列表（共 ${merged.length} 个${hint}）`);
@@ -188,16 +197,19 @@ const PairSelector = () => {
       title: '币对',
       dataIndex: 'symbol',
       key: 'symbol',
-      width: 130,
+      width: 150,
       fixed: 'left',
-      render: symbol => (
-        <a
-          href={`https://www.bitget.com/zh-CN/futures/usdt/${symbol}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {symbol.replace('USDT', '')} <RightOutlined style={{ fontSize: 10 }} />
-        </a>
+      render: (symbol, r) => (
+        <Space size={4}>
+          <a
+            href={getTradeUrl(symbol, r.exchange || 'bitget')}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {symbol.replace('USDT', '')} <RightOutlined style={{ fontSize: 10 }} />
+          </a>
+          <Tag style={{ margin: 0, fontSize: 10 }}>{r.exchange === 'binance' ? 'BN' : 'BG'}</Tag>
+        </Space>
       ),
     },
     {
