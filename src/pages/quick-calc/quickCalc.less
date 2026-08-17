@@ -1,0 +1,19 @@
+// quick-calc 页面的紧凑导航菜单（antd 横向 Menu 默认 46px 行高，太占地方）
+
+.quick-calc-menu.ant-menu-horizontal {
+    line-height: 32px;
+    font-size: 13px;
+    border-bottom: 1px solid #f0f1f3;
+  
+    > .ant-menu-item {
+      top: 0;
+      margin: 0;
+      padding: 0 12px;
+  
+      &::after {
+        left: 12px;
+        right: 12px;
+      }
+    }
+  }
+  

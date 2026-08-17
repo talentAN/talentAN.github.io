@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Layout, Menu } from 'antd';
 import { navigate } from 'gatsby';
+import './quickCalc.less';
 
 const { Content } = Layout;
 
@@ -60,11 +61,12 @@ const QuickCalc = ({ children, location }) => {
     <Layout className="outerPadding">
       <Layout className="container">
         <Menu
+          className="quick-calc-menu"
           mode="horizontal"
           selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 8 }}
         />
         <Content>{children}</Content>
       </Layout>

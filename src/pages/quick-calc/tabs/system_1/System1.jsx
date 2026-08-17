@@ -78,13 +78,14 @@ const System1 = ({ location }) => {
   return (
     <>
       <SurgeAlert />
-      <Card>
+      <Card bodyStyle={{padding: '0 12px 12px'}}>
         <Menu
+          className='quick-calc-menu'
           mode="horizontal"
           selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 8 }}
         />
         {showRule && <Rule />}
         {showTradingDiscipline && <TradingDiscipline />}

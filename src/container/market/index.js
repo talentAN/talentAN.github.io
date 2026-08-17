@@ -57,6 +57,12 @@ export async function getMergedTradingPairs(opts = {}) {
   return [...binanceList, ...bitgetOnly];
 }
 
+export async function getContracts(opts = {}, exchange) {
+  const api = resolveApi(exchange);
+  if (typeof api.getContracts !== 'function') return [];
+  return api.getContracts(opts);
+}
+
 export async function getFutureKlineData(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getFutureKlineData !== 'function')
@@ -105,6 +111,7 @@ export default {
   setDefaultExchange,
   getTradingPairs,
   getMergedTradingPairs,
+  getContracts,
   getFutureKlineData,
   getFutureTicker,
   getSpotTicker,

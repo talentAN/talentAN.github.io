@@ -32,6 +32,18 @@ export const getTradingPairs = async () => {
   }
 };
 
+// 获取合约配置；underlyingType / underlyingSubType 可识别股票、商品及其他 TradFi 标的
+export const getContracts = async () => {
+  try {
+    const res = await fetch(`${FUTURES_BASE}/fapi/v1/exchangeInfo`);
+    const data = await res.json();
+    return Array.isArray(data.symbols) ? data.symbols : [];
+  } catch (e) {
+    console.error('binance getContracts error', e);
+    return [];
+  }
+};
+
 export const getSpotTradingPairs = async () => {
   try {
     const res = await fetch(`${SPOT_BASE}/api/v3/exchangeInfo`);
@@ -58,8 +70,11 @@ export const getFutureKlineData = async ({
     if (endTime) url += `&endTime=${endTime}`;
     const ret = await fetch(url);
     const data = await ret.json();
-    // Binance returns array of arrays; wrap into { data: [...] } to match bitget shape
-    return { data };
+    // 对齐 Bitget 形状: [ts, open, high, low, close, baseVol, quoteVol]
+    const normalized = Array.isArray(data)
+      ? data.map(c => [c[0], c[1], c[2], c[3], c[4], c[5], c[7]])
+      : [];
+    return { data: normalized };
   } catch (e) {
     console.error('binance getFutureKlineData error', e);
     return { data: [] };
@@ -156,6 +171,7 @@ export function createAuthenticatedClient({ key, secret } = {}) {
 
 export default {
   getTradingPairs,
+  getContracts,
   getSpotTradingPairs,
   getFutureKlineData,
   getSpotKlineData,

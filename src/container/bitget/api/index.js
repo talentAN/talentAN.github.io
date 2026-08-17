@@ -25,6 +25,20 @@ export const getTradingPairs = async () => {
   }
 };
 
+// 获取合约配置（含 isRwa 标记，用于区分代币化股票 / 商品与原生加密资产）
+export const getContracts = async () => {
+  try {
+    const response = await fetch(
+      `${exchange.baseUrl}/api/v2/mix/market/contracts?productType=USDT-FUTURES`
+    );
+    const data = await response.json();
+    return data.code === '00000' && Array.isArray(data.data) ? data.data : [];
+  } catch (e) {
+    console.error('bitget getContracts error', e);
+    return [];
+  }
+};
+
 // 获取现货币对信息
 export const getSpotTradingPairs = async () => {
   let response;

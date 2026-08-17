@@ -1,0 +1,426 @@
+// 币对筛选 — 视觉样式
+
+@blue: #1677ff;
+@green: #0f9960;
+@red: #d93026;
+@orange: #d46b08;
+@ink: #1f2329;
+@grey: #8c8c8c;
+@line: #f0f1f3;
+
+.panel {
+  color: @ink;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---------- 级联导航（市场 › 模式） ---------- */
+.cascade {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cascadeSep {
+  color: #d0d3d9;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.pillActivePrimary {
+  color: @blue;
+}
+
+/* ---------- 行情条 ---------- */
+.stickyBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  padding-bottom: 8px;
+}
+
+.marketBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 5px 10px;
+  border: 1px solid @line;
+  border-radius: 6px;
+  background: #fafbfc;
+  min-height: 26px;
+}
+
+.marketItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.marketSymbol {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: @ink;
+}
+
+.resonanceHint {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  color: #d46b08;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resonanceNote {
+  margin-left: 4px;
+  color: #ad6800;
+  opacity: 0.85;
+}
+
+.marketPrice {
+  color: @blue;
+  font-variant-numeric: tabular-nums;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.chip {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chipLabel {
+  color: #bfbfbf;
+  margin-right: 3px;
+}
+
+.chipUp {
+  color: @green;
+  background: #eaf7f0;
+}
+
+.chipDown {
+  color: @red;
+  background: #fdeeee;
+}
+
+.chipFlat {
+  color: @grey;
+  background: #f5f5f5;
+}
+
+/* ---------- 工具栏 ---------- */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pillGroup {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: #f5f6f7;
+}
+
+.pill {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #595959;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.pillActive {
+  background: #fff;
+  color: @ink;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ---------- 说明行 ---------- */
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ruleText {
+  font-size: 12px;
+  line-height: 18px;
+  color: @grey;
+}
+
+.countBadge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: @blue;
+  background: #eef6ff;
+  white-space: nowrap;
+}
+
+.filterRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+/* ---------- 进度条 ---------- */
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.progressTrack {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: #f0f1f3;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 2px;
+  background: @blue;
+  transition: width 0.2s;
+}
+
+.progressText {
+  font-size: 11px;
+  color: @grey;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.filterChip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: @grey;
+  background: #f5f6f7;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.filterChipActive {
+  color: @blue;
+  background: #eef6ff;
+  font-weight: 600;
+}
+
+/* ---------- 列表 ---------- */
+.list {
+  border: 1px solid @line;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.listHead {
+  display: grid;
+  background: #fafbfc;
+  border-bottom: 1px solid @line;
+  color: @grey;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+.headCell {
+  padding: 6px 10px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sortable {
+  cursor: pointer;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.sortActive {
+  color: @blue;
+  font-weight: 600;
+}
+
+.row {
+  display: grid;
+  border-bottom: 1px solid #f7f8f9;
+  transition: background 0.12s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: #f7fbff;
+  }
+}
+
+.rowAlt {
+  background: #fcfcfd;
+}
+
+.cell {
+  padding: 5px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  color: @ink;
+}
+
+.symbolLink {
+  color: @blue;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.exchangeTag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #f0f1f3;
+  color: #a0a5ad;
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: 1px;
+}
+
+.empty {
+  padding: 26px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.badgeGreen {
+  color: @green;
+  background: #eaf7f0;
+}
+
+.badgeRed {
+  color: @red;
+  background: #fdeeee;
+}
+
+.badgeOrange {
+  color: @orange;
+  background: #fff5e6;
+}
+
+.badgeBlue {
+  color: @blue;
+  background: #eef6ff;
+}
+
+.muted {
+  color: #bfbfbf;
+}
+
+/* ---------- 美股面板 ---------- */
+.notice {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: @orange;
+  background: #fff5e6;
+  white-space: nowrap;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.infoCard {
+  padding: 7px 10px;
+  border: 1px solid @line;
+  border-radius: 6px;
+  background: #fafbfc;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.infoTitle {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: @grey;
+  letter-spacing: 0.3px;
+}
+
+.pendingBox {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed #ffd591;
+  border-radius: 6px;
+  background: #fffbf5;
+}
+
+.pendingTitle {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: @orange;
+  font-weight: 600;
+}
+
+.pendingItem {
+  font-size: 12px;
+  line-height: 20px;
+  color: #595959;
+}
