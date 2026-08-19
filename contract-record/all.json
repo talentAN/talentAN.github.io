@@ -28,7 +28,6 @@
     "cashDividend": "0",
     "ctime": "1786608614000",
     "utime": "1786617847000",
-    "entryReason": "surge_100_pullback",
     "remark": "260818:价格达到了历史高点，开空。但对美股不熟，略微盈利后直接设置成本价止损。后续价格一路下跌\n",
     "exchange": "binance",
     "openNotional": "199.206",
