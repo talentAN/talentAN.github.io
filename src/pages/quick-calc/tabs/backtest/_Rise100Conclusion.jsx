@@ -17,12 +17,11 @@ const PLAYBOOK = [
   '标记日收在最高附近、几乎无上影，偏趋势启动，不做',
   '横盘许久，直接突破或跌破下限后短时间迅速向上突破的，谨慎',
   '单笔面值 10-20U、逐仓，禁止对着浮亏加仓',
+  '止盈重心 1.4×O，末档 20% 用跟踪止盈；成功样本中位数会跌到 1.0-1.2×O',
   '14 天只是回测窗口：再收新高即视为无效，不必等满 14 天',
 ];
 
 const Rise100Conclusion = ({ stats }) => {
-  if (!stats) return null;
-  
   const rate = stats.successRate == null ? '—' : `${stats.successRate.toFixed(2)}%`;
   const maxHigh =
     stats.maxHighVsThreshold == null
