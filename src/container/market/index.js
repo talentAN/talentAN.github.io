@@ -70,6 +70,13 @@ export async function getFutureKlineData(opts = {}, exchange) {
   return api.getFutureKlineData(opts);
 }
 
+export async function getAllFutureDailyKlines(opts = {}, exchange) {
+  const api = resolveApi(exchange);
+  if (typeof api.getAllFutureDailyKlines !== 'function')
+    throw new Error('getAllFutureDailyKlines not implemented');
+  return api.getAllFutureDailyKlines(opts);
+}
+
 export async function getFutureTicker(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getFutureTicker !== 'function') throw new Error('getFutureTicker not implemented');
@@ -113,6 +120,7 @@ export default {
   getMergedTradingPairs,
   getContracts,
   getFutureKlineData,
+  getAllFutureDailyKlines,
   getFutureTicker,
   getSpotTicker,
   getTradeUrl,

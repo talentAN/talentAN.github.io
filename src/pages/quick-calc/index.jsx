@@ -20,6 +20,7 @@ const QuickCalc = ({ children, location }) => {
     { key: '/quick-calc/meta-system', label: '系统-meta' },
     { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
     { key: '/quick-calc/system_2', label: '系统-低量高低点抬升' },
+    {key: '/quick-calc/backtest',label:'回测'}
     // { key: '/quick-calc/newcoin', label: <span style={{ textDecoration: 'line-through' }}>🗑系统-新币低波动高潜</span> },
     // { key: '/quick-calc/system_2', label: '开多探索' },
     // { key: '/quick-calc/kang-dan', label: '扛单分析' },
@@ -45,6 +46,7 @@ const QuickCalc = ({ children, location }) => {
       '/quick-calc/system_1',
       '/quick-calc/newcoin',
       '/quick-calc/system_2',
+      '/quick-calc/backtest'
     ];
     for (const route of routes) {
       if (cleanPath.startsWith(route)) {

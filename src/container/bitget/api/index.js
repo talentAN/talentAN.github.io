@@ -73,6 +73,47 @@ export const getFutureKlineData = async ({
   }
 };
 
+/**
+ * 分页拉取 Bitget USDT 合约的全部日线。
+ * history-candles 的单页上限为 200；从最新向上市首日回溯。
+ */
+export const getAllFutureDailyKlines = async ({
+  symbol,
+  signal,
+  onPage,
+  endTime = Date.now(),
+}) => {
+  const pageSize = 200;
+  const all = new Map();
+  let cursor = endTime;
+  let page = 0;
+
+  while (cursor > 0) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const url = `${exchange.baseUrl}/api/v2/mix/market/history-candles?symbol=${encodeURIComponent(
+      symbol
+    )}&productType=USDT-FUTURES&granularity=1Dutc&limit=${pageSize}&endTime=${cursor}`;
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`Bitget K线请求失败 (${response.status})`);
+    const body = await response.json();
+    if (body?.code !== '00000') throw new Error(body?.msg || 'Bitget K线响应异常');
+    const raw = Array.isArray(body.data) ? body.data : [];
+    if (!raw.length) break;
+
+    raw.forEach(c => all.set(Number(c[0]), c.slice(0, 7)));
+    page += 1;
+    onPage?.({ page, loaded: all.size });
+
+    const oldest = Math.min(...raw.map(c => Number(c[0])));
+    if (raw.length < pageSize || !Number.isFinite(oldest) || oldest >= cursor) break;
+    cursor = oldest - 1;
+    // history-candles 单页较小，全市场扫描时主动节流。
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return [...all.values()].sort((a, b) => Number(a[0]) - Number(b[0]));
+};
+
 // 获取现货K线数据
 export const getSpotKlineData = async ({ symbol, granularity, limit = 2, startTime, endTime }) => {
   try {

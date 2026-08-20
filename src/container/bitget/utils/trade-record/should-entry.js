@@ -1,6 +1,6 @@
 import { findAllSupportResistanceLevels } from './support-resistance';
 import { getFutureTicker } from '../../api';
-import { isBullishEntrySignal, isBearishEntrySignal } from './kline-pattern';
+import { isBullishEntrySignal, isBearishEntrySignal } from '@root/src/utils/kline-pattern';
 
 /**
  * 获取所有触发的水平位（可能有多个）±2%

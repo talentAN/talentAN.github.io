@@ -1,0 +1,548 @@
+// 回测页 — 视觉样式（对齐 system_1 币对筛选）
+
+@blue: #1677ff;
+@green: #0f9960;
+@red: #d93026;
+@orange: #d46b08;
+@ink: #1f2329;
+@grey: #8c8c8c;
+@line: #f0f1f3;
+
+.panel {
+  color: @ink;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---------- 子页签 ---------- */
+.pillGroup {
+  display: inline-flex;
+  padding: 2px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: #f5f6f7;
+}
+
+.pill {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #595959;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.pillActive {
+  background: #fff;
+  color: @ink;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.pillDisabled {
+  color: #c0c4cc;
+  cursor: default;
+
+  &:hover {
+    color: #c0c4cc;
+  }
+}
+
+/* ---------- 统计条 ---------- */
+.statBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  border: 1px solid @line;
+  border-radius: 6px;
+  background: #fafbfc;
+  min-height: 26px;
+}
+
+.statItem {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.statLabel {
+  color: @grey;
+}
+
+.statValue {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: @ink;
+}
+
+.statGreen {
+  color: @green;
+}
+
+.statRed {
+  color: @red;
+}
+
+.statBlue {
+  color: @blue;
+}
+
+.conclusionTag {
+  padding: 1px 9px;
+  border-radius: 10px;
+  border: 1px solid #91caff;
+  background: #eef6ff;
+  color: @blue;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
+  white-space: nowrap;
+
+  &:hover {
+    background: #d6e9ff;
+  }
+}
+
+.conclusionBox {
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.conclusionSection {
+  &:not(:last-child) {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  }
+}
+
+.conclusionTitle {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  opacity: 0.75;
+}
+
+.conclusionList {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.playbookTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  td {
+    padding: 1px 8px 1px 0;
+    white-space: nowrap;
+  }
+}
+
+.playbookMuted {
+  opacity: 0.7;
+}
+
+.conclusionFoot {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.distBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  border: 1px solid @line;
+  border-radius: 6px;
+  background: #fff;
+  min-width: 0;
+}
+
+.distTitle {
+  font-size: 11px;
+  color: @grey;
+  white-space: nowrap;
+}
+
+.distItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #f5f6f7;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    color: @blue;
+    background: #eef6ff;
+  }
+}
+
+.distItemActive {
+  background: #eef6ff;
+  box-shadow: inset 0 0 0 1px #91caff;
+}
+
+.distItemStatic {
+  cursor: default;
+
+  &:hover {
+    color: inherit;
+  }
+}
+
+.distItemStatic.distItemActive:hover {
+  background: #eef6ff;
+}
+
+.ladderBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  border: 1px solid @line;
+  border-radius: 6px;
+  background: #fafbfc;
+  min-width: 0;
+}
+
+.ladderItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid @line;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rowTip {
+  max-width: 680px;
+}
+
+.rowTipTitle {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.rowTipChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.distLabel {
+  color: @grey;
+}
+
+.distCount {
+  font-weight: 600;
+  color: @ink;
+}
+
+.distPct {
+  color: @blue;
+}
+
+/* ---------- 说明 / 工具栏 ---------- */
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ruleText {
+  font-size: 12px;
+  line-height: 18px;
+  color: @grey;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.countBadge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: @blue;
+  background: #eef6ff;
+  white-space: nowrap;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.filterChip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: @grey;
+  background: #f5f6f7;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.filterChipActive {
+  color: @blue;
+  background: #eef6ff;
+  font-weight: 600;
+}
+
+.search {
+  width: 130px;
+  padding: 2px 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  outline: none;
+  font-size: 11px;
+  color: @ink;
+
+  &:focus {
+    border-color: @blue;
+  }
+}
+
+/* ---------- 进度条 ---------- */
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.progressTrack {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: @line;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 2px;
+  background: @blue;
+  transition: width 0.2s;
+}
+
+.progressText {
+  font-size: 11px;
+  color: @grey;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 列表 ---------- */
+.list {
+  border: 1px solid @line;
+  border-radius: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-size: 12px;
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: #dcdfe6;
+  }
+}
+
+.listInner {
+  min-width: 100%;
+}
+
+.listHead {
+  display: grid;
+  background: #fafbfc;
+  border-bottom: 1px solid @line;
+  color: @grey;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+.headCell {
+  padding: 6px 8px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sortable {
+  cursor: pointer;
+
+  &:hover {
+    color: @blue;
+  }
+}
+
+.sortActive {
+  color: @blue;
+  font-weight: 600;
+}
+
+.row {
+  display: grid;
+  border-bottom: 1px solid #f7f8f9;
+  transition: background 0.12s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: #f7fbff;
+  }
+}
+
+.rowAlt {
+  background: #fcfcfd;
+}
+
+.rowHighlight {
+  background: #fffbe6;
+
+  &:hover {
+    background: #fff1b8;
+  }
+}
+
+.cell {
+  padding: 4px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  color: @ink;
+}
+
+.symbolLink {
+  color: @blue;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.exchangeTag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: @line;
+  color: #a0a5ad;
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: 1px;
+}
+
+.empty {
+  padding: 26px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.badgeGreen {
+  color: @green;
+  background: #eaf7f0;
+}
+
+.badgeRed {
+  color: @red;
+  background: #fdeeee;
+}
+
+.badgeGrey {
+  color: @grey;
+  background: #f5f5f5;
+}
+
+.muted {
+  color: #bfbfbf;
+}
+
+.moreRow {
+  padding: 6px 10px;
+  text-align: center;
+  border-top: 1px solid @line;
+  background: #fafbfc;
+  color: @blue;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: #f2f8ff;
+  }
+}
+
+.laterCell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.errorBox {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1px dashed #ffd591;
+  border-radius: 6px;
+  background: #fffbf5;
+  color: #ad6800;
+  font-size: 11px;
+  line-height: 18px;
+}

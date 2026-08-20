@@ -23,7 +23,7 @@ const {
   isShootingStar,
   isBearishEngulfing,
   isEveningStar,
-} = require('../src/container/bitget/utils/trade-record/kline-pattern');
+} = require('../src/utils/kline-pattern');
 
 // 读取 klines.json
 const klineFile = path.join(__dirname, 'klines.json');

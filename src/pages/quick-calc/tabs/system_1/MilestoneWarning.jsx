@@ -120,13 +120,141 @@ const MilestoneTag = ({ label, active }) => (
   </div>
 );
 
+const StatRow = ({ items }) => (
+  <div
+    style={{
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 16,
+    }}
+  >
+    {items.map(it => (
+      <div
+        key={it.label}
+        style={{
+          flex: '1 1 140px',
+          minWidth: 120,
+          background: '#fafafa',
+          border: '1px solid #f0f0f0',
+          borderRadius: 6,
+          padding: '10px 12px',
+        }}
+      >
+        <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>{it.label}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: it.color || '#262626' }}>{it.value}</div>
+        {it.sub && <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>{it.sub}</div>}
+      </div>
+    ))}
+  </div>
+);
+
+// 数据锚点（2026-08-19，基于 contract-record/all.json）
+// Bitget：100 笔，累计净盈亏 +87，账户余额 1115（用户口述）
+// Binance：12 笔全胜，累计 +626（含 AAPL +342）；其中 surge_100_pullback 8 笔 +275
+
+// ── 维度〇：双账户现状 ───────────────────────────────────────────────
+const SnapshotDimension = () => (
+  <div>
+    <Section title="Bitget · system1（放量冲关缩量滞涨）">
+      <StatRow
+        items={[
+          { label: '账户余额', value: '1115 U', sub: '已越过 1000 翻倍目标', color: '#52c41a' },
+          { label: '历史笔数', value: '100', sub: '胜 61 / 负 39 · 胜率 61%' },
+          { label: '累计净盈亏', value: '+87 U', sub: '相对早期起点的账面贡献' },
+          { label: '近段（26/05 起）', value: '16 笔 +108', sub: '胜 14 / 负 2', color: '#1677ff' },
+        ]}
+      />
+      <WarningCard
+        level="green"
+        icon="✅"
+        title="回本成立：系统化阶段把你从 451 拉回 1115"
+        evidence="阶段低点 451 → 当前 1115；近 16 笔（2026-05 起）胜率 87.5%、合计 +108U。GWEI / BEAT 等标杆单仍是 system1 的证据。"
+      >
+        Bitget
+        这条线已经不是「证明系统能不能赚钱」，而是「赚钱之后会不会自我破坏」。历史里大回撤几乎都来自单笔破
+        1R / 扛单 / 夜鬼，不是来自连亏小单。
+      </WarningCard>
+      <WarningCard
+        level="orange"
+        icon="⚠️"
+        title="翻倍后的第一风险：仓位上修"
+        evidence="阶段1：500→920 时开始加大保证金，ALPINE 一次 -300U；你刚口述的「面值 10-20、亏损后再加 20-40」若在 1115 上被悄悄放大，会重演。"
+      >
+        余额过 1000 后，「10U 太小」的感觉会变强。规则应锁在
+        <strong> 占本金比例 </strong>
+        ，而不是锁死绝对金额；绝对金额可以随本金涨，但比例不能涨。
+      </WarningCard>
+    </Section>
+
+    <Section title="Binance · 新模式（surge_100_pullback）">
+      <StatRow
+        items={[
+          { label: '笔数', value: '12', sub: '胜 12 / 负 0 · 样本极小', color: '#fa8c16' },
+          { label: '累计盈亏', value: '+626 U', sub: '其中 AAPL 一笔 +342' },
+          { label: 'surge_100', value: '8 笔 +275', sub: '名义多在 100–300 U' },
+          { label: '主导方向', value: '空 11 / 多 1', sub: '与 system1 同向偏空' },
+        ]}
+      />
+      <WarningCard
+        level="yellow"
+        icon="📊"
+        title="12 笔全胜 ≠ 新模式已被证明"
+        evidence="统计学：12 笔 100% 胜率的 95% 置信下限大约只有七成出头。去掉 AAPL（+342）后其余合计约 +284，结构更像「顺风 + 早止盈」而非完整系统检验。"
+      >
+        新模式还在「小样本过度自信期」。现在最危险的不是继续赚钱，而是把全胜当成可以加大名义、可以扛单的许可证。
+      </WarningCard>
+      <WarningCard
+        level="orange"
+        icon="🔁"
+        title="出场过早是当前主矛盾（不是开仓）"
+        evidence={
+          <>
+            <div>· HEI：高点附近开空，止盈早，自述错过约 30%</div>
+            <div>· BLESS / RATS：最高涨幅到 200%，成本线追踪出场偏早</div>
+            <div>· BMT：半山腰开空，成本价追踪止盈，其后价格继续跌</div>
+            <div>· ZHIPU：略盈后直接成本价止损，其后一路下跌</div>
+          </>
+        }
+      >
+        多笔备注都在说同一件事：方向对了，但用「回到成本就跑 / 成本线下追踪」把利润截断。若信念是「山寨迟早归零」，出场规则却在保护已实现小盈——信念和执行是打架的。
+      </WarningCard>
+      <WarningCard
+        level="red"
+        icon="🔴"
+        title="名义仓位已经出现破格"
+        evidence="常规 surge_100 名义约 100–300U；AAPL 第二笔名义约 5000U（15.01 × 333）。同一账户里数量级差了十几倍。"
+      >
+        新模式若要以「小仓位 + 回调加仓」成立，必须先有总名义上限。AAPL
+        这种单笔已经不是同一套风控语言——盈利会强化错误的仓位记忆。
+      </WarningCard>
+    </Section>
+
+    <Section title="两账户不要混用规则">
+      <WarningCard
+        level="orange"
+        icon="🔀"
+        title="system1 ≠ surge_100，赢钱逻辑不同"
+        evidence="Bitget 近段 entryReason 以 high_volume_breakout_shrink_stall 为主；Binance 主标签是 surge_100_pullback。前者吃「缩量滞涨」，后者吃「涨幅过热后的回吐」。"
+      >
+        可以把经验迁移（空头偏见、小仓、禁止情绪加仓），但不要把 Bitget 的 E02「横盘 ≥3
+        天」或 Binance 的「涨 100% 就空」直接互套。混用会让每一笔都能找到「符合某条规则」的借口。
+      </WarningCard>
+    </Section>
+  </div>
+);
+
 // ── 维度一：交易笔数 ──────────────────────────────────────────────────
 const TradeCountDimension = () => (
   <div>
+    <div style={{ marginBottom: 8, fontSize: 12, color: '#8c8c8c' }}>
+      以下里程碑按 <strong>Binance 新模式</strong> 计数（当前 12
+      笔）；Bitget/system1 已进入大样本区，笔数风险降级为「纪律侵蚀」，见历史数据页。
+    </div>
     <div style={{ marginBottom: 16 }}>
-      <MilestoneTag label="1-6 笔（阶段1）" />
+      <MilestoneTag label="1-6 笔（点火）" />
       <MilestoneTag label="7-12 笔（现在）" active />
-      <MilestoneTag label="13-30 笔" />
+      <MilestoneTag label="13-30 笔（首考）" />
       <MilestoneTag label="31-100 笔" />
       <MilestoneTag label="100+ 笔" />
     </div>
@@ -135,76 +263,50 @@ const TradeCountDimension = () => (
       <WarningCard
         level="orange"
         icon="⚠️"
-        title="E02 已经被你连续突破 2 次"
-        evidence="SYNUSDT（260623）备注：「连续两次没有严格遵循缩量两天以上开仓规则了，警醒」；HUSDT 第二笔：缩量一天扛单，靠价格暴跌90%出局"
+        title="全胜会压缩「下一次必须守规」的权重"
+        evidence="RATS 三笔加仓（约 100→200→300 名义）全部获利；KOMA 抗单到成本后小盈。两次都强化「亏了可以等 / 可以加」。"
       >
-        你在备注里已经写过两次"警醒"，但下一次照样发生。这不是认知问题，是执行问题——信号稀少时大脑会主动找理由降低标准。
+        这正是你准备「正确扛单」的危险窗口：样本还没出现真正的结构破坏单，大脑会把运气写成方法论。
       </WarningCard>
       <WarningCard
         level="yellow"
-        icon="📊"
-        title="12 笔 100% 胜率不代表系统已被证明"
-        evidence="统计学：12 笔 100% 胜率的置信区间下限约 74%，真实胜率可能只有 75%"
+        icon="📉"
+        title="加仓目前只被验证了「顺风加仓」，不是「逆势扛单」"
+        evidence="RATS 系列是上涨途中分批空、价格最终下来；KOMA 是开错节奏后抗到成本。两者都不是「信号失效后用归零信仰续命」的成功证明。"
       >
-        第二阶段零亏损是真实的执行质量提升，但也有市场顺风的成分。在看到连亏之前，不能确认系统在不利环境下同样有效。
+        允许的加仓：下一次仍满足 surge_100（或你写明的二次信号）。不允许的加仓：只因为浮亏、只因为「它会归零」。
       </WarningCard>
     </Section>
 
-    <Section title="13-30 笔：第一次真正考验">
+    <Section title="13-30 笔：第一次真正考验（正在逼近）">
       <WarningCard
         level="red"
         icon="🔴"
-        title="你将遇到第一次连续亏损"
-        evidence="概率估算：若真实胜率 75%，30 笔内出现连亏 2 笔的概率 >40%，几乎不可避免"
+        title="你很快会遇到新模式的首亏 / 连亏"
+        evidence="若真实胜率 75%，30 笔内出现连亏 2 笔的概率仍然很高。Bitget 历史里，首亏后的典型反应是追加保证金或放大下一笔。"
       >
-        这不是"如果"，是"什么时候"。关键是你在亏损发生时的行为——历史上你的模式是：亏损 → 不接受 →
-        追加保证金 → 扩大损失（ZBTUSDT双笔、HUSDT扛单）。
+        请预先写死：新模式首亏时，不加仓、不把名义从 100 提到
+        500、不把 Bitget 的「回本经验」拿来安慰自己。回本证明的是 system1 + 小仓活下来，不是证明任何空单都能扛。
       </WarningCard>
       <WarningCard
         level="orange"
-        icon="⚠️"
-        title="市场环境可能切换，系统信号质量下降"
-        evidence="你所有系统期交易均在 2025年8月至2026年6月，未经历完整牛熊周期检验"
+        icon="⏱️"
+        title="「出场早」在连亏期可能突然翻成「死扛」"
+        evidence="当前备注高频是出场早；历史 Bitget 在压力下高频是止损不执行。同一个人，两种相反错误会在情绪切换时互换。"
       >
-        当前盈利可能有市场顺风因素。如果进入阶段性熊市，「暴涨缩量横盘」的标的减少，信号干燥期延长，E02降标压力会显著增大。
-      </WarningCard>
-      <WarningCard
-        level="yellow"
-        icon="💡"
-        title="规则「合理化」开始出现"
-        evidence="历史样本：MAGMAUSDT「尽管盈利，但跟系统无关」，GWEIUSDT阶段5那笔「不符合系统的交易」"
-      >
-        亏损后大脑会主动寻找例外理由，让下一笔「看起来符合系统」。每次在备注里写"这笔不符合"就是在记录一次规则侵蚀。
+        预设锚点：盈利单用规则止盈，亏损单用规则止损——不要用「上一阶段出场太早」当这一阶段继续扛的理由。
       </WarningCard>
     </Section>
 
-    <Section title="31-100 笔：纪律慢性侵蚀期">
-      <WarningCard
-        level="orange"
-        icon="🔄"
-        title="每条规则都会积累一次「特殊情况」例外"
-        evidence="历史轨迹：E02从「2天以上」被调整为「至少3天」，说明规则一直在被真实违规倒逼修改"
-      >
-        这不一定是坏事（规则应该进化），但要区分「数据驱动的修改」和「情绪驱动的妥协」。前者留在变更历史，后者是系统腐化。
-      </WarningCard>
-      <WarningCard
-        level="red"
-        icon="🎯"
-        title="B类事件（真实基本面驱动）首次命中概率升高"
-        evidence="你的交易都在市值100名外，但样本只有12笔，小概率事件在更多笔数后必然出现"
-      >
-        你的时间止损（X02）是为此准备的。问题是：当持仓浮亏且超过50天时，你能执行强制平仓吗？历史上你在扛单时很难主动认亏。
-      </WarningCard>
-    </Section>
-
-    <Section title="100+ 笔：成熟期隐性风险">
+    <Section title="Bitget / system1（大样本侧）">
       <WarningCard
         level="yellow"
-        icon="😌"
-        title="自满导致步骤跳过"
-        evidence="你在阶段1早期曾说「感觉不对就先跑」——这是直觉替代系统的典型表现"
+        icon="📋"
+        title="笔数已过百：风险从「样本不够」变成「例外积累」"
+        evidence="全历史 100 笔；E02 在系统期仍被连续突破（SYN、H 等备注自陈）。规则进化可以，但每次例外要写进变更记录，不能只写在单笔备注里。"
       >
-        稳定盈利后容易觉得「这个我看一眼就知道」，不再执行入场检查清单。系统的价值在于替代当下情绪决策，一旦开始凭感觉走捷径，系统就开始失效。
+        100+ 笔的隐性风险是自满跳步。余额 1115
+        时更要强制走入场清单，而不是「这个我看一眼就知道」。
       </WarningCard>
     </Section>
   </div>
@@ -215,63 +317,57 @@ const CapitalDimension = () => (
   <div>
     <div style={{ marginBottom: 16 }}>
       <MilestoneTag label="500U 起点" />
-      <MilestoneTag label="920U（+84%）" />
+      <MilestoneTag label="920U（阶段1峰值）" />
       <MilestoneTag label="历史最低 451U" />
-      <MilestoneTag label="当前 ~577U" active />
-      <MilestoneTag label="1000U（翻倍目标）" />
+      <MilestoneTag label="1000U 目标" />
+      <MilestoneTag label="当前 Bitget 1115U" active />
     </div>
 
-    <Section title="当前（577U）：你正处于历史最高系统化收益区">
+    <Section title="Bitget 1115U：目标已达成，进入「守住」阶段">
       <WarningCard
         level="green"
         icon="✅"
-        title="当前风险敞口（1% 单笔）是合理的"
-        evidence="1R = 10U = 本金 1%，历史记录中你在系统期从未出现超过 1R 的单笔亏损（除了执行违规的 BOBUSDT）"
+        title="单笔 1% 量级仍然合适"
+        evidence="按 1115 计，1R ≈ 11U。系统期大亏几乎都来自破 1R，而不是 1R 本身太小。"
       >
-        这个阶段不需要提高风险。继续用 1%，把样本积累到 30 笔再重新评估。
+        不需要因为账户大了就提高风险百分比。先把 1115→稳定跑完下一次完整连亏周期，再谈提高。
       </WarningCard>
       <WarningCard
         level="orange"
         icon="⚠️"
-        title="资金超过 700U 时你有加大单笔风险的历史前科"
-        evidence="阶段1：500→920 期间，你开始使用 30-80U 保证金做大单，「为了求稳，加保证金使预估强平达到10块」——那笔 ALPINE 一次 -300U"
+        title="过 1000 后你有「加大单笔」的前科"
+        evidence="500→920 期间出现过 30–80U 保证金大单与 ALPINE -300U；黑天鹅阶段也有过「想扳回来」的放大。"
       >
-        当账户盈利让你感到「稳了」时，大脑会产生加大仓位的冲动。1R 的绝对值增大（从 10U 到
-        20U）会让止损的心理重量翻倍，进而产生扛单冲动。
+        触发条件往往是：连续盈利 → 觉得稳了 → 同一逻辑加大码。现在 Binance
+        全胜 + Bitget 回本，两个账户同时在喂这种感觉。
       </WarningCard>
-    </Section>
-
-    <Section title="首次大回撤（-150U 以上）">
       <WarningCard
         level="red"
         icon="🚨"
-        title="你经历过 3 次大回撤，每次模式相同"
-        evidence="阶段1：920→632（-288U），一次 ALPINE 爆仓 -300U；阶段2：632→547（-85U），1011黑天鹅四多头同日爆；阶段3：547→451（-96U），做多失败集中亏损"
+        title="大回撤模式未变：单次事件，不是磨死"
+        evidence="920→632（ALPINE）；632→547（1011 四多头）；547→451（做多失败集中）。三次都是单次/单日事件击穿。"
       >
-        你的大回撤不是由连续小亏损累积的，而是由**单次大事件**触发的：一笔巨鬼、一次黑天鹅、一次逆势追加保证金。当前系统的
-        1R 硬约束是防止这个模式的核心机制——任何理由导致单笔超过 1R 都是在重演历史。
-      </WarningCard>
-      <WarningCard
-        level="red"
-        icon="🔄"
-        title="回撤后你的历史反应是：加大风险「扳回来」"
-        evidence="阶段1爆仓后接着开了 SQDUSDT +116U 这笔（成功），但同期也有 ZBTUSDT 双笔追加保证金爆仓（失败）。两种行为都是回撤后的情绪反应"
-      >
-        在大亏损后，做对了会强化「我应该大仓」的错误认知，做错了会进一步亏损。最安全的规则是：单月亏损超过
-        50U，强制暂停 3 天，不做任何交易。
+        1R 硬约束 + 委托不过夜 + 禁止为求稳追加保证金，仍是防回撤的三件套。任何「这次特殊」都在重演剧本。
       </WarningCard>
     </Section>
 
-    <Section title="资金翻倍（1000U+）：未知领域">
+    <Section title="Binance 新模式资金：用名义，不要用感觉">
+      <WarningCard
+        level="orange"
+        icon="📐"
+        title="把「10–20 / 加仓 20–40」写成账户级硬顶"
+        evidence="当前主流名义 100–300U，已高于你口述的 10–20 面值；RATS 加仓链把单标的名义堆到约 600U 量级；AAPL 一次到 5000U。"
+      >
+        建议三条写死（数字可改，结构不要改）：① 单笔开仓名义上限；② 同一标的累计名义上限；③
+        单日/单周新增名义上限。没有这三条，「正确扛单」会在第三次加仓时失控。
+      </WarningCard>
       <WarningCard
         level="yellow"
         icon="❓"
-        title="你从未在系统化状态下持续管理过 1000U 以上的资金"
-        evidence="历史最高 920U，但是在非系统化、高杠杆、扛单模式下达到的，不具有参考性"
+        title="Binance 盈利结构不稳定：头部依赖单笔"
+        evidence="AAPL +342 约占 Binance 总盈利一半；其余分散在 HEI / BLESS / RATS。去掉头部后曲线完全不同。"
       >
-        1R = 10U 在 1000U 本金下是 1%，在 2000U 本金下是
-        0.5%。随着本金增大，系统的绝对盈利数字增大，但你的心理参考点（「10U
-        的利润归零很难受」）会产生更强的干预冲动。建议在本金翻倍前，先做一次完整的「首次连亏」经历。
+        评估新模式时，用「中位单」和「去掉最大盈利后的曲线」，不要用含 AAPL 的总和自我证明。
       </WarningCard>
     </Section>
   </div>
@@ -280,98 +376,81 @@ const CapitalDimension = () => (
 // ── 维度三：历史数据规律 ─────────────────────────────────────────────
 const HistoryDimension = () => (
   <div>
-    <Section title="模式一：止损不执行（出现频率最高）">
+    <Section title="模式一：止损不执行（Bitget 老伤，仍有效）">
       <WarningCard
         level="red"
         icon="🔴"
-        title="你有至少 5 次明确的止损未执行记录"
+        title="至少 5 次明确的止损未执行 / 逆势加仓"
         evidence={
           <>
-            <div>· INUSDT（早期）：-29U 爆仓，「没及时止盈，被探针了」</div>
-            <div>· ZBTUSDT 第一笔：-9.9U，「开空价格已经证明错误，还逆势追加开仓，最后全被爆」</div>
-            <div>· ZBTUSDT 第二笔：-6.9U，「上头了，还追加保证金，活该」</div>
-            <div>· BOBUSDT（系统期）：止损位设在前高以下，被精确触发</div>
-            <div>· HUSDT 扛单那笔：没设止损，靠暴跌90%才出局</div>
+            <div>· INUSDT（早期）：-29U 爆仓</div>
+            <div>· ZBTUSDT 双笔：逆势追加，最后被爆</div>
+            <div>· BOBUSDT：止损位设在前高以下被扫</div>
+            <div>· HUSDT：没设止损，靠暴跌 90% 才出局</div>
+            <div>· SYNUSDT（近）：扛单约一个月回本，最高浮亏 25R——回本不代表过程可复制</div>
           </>
         }
       >
-        每一次你都在事后复盘里写清楚了原因，但下一次遇到浮亏扩大时，同样的冲动还是会出现。这不是知识问题，是在压力下的行为模式问题。
-      </WarningCard>
-      <WarningCard
-        level="orange"
-        icon="💡"
-        title="触发止损不执行的共同前置状态"
-        evidence="ZBTUSDT、HUSDT、INUSDT 三笔均有一个共同点：开仓后价格立刻反向，且仓位较大（相对当时本金）"
-      >
-        当止损线被触及时，「再等一下」的冲动来自于「损失金额让你无法接受」。解法不是意志力，而是把单笔风险设得更小——1%
-        的约束正是为此存在的。
+        SYN 是最近的危险教材：结果是回本，过程是 25R
+        浮亏。若你把这笔写进「正确扛单」案例集，等于用幸存者偏差覆盖爆仓距离。
       </WarningCard>
     </Section>
 
-    <Section title="模式二：遇「鬼」（B类事件）爆仓">
+    <Section title="模式二：遇「鬼」与隔夜委托">
       <WarningCard
         level="red"
         icon="👻"
-        title="你遇过 6 次以上的「鬼」事件，每次在此之前账户都表现良好"
-        evidence={
-          <>
-            <div>· SAPIEN：新币第三天，半夜爆仓 -29U</div>
-            <div>· SIGN：看空遇鬼，半夜被爆 -29U</div>
-            <div>· XPL（第一次）：看空遇鬼，半夜被爆 -39U</div>
-            <div>· ALPINE（大鬼）：加保证金求稳，半夜被爆 -300U</div>
-            <div>· 1011 黑天鹅：4 个多头同日爆 -150U</div>
-            <div>· XPINUSDT：破新高做空被爆 -49U</div>
-          </>
-        }
+        title="大亏仍高度集中在夜间 / 突发拉升"
+        evidence="SAPIEN / SIGN / XPL / ALPINE / 1011 黑天鹅 / XPIN 破新高做空。规则侧已有：委托不过夜、止损在前高以上、市值过滤。"
       >
-        你在市值100名外的策略大幅降低了这个风险，但没有消除。当前系统的 1R 硬约束 +
-        禁止隔夜委托单是核心防线。不要因为「这个币感觉稳」而绕过这两条。
-      </WarningCard>
-      <WarningCard
-        level="orange"
-        icon="🌙"
-        title="你的「鬼」爆仓 100% 发生在夜间委托"
-        evidence="SAPIEN、SIGN、XPL、ALPINE 均为「半夜被爆」——你本人在 BOBUSDT 复盘后已经写入规则：开仓委托单不过夜"
-      >
-        E04「入场前确认失效价」+
-        SL01「止损设在前高以上」是目前防止这个模式的规则。但这两条都依赖执行，不是自动保护。
+        Binance 做代币化美股时，另加一条：开盘缺口与资金费率尖刺，不等于「可以不设失效价」。
       </WarningCard>
     </Section>
-
-    <Section title="模式三：「好交易」之后放松标准">
+<Section title="模式三：大盈利之后降标">
       <WarningCard
         level="orange"
         icon="📈"
-        title="你的大盈利笔（+100U 级别）之后往往跟着规则违规"
+        title="大盈利笔之后往往跟着规则违规"
         evidence={
           <>
-            <div>· SQDUSDT +116U 之后：ZBTUSDT 两笔追加保证金爆仓</div>
-            <div>· TREEUSDT +82U 之后：ALPINE 加保证金求稳，-300U 爆仓</div>
-            <div>· GWEIUSDT +31U 之后：SYNUSDT E02 违规（近期）</div>
+            <div>· SQD +116 后：ZBT 双笔追加爆仓</div>
+            <div>· TREE +82 后：ALPINE -300</div>
+            <div>· GWEI +31 后：SYN E02 违规</div>
+            <div>· 当前：Binance 连胜 + Bitget 回本，正处于同类情绪窗口</div>
           </>
         }
       >
-        大盈利触发「我判断对了」的自信感，进而降低下一笔的入场标准或提高风险敞口。SYNUSDT
-        发生在你第二阶段最好的两笔之后，这不是巧合。
+        下一笔（尤其是 Binance）强制多做一次清单：是否真的 surge_100 / 是否缩量条件、名义是否超上限、止损是否已挂。
       </WarningCard>
     </Section>
 
-    <Section title="模式四：E02「横盘 ≥ 3 天」被信号干燥期侵蚀">
+    <Section title="模式四：E02 横盘天数被干燥期侵蚀">
       <WarningCard
         level="red"
         icon="⚡"
-        title="E02 是你整个系统期触发频率最高的违规项"
-        evidence={
-          <>
-            <div>· BOBUSDT：「横盘期间实体仍在上移未识别」</div>
-            <div>· SKYAIUSDT：「横盘不充分」</div>
-            <div>· HUSDT（第二笔，0.16入场）：缩量一天就挂委托</div>
-            <div>· SYNUSDT：「没等至少横盘两天才开仓，赌博心态明显」</div>
-          </>
-        }
+        title="system1 期最高频违规仍是「等不及」"
+        evidence="BOB / SKYAI / H 第二笔 / SYN——备注里反复出现「没等够就挂」。好看的币最容易触发抢跑。"
       >
-        这条规则触发的心理机制是：「看到一个很好的币，等不了 3
-        天」。越是好看的信号，越容易触发焦虑。解法是物理隔离：开仓委托单只在确认天数满足后才允许提交，没有例外。
+        物理隔离仍然有效：天数不够，委托单不允许提交。没有「差一点也行」。
+      </WarningCard>
+    </Section>
+
+    <Section title="模式五（新）：Binance 早止盈 + 叙事加仓">
+      <WarningCard
+        level="orange"
+        icon="✂️"
+        title="成本价止盈正在系统性截断利润"
+        evidence="ZHIPU / BMT / BLESS / HEI 备注均指向出场早于趋势结束。若策略假设是回归/归零，出场应绑定结构破坏或时间规则，而不是成本线。"
+      >
+        迭代方向：把「成本下追踪」改成「结构失效出场」或「R 倍数分级止盈」。继续用成本线，你会在账面上制造稳定小胜，却学不会拿住主升段的反向（下跌段）。
+      </WarningCard>
+      <WarningCard
+        level="red"
+        icon="🧱"
+        title="「归零信仰」不能当加仓许可证"
+        evidence="你已讨论：正确加仓 = 系统二次信号；错误加仓 = 浮亏 + 归零叙事。KOMA 抗单到成本、SYN 25R 浮亏回本，都是结果美化过程。"
+      >
+        写进纪律：加仓前必须能指出「哪一条入场规则再次满足」。写不出来，就不加。
       </WarningCard>
     </Section>
 
@@ -385,19 +464,32 @@ const HistoryDimension = () => (
         }}
       >
         <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>
-          在情绪平静时写下，等真正遇到时才能信任这些规则：
+          情绪平静时确认；真遇到时只执行，不现场辩论：
         </div>
         {[
-          { label: '连亏 3 笔时', placeholder: '停止交易 X 天，做一次完整复盘，不急于找机会' },
-          { label: '月度亏损超过 ___U 时', placeholder: '强制暂停，不做任何操作' },
-          { label: '持仓超过 50 天浮亏仍扩大', placeholder: '启动减仓，不扛单（X02 时间止损）' },
           {
-            label: '遇到 B 类：持仓 30 天价格反向创新高',
-            placeholder: '承认系统失效，直接平仓，不追加保证金',
+            label: 'Binance 新模式出现首亏时',
+            placeholder: '不加仓、不升名义；只复盘是否规则内开仓',
           },
           {
-            label: '大盈利（+30U 单笔）后下一笔',
-            placeholder: '额外检查 E02，确认满 3 天才提交委托',
+            label: '同一标的准备第二次加仓时',
+            placeholder: '必须写出再次满足的入场条件；否则禁止',
+          },
+          {
+            label: '单笔名义想超过常规上限时',
+            placeholder: '一律视为违规冲动，当日不再开新仓',
+          },
+          {
+            label: 'Bitget 月度回撤超过 ___U',
+            placeholder: '强制暂停 3 天（数字自填，建议 ≤ 5R）',
+          },
+          {
+            label: '持仓浮亏且结构已破坏（放量新高 / 叙事强化）',
+            placeholder: '认赔；禁止用「迟早归零」续命',
+          },
+          {
+            label: '单笔大盈利（例如 +30U 或 +3R）后的下一笔',
+            placeholder: '强制完整走清单，名义用下限而不是上限',
           },
         ].map((item, i) => (
           <div
@@ -433,9 +525,6 @@ const HistoryDimension = () => (
             </div>
           </div>
         ))}
-        <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 8 }}>
-          * 以上是模板，请用你自己的判断填入具体数字和行动
-        </div>
       </div>
     </Section>
   </div>
@@ -443,17 +532,17 @@ const HistoryDimension = () => (
 
 // ── 主组件 ────────────────────────────────────────────────────────────
 const TABS = [
+  { key: 'snapshot', label: '双账户现状', icon: '🪞' },
   { key: 'count', label: '交易笔数', icon: '📊' },
   { key: 'capital', label: '资金规模', icon: '💰' },
-  { key: 'history', label: '历史数据', icon: '📋' },
+  { key: 'history', label: '历史规律', icon: '📋' },
 ];
 
 const MilestoneWarning = () => {
-  const [active, setActive] = useState('count');
+  const [active, setActive] = useState('snapshot');
 
   return (
     <div>
-      {/* 标题 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #fff2e8 0%, #fff7e6 100%)',
@@ -472,13 +561,13 @@ const MilestoneWarning = () => {
             给未来的自己：阶段性预警地图
           </div>
           <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
-            基于你从 2025-08 至今的完整交易数据归纳，在情绪平静时阅读，在关键时刻回顾
+            更新于 2026-08-19 · Bitget 回本至 1115U · Binance 新模式 12 笔全胜（小样本）·
+            基于 all.json 与备注归纳
           </div>
         </div>
       </div>
 
-      {/* Tab 切换 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {TABS.map(tab => (
           <div
             key={tab.key}
@@ -504,8 +593,8 @@ const MilestoneWarning = () => {
         ))}
       </div>
 
-      {/* 内容 */}
       <div>
+        {active === 'snapshot' && <SnapshotDimension />}
         {active === 'count' && <TradeCountDimension />}
         {active === 'capital' && <CapitalDimension />}
         {active === 'history' && <HistoryDimension />}
