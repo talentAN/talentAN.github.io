@@ -21,6 +21,8 @@ const PLAYBOOK = [
 ];
 
 const Rise100Conclusion = ({ stats }) => {
+  if (!stats) return null;
+  
   const rate = stats.successRate == null ? '—' : `${stats.successRate.toFixed(2)}%`;
   const maxHigh =
     stats.maxHighVsThreshold == null

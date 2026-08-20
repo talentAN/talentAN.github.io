@@ -290,7 +290,7 @@ const Rise100Backtest = () => {
               <div className={s.rowTip}>
                 <span className={s.rowTipTitle}>
                   成功样本后 {FOLLOW_UP_DAYS} 日最低价低于成功线（开盘×2）的幅度 · 每 10 个点一档（共{' '}
-                  {stats.success} 条）
+                  {stats?.success || 0} 条）
                 </span>
                 <div className={s.rowTipChips}>
                   {dropBuckets.length === 0 ? (
@@ -399,7 +399,7 @@ const Rise100Backtest = () => {
         rows={displayRows}
         empty={running ? '回测中...' : '点击「开始全量回测」获取数据'}
         defaultSort={{ key: 'markerDate', dir: 'desc' }}
-        highlightKey={stats.maxHighVsThresholdKey}
+        highlightKey={stats?.maxHighVsThresholdKey}
       />
     </div>
   );
