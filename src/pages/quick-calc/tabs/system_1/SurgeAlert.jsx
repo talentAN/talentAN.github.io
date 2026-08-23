@@ -21,6 +21,7 @@ import {
   evaluateExit,
   checkExistingExposure,
 } from './_autoOrderModel';
+import TradeUnlockPrompt from './TradeUnlockPrompt';
 
 const BATCH_SIZE = 8;
 const BATCH_MS = 1000;
@@ -452,7 +453,6 @@ const SurgeAlert = () => {
                 } else {
                   clearHit(pair);
                 }
-
                 if (autoOrderEnabledRef.current) {
                   const event = await handleAutoOrder(info);
                   if (event) orderEvents.push(event);
@@ -562,6 +562,8 @@ const SurgeAlert = () => {
   // 收起态：小角标，位置跟随拖拽坐标
   if (!expanded) {
     return (
+      <>
+      <TradeUnlockPrompt active={autoOrderEnabled} />
       <div
         role="button"
         tabIndex={0}
@@ -622,10 +624,13 @@ const SurgeAlert = () => {
           </span>
         )}
       </div>
+      </>
     );
   }
 
   return (
+    <>
+    <TradeUnlockPrompt active={autoOrderEnabled} />
     <div
       style={{
         position: 'fixed',
@@ -931,6 +936,7 @@ const SurgeAlert = () => {
         )}
       </div>
     </div>
+    </>
   );
 };
 

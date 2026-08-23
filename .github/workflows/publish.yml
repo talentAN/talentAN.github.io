@@ -15,24 +15,13 @@ jobs:
       - run: npm run install-action
       - run: npm run build
         env:
-          GATSBY_BITGET_API_KEY: ${{ secrets.GATSBY_BITGET_API_KEY }}
-          GATSBY_BITGET_API_SECRET: ${{ secrets.GATSBY_BITGET_API_SECRET }}
-          GATSBY_BITGET_PASSPHRASE: ${{ secrets.GATSBY_BITGET_PASSPHRASE }}
+          # GATSBY_EXCHANGE_PROXY_TOKEN 这里必须填 Worker 的 PROXY_READONLY_TOKEN
+          # （只读，见 workers/exchange-proxy），不能填 PROXY_TRADE_TOKEN——这个值会
+          # 被打进公开发布的 bundle，只读 token 泄露最多被人查一下历史仓位，
+          # 不能拿去下单。
+          GATSBY_EXCHANGE_PROXY_URL: ${{ secrets.GATSBY_EXCHANGE_PROXY_URL }}
+          GATSBY_EXCHANGE_PROXY_TOKEN: ${{ secrets.GATSBY_EXCHANGE_PROXY_TOKEN }}
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GH_ACTION_DEPLOY_KEY}}
           publish_dir: ./public
-  # 不同步到gitee了，没啥用
-  # sync-to-gitee:
-  #   needs: build-and-deploy-to-github
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Sync to Gitee
-  #       uses: wearerequired/git-mirror-action@master
-  #       env:
-  #         SSH_PRIVATE_KEY: ${{ secrets.GITEE_RSA_PRIVATE_KEY }}
-  #       with:
-  #         # 来源仓库
-  #         source-repo: 'git@github.com:talentAN/talentAN.github.io.git'
-  #         # 目标仓库
-  #         destination-repo: 'git@gitee.com:talentan/talentan.git'

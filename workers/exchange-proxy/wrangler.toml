@@ -1,0 +1,25 @@
+name = "exchange-signed-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# 真实密钥不要写在这里。部署前先执行：
+#   wrangler secret put BINANCE_API_KEY
+#   wrangler secret put BINANCE_PRIVATE_KEY
+#   wrangler secret put BITGET_API_KEY
+#   wrangler secret put BITGET_API_SECRET
+#   wrangler secret put BITGET_PASSPHRASE
+#   wrangler secret put PROXY_TRADE_TOKEN      （全权限，只给本地 .env.development 用）
+#   wrangler secret put PROXY_READONLY_TOKEN   （只读，允许打进 CI/公开发布的 bundle）
+#   wrangler secret put UNLOCK_PASSWORD        （线上解锁交易 session 用的密码，建议 20+ 位随机字符串）
+#   wrangler secret put SESSION_SIGNING_KEY    （签发 session token 用，例如 openssl rand -hex 32）
+# 本地开发用 wrangler dev + .dev.vars（见 .dev.vars.example）。
+#
+# 建议：去 Cloudflare 控制台给这个 Worker 的路由加一条 Rate Limiting Rule，
+# 防止有人对着 action=unlock 暴力试密码（密码本身足够随机的话不是必须，但加一层更稳）。
+
+[vars]
+# 逗号分隔的允许跨域来源，按请求 Origin 精确匹配。
+# 本地开发端口 + 线上正式站点（config.js 的 siteUrl）。
+ALLOWED_ORIGINS = "http://localhost:8000,https://www.talentan.cn"
+# 密码解锁后签发的交易 session 有效期（分钟）。过期前端会主动重新弹出解锁框续期。
+SESSION_TTL_MINUTES = "60"

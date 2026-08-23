@@ -1,6 +1,8 @@
 // Minimal Binance adapter implementing the functions our app expects.
 // Uses public REST endpoints; these calls do not require API keys for market data.
 
+import { signedRequestVerbose } from '../utils/auth';
+
 const FUTURES_BASE = 'https://fapi.binance.com';
 const SPOT_BASE = 'https://api.binance.com';
 
@@ -199,37 +201,10 @@ export const getSpotTicker = async symbol => {
   }
 };
 
-// Create an authenticated client using API key + secret.
-export function createAuthenticatedClient({ key, secret } = {}) {
-  if (!key || !secret) {
-    throw new Error('Binance auth client requires key and secret');
-  }
-
-  const sign = query => {
-    try {
-      // try node crypto
-      // eslint-disable-next-line global-require
-      const crypto = require('crypto');
-      return crypto.createHmac('sha256', secret).update(query).digest('hex');
-    } catch (e) {
-      // Browser environment: try subtle crypto
-      if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-        // synchronous HMAC is not available; throw to indicate unsupported in browser
-        throw new Error('Signing not supported in browser environment');
-      }
-      throw e;
-    }
-  };
-
-  const signedGet = async (base, path, params = {}) => {
-    const timestamp = Date.now();
-    const qs = new URLSearchParams({ ...params, timestamp }).toString();
-    const signature = sign(qs);
-    const url = `${base}${path}?${qs}&signature=${signature}`;
-    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': key } });
-    return res.json ? res.json() : {};
-  };
-
+// Create an authenticated client. Signs locally (utils/auth.js) with the
+// Ed25519 private key from GATSBY_BINANCE_PRIVATE_KEY — Binance blocks
+// Cloudflare Workers' egress IPs, so this can't go through the proxy Worker.
+export function createAuthenticatedClient() {
   return {
     // expose public methods
     getTradingPairs,
@@ -242,7 +217,8 @@ export function createAuthenticatedClient({ key, secret } = {}) {
     // authenticated example
     getFutureAccount: async () => {
       try {
-        return await signedGet(FUTURES_BASE, '/fapi/v2/account');
+        const { response } = await signedRequestVerbose({ method: 'GET', base: FUTURES_BASE, path: '/fapi/v2/account' });
+        return response || {};
       } catch (e) {
         console.error('binance getFutureAccount error', e);
         return {};

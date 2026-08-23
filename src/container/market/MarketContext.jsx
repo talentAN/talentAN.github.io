@@ -34,13 +34,14 @@ export const MarketProvider = ({ children, initial = 'bitget' }) => {
     setAvailable(getRegisteredExchanges());
   };
 
-  // On mount: if BINANCE keys exist in env, register an authenticated client (without writing keys)
+  // On mount: if BINANCE key + Ed25519 private key exist in env, register an authenticated client.
+  // 本地直接签（币安会拦 Cloudflare Workers 的出口 IP，走不了 Worker 代理）。
   useEffect(() => {
     const key = process.env.BINANCE_API_KEY || process.env.GATSBY_BINANCE_API_KEY;
-    const secret = process.env.BINANCE_API_SECRET || process.env.GATSBY_BINANCE_API_SECRET;
-    if (key && secret) {
+    const privateKey = process.env.BINANCE_PRIVATE_KEY || process.env.GATSBY_BINANCE_PRIVATE_KEY;
+    if (key && privateKey) {
       try {
-        const client = binanceApi.createAuthenticatedClient({ key, secret });
+        const client = binanceApi.createAuthenticatedClient();
         registerExchange('binance-auth', client);
       } catch (e) {
         // signing may be unsupported in browser; ignore

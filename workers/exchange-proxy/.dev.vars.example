@@ -1,0 +1,18 @@
+# 复制为 .dev.vars（该文件已被 .gitignore 排除，不会提交），填真实值后 `wrangler dev` 即可本地跑通。
+BINANCE_API_KEY=mock_binance_api_key_1234567890
+BINANCE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n-----END PRIVATE KEY-----"
+
+BITGET_API_KEY=mock_bitget_api_key_1234567890
+BITGET_API_SECRET=mock_bitget_api_secret_1234567890
+BITGET_PASSPHRASE=mock_bitget_passphrase
+
+# 全权限（GET+POST），本地开发/自动下单要用这个。正式部署后绝对不要把这个值放进
+# GitHub Actions Secrets 或任何会被打进公开 bundle 的地方。
+PROXY_TRADE_TOKEN=change-me-to-a-random-trade-token
+# 只读（仅放行 GET），CI / 公开发布的 bundle 用这个——即使泄露也只能查询，不能下单。
+PROXY_READONLY_TOKEN=change-me-to-a-random-readonly-token
+
+# 线上密码解锁交易 session 用，建议 20+ 位随机字符串（密码强度是这套机制的主要防线）。
+UNLOCK_PASSWORD=change-me-to-a-long-random-password
+# 签发/校验 session token 用的 HMAC key，例如 openssl rand -hex 32。
+SESSION_SIGNING_KEY=change-me-to-a-random-signing-key

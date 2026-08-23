@@ -2,7 +2,9 @@ import { DEFAULT_LADDER } from '../backtest/_ladderRules';
 import { placeFutureBatchLimitOrders as placeBitgetBatchLimit, placeFutureMarketOrder as placeBitgetMarket } from '@root/src/container/bitget/api/order';
 import { placeFutureBatchLimitOrders as placeBinanceBatchLimit, placeFutureMarketOrder as placeBinanceMarket } from '@root/src/container/binance/api/order';
 import { getSinglePosition as getBitgetPosition, getPendingOrders as getBitgetPendingOrders } from '@root/src/container/bitget/api/query';
-import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceOpenOrders } from '@root/src/container/binance/api/query';
+import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceOpenOrders, getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
+import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
+import { getTradeSession } from '@root/src/utils/tradeSession';
 
 /**
  * 自动下单模型（现在会真的往交易所发签名请求，但用的是 mock/占位 API Key）
@@ -20,19 +22,25 @@ import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceO
  *
  * ⚠️ 当前状态：submitLadderPlan / closeLadderPlan 会调用
  * container/bitget/api/order.js、container/binance/api/order.js 里真实的签名下单
- * 请求（endpoint、参数、HMAC 签名都是按官方文档 + 实测响应验证过路径确实存在），但用
- * 的 API Key 来自 .env.development 里的占位值（mock_xxx），交易所会返回签名/鉴权
- * 失败 —— 这是故意的：先跑通请求构造，在浏览器 Network 面板或本函数返回值里核对
- * url/body/响应，参数确认没问题后，再把 .env.development 换成真实 Key。
+ * 请求（endpoint、参数都是按官方文档 + 实测响应验证过路径确实存在）。签名这一步
+ * 两边都已经挪到 workers/exchange-proxy 这个 Cloudflare Worker 里做——Bitget 走
+ * HMAC-SHA256、Binance 走 Ed25519，浏览器只是把「调哪个接口、带什么参数」转发过去，
+ * 私钥/API Secret/Passphrase 都不出现在浏览器里，见 utils/exchangeProxy.js。
+ * 本地用的是占位 token（.env.development 里的默认值），交易所会返回签名/鉴权失败
+ * —— 这是故意的：先跑通请求构造，在浏览器 Network 面板或本函数返回值里核对
+ * url/body/响应，参数确认没问题后再把 Worker 换真实凭证。
  *
  * ⚠️ 批量下单成功时的响应结构（Bitget 的 data.successList/failureList、Binance 按
  * 请求顺序返回的数组）是按官方文档写的 applyBatchResult，还没能用真实 Key 验证过，
  * 换真实 Key 后第一次下单建议核对一下实际响应形状对不对。
  *
  * ⚠️ 接真实资金前还必须处理：
- *   1. 这是纯前端静态站（GitHub Pages，无服务端代理），GATSBY_ 前缀的环境变量会被
- *      构建进客户端 bundle —— 真实 API Secret 绝对不能这样直接发布出去，需要先加一层
- *      服务端/云函数代理转发签名请求，不能让浏览器直连交易所
+ *   1. Worker 用两级 token 区分风险：PROXY_TRADE_TOKEN（全权限，GET+POST）只放本地
+ *      .env.development，绝不进 CI；PROXY_READONLY_TOKEN（只放行 GET）才允许打进
+ *      GitHub Actions Secret / 公开发布的 bundle（Bitget 的历史仓位查询就是线上功能，
+ *      这个 token 必然会被人从 bundle 里看到）。这个开关本身不下单，但如果哪天改
+ *      GATSBY_EXCHANGE_PROXY_TOKEN 时手滑填成了 trade token，线上发布出去就等于
+ *      把下单权限重新公开了——改这两个 token 的值时务必确认填的是哪一个。
  *   2. 合约精度 / 最小下单量 / 合约面值（getContracts 能取到），把 notional 换算成
  *      交易所要求的张数或数量（现在直接传的是浮点数量，交易所大概率会因精度报错）
  *   3. 杠杆倍数、单向/双向持仓模式等账户级参数（双向持仓模式下 Bitget 需要
@@ -45,29 +53,25 @@ import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceO
  * 失败时保守按「已有仓位」处理。这些接口返回的字段名是按官方文档写的，还没能用真实
  * Key 验证过实际结构，换真实 Key 后第一次触发建议核对一下。
  *
- * 线上验证期：LIVE_NOTIONAL_SCALE 把 DEFAULT_LADDER 里每档的下单金额缩小到 1/10，
- * 只影响这里的实盘下单，不影响 backtest 那边的回测计算（那边仍然读原始 DEFAULT_LADDER）。
- * 验证没问题后记得把这个系数调回 1。
+ * LIVE_NOTIONAL_SCALE 控制 DEFAULT_LADDER 每档下单金额相对回测配置的缩放比例，只影响
+ * 这里的实盘下单，不影响 backtest 那边的回测计算（那边仍然读原始 DEFAULT_LADDER）。
+ * 参数/精度/持仓模式已验证通过，现在是 1（不缩放，按 DEFAULT_LADDER 原始金额下单）。
  *
- * ⚠️ 只在本地生效的开关：真实 API Key 只放本地 .env.development，不进 GitHub
- * Actions/不发布到 GitHub Pages —— 这个纯前端静态站没有服务端，GATSBY_ 前缀的变量
- * 会被打进公开发布的 JS bundle，真下单用的 key 绝对不能这样暴露出去。
- * 但要注意：.github/workflows/publish.yml 里线上构建本来就已经配了三个 Bitget 的
- * secret（GATSBY_BITGET_API_KEY/_API_SECRET/_PASSPHRASE，给只读的历史仓位功能用），
- * 如果不额外加一道开关，这份代码一旦发布上线，Bitget 那几个函数会直接拿着线上现有的
- * 真实 key 去发真实下单请求——不会因为"没配 key"而自然失败。所以这里加了
- * GATSBY_ENABLE_AUTO_ORDER 这个显式开关：只有本地 .env.development 里手动写
- * GATSBY_ENABLE_AUTO_ORDER=true 才会真的发请求；CI 里不配这个变量，线上永远走
- * disabled 分支，在发起任何网络请求之前就直接短路返回，不会碰到任何已配置的 key
- * （不管是 Bitget 那三个现成的，还是以后可能加的 Binance 的）。币对筛选 / 行情轮询
- * 走的是完全独立的 getMergedTradingPairs / getFutureKlineData，不受这个开关影响。
+ * ⚠️ 下单开关现在是运行时判断（isLiveOrderEnabled），不再是编译时固定值：本地
+ * .env.development 里 GATSBY_ENABLE_AUTO_ORDER=true 依然直接放行（行为不变）；线上
+ * 没有这个变量，改成看有没有一个还没过期的交易 session——这个 session 只能通过
+ * SurgeAlert 页面的密码解锁弹窗换来（见 utils/tradeSession.js，密码校验在
+ * workers/exchange-proxy），没解锁过就跟以前一样直接短路返回 auto_order_disabled，
+ * 不会碰任何网络请求。币对筛选 / 行情轮询走的是完全独立的 getMergedTradingPairs /
+ * getFutureKlineData，不受这个开关影响。
  */
 
-// 先用一个更小的下单金额在线上跑通，不改 DEFAULT_LADDER 本身（backtest 页面还在用它)
-const LIVE_NOTIONAL_SCALE = 0.1;
+// 不缩放，按 DEFAULT_LADDER 原始金额下单（不改 DEFAULT_LADDER 本身，backtest 页面还在用它)
+const LIVE_NOTIONAL_SCALE = 1;
 
-// 只有本地显式打开才会真的查持仓/挂单、真的下单；CI/线上不配这个变量，永远是 false
-const LIVE_ORDER_ENABLED = process.env.GATSBY_ENABLE_AUTO_ORDER === 'true';
+// 本地开发直接放行；线上没有 GATSBY_ENABLE_AUTO_ORDER，取决于有没有解锁过的交易 session
+export const isLiveOrderEnabled = () =>
+  process.env.GATSBY_ENABLE_AUTO_ORDER === 'true' || Boolean(getTradeSession());
 
 export const AUTO_ORDER_PCT_KEY = 'surge-alert-auto-order-pct';
 export const AUTO_ORDER_ENABLED_KEY = 'surge-alert-auto-order-enabled';
@@ -94,7 +98,7 @@ export const SKIP_REASON_LABEL = {
   query_failed: '查询持仓/委托失败',
   query_error: '查询持仓/委托异常',
   unsupported_exchange: '不支持的交易所',
-  auto_order_disabled: '线上未开启自动下单',
+  auto_order_disabled: '自动下单未启用/未解锁',
 };
 
 const todayKey = () => {
@@ -207,7 +211,7 @@ const parseExposure = (exchange, posResult, orderResult) => {
  * 状态就不继续开新仓。
  */
 export const checkExistingExposure = async ({ symbol, exchange }) => {
-  if (!LIVE_ORDER_ENABLED) {
+  if (!isLiveOrderEnabled()) {
     return { exposed: true, reason: 'auto_order_disabled' };
   }
   try {
@@ -237,48 +241,106 @@ let orderSeq = 0;
 // 浮点数换算出来的价格/数量做个粗糙的截位，避免请求体里出现一长串浮点误差尾数
 const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
 
+// 币安每个合约的价格/数量精度不一样（pricePrecision/quantityPrecision），
+// 统一按 8 位小数截位会超出交易所允许的最大精度（-1111 Precision is over the
+// maximum defined for this asset），得按具体合约的精度四舍五入。exchangeInfo
+// 一次请求拉回全部合约，缓存起来，同一次会话不用重复请求。
+let binanceContractsPromise = null;
+const getBinanceSymbolPrecision = async symbol => {
+  if (!binanceContractsPromise) binanceContractsPromise = getBinanceContracts();
+  const contracts = await binanceContractsPromise;
+  const contract = contracts.find(c => c.symbol === symbol);
+  return {
+    pricePrecision: contract?.pricePrecision ?? 8,
+    quantityPrecision: contract?.quantityPrecision ?? 8,
+  };
+};
+
+// 账户是单向持仓还是双向持仓（Hedge Mode）决定要不要传 positionSide，同一次会话查一次就够。
+let binancePositionModePromise = null;
+const isBinanceHedgeMode = async () => {
+  if (!binancePositionModePromise) binancePositionModePromise = getBinancePositionMode();
+  const { response } = await binancePositionModePromise;
+  return response?.dualSidePosition === true;
+};
+
 const EXCHANGE_BATCH_LIMIT_API = {
   bitget: ({ symbol, orders }) =>
     placeBitgetBatchLimit({
       symbol,
       orders: orders.map(o => ({ side: o.side, price: roundNum(o.price), size: roundNum(o.qty), clientOid: o.clientOid })),
     }),
-  binance: ({ symbol, orders }) =>
-    placeBinanceBatchLimit({
-      orders: orders.map(o => ({
+  binance: async ({ symbol, orders }) => {
+    const [{ pricePrecision, quantityPrecision }, hedgeMode] = await Promise.all([
+      getBinanceSymbolPrecision(symbol),
+      isBinanceHedgeMode(),
+    ]);
+    const rounded = orders.map(o => ({ ...o, price: roundNum(o.price, pricePrecision), qty: roundNum(o.qty, quantityPrecision) }));
+    // 四舍五入到合约精度后数量变成 0 的档，发出去毫无意义，直接跳过不发请求
+    const sendable = rounded.filter(o => o.qty > 0);
+    const skipped = rounded.filter(o => o.qty <= 0);
+
+    if (!sendable.length) {
+      return { request: null, response: null, httpStatus: null, ok: false, skipped };
+    }
+
+    const result = await placeBinanceBatchLimit({
+      orders: sendable.map(o => ({
         symbol,
         side: o.side === 'sell' ? 'SELL' : 'BUY',
-        price: roundNum(o.price),
-        quantity: roundNum(o.qty),
+        price: o.price,
+        quantity: o.qty,
         newClientOrderId: o.clientOid,
+        // 双向持仓下必须传 positionSide；单向持仓下不能传
+        ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
       })),
-    }),
+    });
+    return { ...result, skipped };
+  },
 };
-
 const EXCHANGE_MARKET_API = {
   bitget: ({ symbol, side, qty, clientOid }) =>
     placeBitgetMarket({ symbol, side, size: roundNum(qty), reduceOnly: side === 'buy', clientOid }),
-  binance: ({ symbol, side, qty, clientOid }) =>
-    placeBinanceMarket({
+  binance: async ({ symbol, side, qty, clientOid }) => {
+    const [{ quantityPrecision }, hedgeMode] = await Promise.all([
+      getBinanceSymbolPrecision(symbol),
+      isBinanceHedgeMode(),
+    ]);
+    const roundedQty = roundNum(qty, quantityPrecision);
+    if (roundedQty <= 0) {
+      throw new Error('数量四舍五入到合约精度后为 0，无法平仓');
+    }
+    return placeBinanceMarket({
       symbol,
       side: side === 'sell' ? 'SELL' : 'BUY',
-      quantity: roundNum(qty),
-      reduceOnly: side === 'buy',
+      quantity: roundedQty,
+      // 双向持仓下不能传 reduceOnly（跟 positionSide 冲突），单向持仓才需要
+      reduceOnly: !hedgeMode && side === 'buy',
+      ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
       newClientOrderId: clientOid,
-    }),
+    });
+  },
 };
 
 /**
  * 把批量下单的响应按 clientOid 对回每一档。批量请求整体失败时（比如鉴权失败，交易所
- * 只返回一个顶层错误、没有逐笔结果），把同一个错误套用到每一档。
+ * 只返回一个顶层错误、没有逐笔结果），把同一个错误套用到每一档；四舍五入后数量为 0
+ * 被跳过、没有实际发出去的档，单独标记，不跟交易所返回的结果混在一起对位。
  */
 const applyBatchResult = (exchange, legs, result) => {
+  const skippedOids = new Set((result.skipped || []).map(o => o.clientOid));
+  const skippedResults = legs
+    .filter(leg => skippedOids.has(leg.clientOid))
+    .map(leg => ({ ...leg, ok: false, status: 'skipped', error: '数量四舍五入到合约精度后为 0，已跳过' }));
+  const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid));
+
+  let sentResults;
   if (exchange === 'bitget') {
     const data = result.response?.data;
     if (data && (Array.isArray(data.successList) || Array.isArray(data.failureList))) {
       const successMap = new Map((data.successList || []).map(item => [item.clientOid, item]));
       const failureMap = new Map((data.failureList || []).map(item => [item.clientOid, item]));
-      return legs.map(leg => {
+      sentResults = sendableLegs.map(leg => {
         const success = successMap.get(leg.clientOid);
         return {
           ...leg,
@@ -290,22 +352,27 @@ const applyBatchResult = (exchange, legs, result) => {
         };
       });
     }
-  } else if (exchange === 'binance' && Array.isArray(result.response) && result.response.length === legs.length) {
-    return legs.map((leg, i) => {
+  } else if (exchange === 'binance' && Array.isArray(result.response) && result.response.length === sendableLegs.length) {
+    sentResults = sendableLegs.map((leg, i) => {
       const item = result.response[i];
       const ok = !!result.ok && !item?.code;
       return { ...leg, ok, status: ok ? 'submitted' : 'rejected', orderId: item?.orderId ?? null, response: item, httpStatus: result.httpStatus };
     });
   }
 
-  return legs.map(leg => ({
-    ...leg,
-    ok: false,
-    status: result.ok ? 'unknown' : 'rejected',
-    response: result.response,
-    httpStatus: result.httpStatus,
-    error: result.error,
-  }));
+  if (!sentResults) {
+    sentResults = sendableLegs.map(leg => ({
+      ...leg,
+      ok: false,
+      status: result.ok ? 'unknown' : 'rejected',
+      response: result.response,
+      httpStatus: result.httpStatus,
+      error: result.error,
+    }));
+  }
+
+  const byOid = new Map([...skippedResults, ...sentResults].map(r => [r.clientOid, r]));
+  return legs.map(leg => byOid.get(leg.clientOid));
 };
 
 /**
@@ -315,7 +382,7 @@ const applyBatchResult = (exchange, legs, result) => {
 export const submitLadderPlan = async plan => {
   const legsWithOid = plan.legs.map((leg, idx) => ({ ...leg, clientOid: `surge${plan.createdAt}${idx}` }));
 
-  if (!LIVE_ORDER_ENABLED) {
+  if (!isLiveOrderEnabled()) {
     return {
       ...plan,
       legs: legsWithOid.map(l => ({ ...l, ok: false, status: 'error', error: 'auto_order_disabled' })),
@@ -342,7 +409,13 @@ export const submitLadderPlan = async plan => {
 
     const legs = applyBatchResult(plan.exchange, legsWithOid, result);
     const anySucceeded = legs.some(l => l.ok);
-    return { ...plan, legs, batchRequest: result.request, status: anySucceeded ? 'open' : 'failed' };
+    const allSkipped = legs.every(l => l.status === 'skipped');
+    return {
+      ...plan,
+      legs,
+      batchRequest: result.request,
+      status: anySucceeded ? 'open' : allSkipped ? 'skipped' : 'failed',
+    };
   } catch (e) {
     console.error(`[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} 批量下单请求失败`, e);
     return {
@@ -357,7 +430,7 @@ const placeExchangeMarketOrder = async ({ symbol, exchange, side, qty }) => {
   orderSeq += 1;
   const clientOid = `surge${Date.now()}${orderSeq}`;
 
-  if (!LIVE_ORDER_ENABLED) {
+  if (!isLiveOrderEnabled()) {
     return { clientOid, orderId: null, ok: false, status: 'error', error: 'auto_order_disabled', submittedAt: Date.now() };
   }
 

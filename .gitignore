@@ -69,3 +69,7 @@ yarn-error.log
 .pnp.js
 # Yarn Integrity file
 .yarn-integrity
+
+# Cloudflare Worker（exchange-signed-proxy）本地开发密钥与构建缓存，绝不提交
+workers/exchange-proxy/.dev.vars
+workers/exchange-proxy/.wrangler/ 
