@@ -298,6 +298,7 @@ const EXCHANGE_BATCH_LIMIT_API = {
     return { ...result, skipped };
   },
 };
+
 const EXCHANGE_MARKET_API = {
   bitget: ({ symbol, side, qty, clientOid }) =>
     placeBitgetMarket({ symbol, side, size: roundNum(qty), reduceOnly: side === 'buy', clientOid }),

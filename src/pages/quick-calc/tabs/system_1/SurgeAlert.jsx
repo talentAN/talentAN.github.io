@@ -33,6 +33,15 @@ const TITLE_FLASH_MS = 8000;
 /** 当日 K 线粒度（UTC 日线，与 todayKey 对齐） */
 const GRANULARITY = '1Dutc';
 
+// 自动下单批次状态标签的配色，跟 _autoOrderModel.js 的 STATUS_LABEL 一一对应
+const BATCH_STATUS_COLOR = {
+  submitting: { bg: '#fff7e6', color: '#d48806', border: '#ffd591' },
+  open: { bg: '#f6ffed', color: '#389e0d', border: '#b7eb8f' },
+  closed: { bg: '#e6f4ff', color: '#1677ff', border: '#91caff' },
+  failed: { bg: '#fff1f0', color: '#cf1322', border: '#ffa39e' },
+  skipped: { bg: '#fafafa', color: '#8c8c8c', border: '#d9d9d9' },
+};
+
 const todayKey = () => {
   const d = new Date();
   return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
@@ -299,8 +308,7 @@ const SurgeAlert = () => {
       document.title = originalTitleRef.current;
     };
   }, []);
-
-  // 轮询：running=true 时启动，false 或卸载时 abort
+// 轮询：running=true 时启动，false 或卸载时 abort
   useEffect(() => {
     if (!running) return undefined;
 
@@ -453,6 +461,7 @@ const SurgeAlert = () => {
                 } else {
                   clearHit(pair);
                 }
+
                 if (autoOrderEnabledRef.current) {
                   const event = await handleAutoOrder(info);
                   if (event) orderEvents.push(event);
@@ -600,7 +609,8 @@ const SurgeAlert = () => {
           userSelect: 'none',
           touchAction: 'none',
         }}
-      >
+
+        >
         暴涨
         {hasHits ? (
           <span
@@ -834,105 +844,89 @@ const SurgeAlert = () => {
             暂无命中
           </div>
         ) : (
-          alerts.map(item => (
-            <div
-              key={`${item.exchange}-${item.symbol}`}
-              style={{
-                background: '#fff',
-                border: '1px solid #ffa39e',
-                borderRadius: 6,
-                padding: '8px 8px 6px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <a
-                  href={item.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: '#cf1322',
-                    textDecoration: 'none',
-                  }}
-                >
-                  {item.symbol}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => dismiss(item.exchange, item.symbol)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#bfbfbf',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    padding: 0,
-                    lineHeight: 1,
-                  }}
-                  title="关闭"
-                >
-                  ×
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: '#389e0d', fontWeight: 600, marginTop: 2 }}>
-                +{((item.ratio - 1) * 100).toFixed(1)}%
-              </div>
-              <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
-                {item.exchange === 'binance' ? 'Binance' : 'Bitget'}
-              </div>
-            </div>
-          ))
-        )}
-
-        {autoBatches.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#a8071a', marginTop: 4 }}>
-              自动下单（真实签名请求 · 当前是 mock key）
-            </div>
-            {autoBatches.map(b => {
-              const firstLeg = (b.legs || [])[0];
-              const errText = firstLeg?.response?.msg || firstLeg?.response?.message || firstLeg?.error;
-              return (
-                <div
-                  key={b.id}
-                  style={{
-                    background: '#fff',
-                    border: '1px dashed #ffa39e',
-                    borderRadius: 6,
-                    padding: '8px 8px 6px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a8071a' }}>{b.symbol}</span>
-                    <span style={{ fontSize: 10, color: '#8c8c8c' }}>
-                      {b.exchange === 'binance' ? 'Binance' : 'Bitget'}
-                    </span>
+          alerts.map(item => {
+            const batch = autoBatchesRef.current.get(`${todayKey()}:${item.exchange}:${item.symbol}`);
+            const batchColor = batch && BATCH_STATUS_COLOR[batch.status];
+            const batchTitle = batch
+              ? [
+                  STATUS_LABEL[batch.status] || batch.status,
+                  batch.exitReason && EXIT_REASON_LABEL[batch.exitReason],
+                  batch.skipReason && SKIP_REASON_LABEL[batch.skipReason],
+                  batch.legs?.[0]?.response?.msg || batch.legs?.[0]?.response?.message || batch.legs?.[0]?.error,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : '';
+            return (
+              <div
+                key={`${item.exchange}-${item.symbol}`}
+                style={{
+                  background: '#fff',
+                  border: '1px solid #ffa39e',
+                  borderRadius: 6,
+                  padding: '8px 8px 6px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#cf1322',
+                        textDecoration: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.symbol}
+                    </a>
+                    {batch && (
+                      <span
+                        title={batchTitle}
+                        style={{
+                          fontSize: 10,
+                          lineHeight: '16px',
+                          padding: '0 6px',
+                          borderRadius: 999,
+                          whiteSpace: 'nowrap',
+                          background: batchColor?.bg || '#fafafa',
+                          color: batchColor?.color || '#8c8c8c',
+                          border: `1px solid ${batchColor?.border || '#d9d9d9'}`,
+                        }}
+                      >
+                        {STATUS_LABEL[batch.status] || batch.status}
+                      </span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 11, marginTop: 2, color: b.status === 'failed' ? '#cf1322' : '#595959' }}>
-                    {STATUS_LABEL[b.status] || b.status}
-                    {b.exitReason ? `（${EXIT_REASON_LABEL[b.exitReason] || b.exitReason}）` : ''}
-                    {b.skipReason ? `（${SKIP_REASON_LABEL[b.skipReason] || b.skipReason}）` : ''}
-                  </div>
-                  {b.legs?.length > 0 && (
-                    <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
-                      挂单价：{b.legs.map(leg => leg.price.toFixed(4)).join(' / ')}
-                    </div>
-                  )}
-                  {Number.isFinite(b.stopPrice) && Number.isFinite(b.targetPrice) && (
-                    <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
-                      止损 {b.stopPrice.toFixed(4)} · 止盈 {b.targetPrice.toFixed(4)}
-                    </div>
-                  )}
-                  {errText && (
-                    <div style={{ fontSize: 10, color: '#cf1322', marginTop: 2, wordBreak: 'break-all' }}>
-                      交易所响应：{errText}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => dismiss(item.exchange, item.symbol)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#bfbfbf',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                    title="关闭"
+                  >
+                    ×
+                  </button>
                 </div>
-              );
-            })}
-          </>
+                <div style={{ fontSize: 11, color: '#389e0d', fontWeight: 600, marginTop: 2 }}>
+                  +{((item.ratio - 1) * 100).toFixed(1)}%
+                </div>
+                <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+                  {item.exchange === 'binance' ? 'Binance' : 'Bitget'}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
