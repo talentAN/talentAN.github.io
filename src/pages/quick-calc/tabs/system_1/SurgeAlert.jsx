@@ -4,6 +4,23 @@ import {
   getFutureKlineData,
   getTradeUrl,
 } from '@root/src/container/market';
+import {
+  DEFAULT_AUTO_ORDER_PCT,
+  EXIT_REASON_LABEL,
+  STATUS_LABEL,
+  SKIP_REASON_LABEL,
+  loadAutoOrderPct,
+  saveAutoOrderPct,
+  loadAutoOrderEnabled,
+  saveAutoOrderEnabled,
+  loadAutoOrderBatches,
+  saveAutoOrderBatches,
+  buildLadderPlan,
+  submitLadderPlan,
+  closeLadderPlan,
+  evaluateExit,
+  checkExistingExposure,
+} from './_autoOrderModel';
 
 const BATCH_SIZE = 8;
 const BATCH_MS = 1000;
@@ -130,8 +147,8 @@ const bringTabToFront = (label) => {
   }
 };
 
-/** 从当日 K 线判断是否暴涨；命中则返回 alert 对象，否则 null */
-const checkPairSurge = async (pair, threshold) => {
+/** 拉取币对当日 K 线，返回涨幅原始数据；无数据返回 null */
+const getPairSurgeInfo = async pair => {
   const { symbol, exchange } = pair;
   const res = await getFutureKlineData(
     { symbol, granularity: GRANULARITY, limit: 1 },
@@ -146,15 +163,12 @@ const checkPairSurge = async (pair, threshold) => {
   const last = parseFloat(candle[4]);
   if (!open || open <= 0 || !high) return null;
 
-  const ratio = high / open;
-  if (ratio < threshold) return null;
-
   return {
     exchange,
     symbol,
     open,
     high,
-    ratio,
+    ratio: high / open,
     last: last || high,
     link: getTradeUrl(symbol, exchange),
   };
@@ -168,9 +182,17 @@ const SurgeAlert = () => {
   const [lastPoll, setLastPoll] = useState(null);
   const [expanded, setExpanded] = useState(true);
   const [pos, setPos] = useState({ x: 16, y: 120 });
+  const [running, setRunning] = useState(true);
+  const [autoOrderPct, setAutoOrderPct] = useState(DEFAULT_AUTO_ORDER_PCT);
+  const [autoOrderPctInput, setAutoOrderPctInput] = useState(String(DEFAULT_AUTO_ORDER_PCT));
+  const [autoOrderEnabled, setAutoOrderEnabled] = useState(true);
+  const [autoBatches, setAutoBatches] = useState([]);
   const notifiedRef = useRef(new Set());
   const alertsMapRef = useRef(new Map());
   const pctRef = useRef(DEFAULT_PCT);
+  const autoOrderPctRef = useRef(DEFAULT_AUTO_ORDER_PCT);
+  const autoOrderEnabledRef = useRef(true);
+  const autoBatchesRef = useRef(new Map());
   const restartRef = useRef(false);
   const abortRef = useRef(false);
   const dragRef = useRef(null);
@@ -185,6 +207,19 @@ const SurgeAlert = () => {
     setPctInput(String(initial));
     pctRef.current = initial;
     setPos(loadPos());
+
+    const initialAutoPct = loadAutoOrderPct();
+    setAutoOrderPct(initialAutoPct);
+    setAutoOrderPctInput(String(initialAutoPct));
+    autoOrderPctRef.current = initialAutoPct;
+
+    const initialEnabled = loadAutoOrderEnabled();
+    setAutoOrderEnabled(initialEnabled);
+    autoOrderEnabledRef.current = initialEnabled;
+
+    const initialBatches = loadAutoOrderBatches();
+    initialBatches.forEach(b => autoBatchesRef.current.set(b.id, b));
+    setAutoBatches(initialBatches);
   }, []);
 
   useEffect(() => {
@@ -236,12 +271,12 @@ const SurgeAlert = () => {
     window.addEventListener('pointerup', onUp);
   };
 
+  // 通知权限 + 音频解锁（只挂一次）
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
 
-    // 浏览器要求用户手势后才能播音频，点一下页面解锁
     const unlockAudio = () => {
       try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -256,6 +291,17 @@ const SurgeAlert = () => {
     };
     window.addEventListener('click', unlockAudio);
     window.addEventListener('keydown', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      document.title = originalTitleRef.current;
+    };
+  }, []);
+
+  // 轮询：running=true 时启动，false 或卸载时 abort
+  useEffect(() => {
+    if (!running) return undefined;
 
     abortRef.current = false;
 
@@ -283,6 +329,81 @@ const SurgeAlert = () => {
       alertsMapRef.current.delete(`${pair.exchange}:${pair.symbol}`);
     };
 
+    const syncAutoBatches = () => {
+      const list = Array.from(autoBatchesRef.current.values()).sort(
+        (a, b) => b.createdAt - a.createdAt
+      );
+      setAutoBatches(list);
+      saveAutoOrderBatches(list);
+      return list;
+    };
+
+    // 涨幅达到自动下单阈值：按回测阶梯模型挂单（MOCK）；已有批次则只检查是否该离场
+    const handleAutoOrder = async (info) => {
+      const batchKey = `${todayKey()}:${info.exchange}:${info.symbol}`;
+      const existing = autoBatchesRef.current.get(batchKey);
+
+      if (existing) {
+        if (existing.status !== 'open') return null;
+        const reason = evaluateExit(existing, info.last);
+        if (!reason) return null;
+        const exitPrice =
+          reason === 'stop' ? existing.stopPrice
+            : reason === 'target' ? existing.targetPrice
+              : info.last;
+        try {
+          const closed = await closeLadderPlan(existing, reason, exitPrice);
+          autoBatchesRef.current.set(batchKey, closed);
+          syncAutoBatches();
+          return { type: 'closed', batch: closed };
+        } catch (e) {
+          console.error('[SurgeAlert][AutoOrder] close', batchKey, e);
+          return null;
+        }
+      }
+
+      const autoThreshold = 1 + autoOrderPctRef.current / 100;
+      if (info.ratio < autoThreshold) return null;
+
+      // 下单前先查一遍该币对是否已有持仓 / 未成交委托，命中就跳过，当天不再重复查询
+      const exposure = await checkExistingExposure({ symbol: info.symbol, exchange: info.exchange });
+      if (exposure.exposed) {
+        const skipped = {
+          id: batchKey,
+          symbol: info.symbol,
+          exchange: info.exchange,
+          status: 'skipped',
+          skipReason: exposure.reason,
+          createdAt: Date.now(),
+        };
+        autoBatchesRef.current.set(batchKey, skipped);
+        syncAutoBatches();
+        return null;
+      }
+
+      const plan = buildLadderPlan({
+        symbol: info.symbol,
+        exchange: info.exchange,
+        open: info.open,
+        triggerHigh: info.high,
+      });
+      const pendingBatch = { ...plan, id: batchKey, status: 'submitting' };
+      autoBatchesRef.current.set(batchKey, pendingBatch);
+      syncAutoBatches();
+
+      try {
+        const submitted = { ...(await submitLadderPlan(plan)), id: batchKey };
+        autoBatchesRef.current.set(batchKey, submitted);
+        syncAutoBatches();
+        return { type: 'submitted', batch: submitted };
+      } catch (e) {
+        console.error('[SurgeAlert][AutoOrder] submit', batchKey, e);
+        autoBatchesRef.current.set(batchKey, { ...pendingBatch, status: 'failed' });
+        syncAutoBatches();
+        return null;
+      }
+    };
+
     const runLoop = async () => {
       while (!abortRef.current) {
         let pairs = [];
@@ -295,6 +416,8 @@ const SurgeAlert = () => {
           await sleep(3000);
           continue;
         }
+
+        if (abortRef.current) break;
 
         if (!pairs.length) {
           setStatus('无可用币对，重试中…');
@@ -312,22 +435,36 @@ const SurgeAlert = () => {
           const batch = pairs.slice(i, i + BATCH_SIZE);
           const threshold = 1 + pctRef.current / 100;
           const freshHits = [];
+          const orderEvents = [];
 
           await Promise.all(
             batch.map(async pair => {
               try {
-                const hit = await checkPairSurge(pair, threshold);
-                if (hit) {
-                  const fresh = applyHit(hit);
+                const info = await getPairSurgeInfo(pair);
+                if (!info) {
+                  clearHit(pair);
+                  return;
+                }
+
+                if (info.ratio >= threshold) {
+                  const fresh = applyHit(info);
                   if (fresh) freshHits.push(fresh);
                 } else {
                   clearHit(pair);
+                }
+
+                if (autoOrderEnabledRef.current) {
+                  const event = await handleAutoOrder(info);
+                  if (event) orderEvents.push(event);
                 }
               } catch (e) {
                 console.error('[SurgeAlert]', pair.symbol, e);
               }
             })
           );
+
+          if (abortRef.current) break;
+
           const list = syncAlerts();
           const checked = Math.min(i + batch.length, total);
           setLastPoll(new Date());
@@ -337,11 +474,16 @@ const SurgeAlert = () => {
               : `轮询 ${checked}/${total} · 无命中`
           );
 
-          if (freshHits.length) {
-            const label = freshHits
+          if (freshHits.length || orderEvents.length) {
+            const hitLabels = freshHits
               .slice(0, 3)
-              .map(item => `${item.symbol}(+${((item.ratio - 1) * 100).toFixed(0)}%)`)
-              .join(' ');
+              .map(item => `${item.symbol}(+${((item.ratio - 1) * 100).toFixed(0)}%)`);
+            const orderLabels = orderEvents.slice(0, 3).map(e =>
+              e.type === 'submitted'
+                ? `${e.batch.symbol}已自动挂单`
+                : `${e.batch.symbol}${EXIT_REASON_LABEL[e.batch.exitReason] || ''}离场`
+            );
+            const label = [...hitLabels, ...orderLabels].slice(0, 3).join(' ');
             setExpanded(true);
             playAlertSound();
             bringTabToFront(label);
@@ -357,11 +499,19 @@ const SurgeAlert = () => {
 
     return () => {
       abortRef.current = true;
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
-      document.title = originalTitleRef.current;
     };
-  }, []);
+  }, [running]);
+
+  const stopMonitor = () => {
+    abortRef.current = true;
+    setRunning(false);
+    setStatus('已停止');
+  };
+
+  const startMonitor = () => {
+    setStatus('启动中…');
+    setRunning(true);
+  };
 
   const applyPct = (raw) => {
     const n = parseFloat(raw);
@@ -377,8 +527,10 @@ const SurgeAlert = () => {
     alertsMapRef.current.clear();
     setAlerts([]);
     notifiedRef.current.clear();
-    restartRef.current = true;
-    setStatus('阈值已更新，重新轮询…');
+    if (running) {
+      restartRef.current = true;
+      setStatus('阈值已更新，重新轮询…');
+    }
   };
 
   const dismiss = (exchange, symbol) => {
@@ -386,17 +538,43 @@ const SurgeAlert = () => {
     setAlerts(prev => prev.filter(a => !(a.exchange === exchange && a.symbol === symbol)));
   };
 
+  const applyAutoOrderPct = (raw) => {
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n) || n <= 0) {
+      setAutoOrderPctInput(String(autoOrderPct));
+      return;
+    }
+    setAutoOrderPct(n);
+    setAutoOrderPctInput(String(n));
+    autoOrderPctRef.current = n;
+    saveAutoOrderPct(n);
+  };
+
+  const toggleAutoOrder = () => {
+    const next = !autoOrderEnabled;
+    setAutoOrderEnabled(next);
+    autoOrderEnabledRef.current = next;
+    saveAutoOrderEnabled(next);
+  };
+
   const hasHits = alerts.length > 0;
 
   // 收起态：小角标，位置跟随拖拽坐标
   if (!expanded) {
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onPointerDown={startDrag}
         onClick={() => {
           if (movedRef.current) return;
           setExpanded(true);
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setExpanded(true);
+          }
         }}
         title={`${status}（可拖拽）`}
         style={{
@@ -439,9 +617,11 @@ const SurgeAlert = () => {
             {alerts.length}
           </span>
         ) : (
-          <span style={{ fontSize: 11, fontWeight: 400, color: '#8c8c8c' }}>监控中</span>
+          <span style={{ fontSize: 11, fontWeight: 400, color: '#8c8c8c' }}>
+            {running ? '监控中' : '已停止'}
+          </span>
         )}
-      </button>
+      </div>
     );
   }
 
@@ -482,22 +662,61 @@ const SurgeAlert = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨监控</div>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: '#8c8c8c',
-              cursor: 'pointer',
-              fontSize: 16,
-              lineHeight: 1,
-              padding: 0,
-            }}
-            title="收起"
-          >
-            −
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {running ? (
+              <button
+                type="button"
+                onClick={stopMonitor}
+                style={{
+                  border: '1px solid #ffa39e',
+                  background: '#fff',
+                  color: '#cf1322',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  lineHeight: 1,
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                }}
+                title="停止轮询"
+              >
+                停止
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startMonitor}
+                style={{
+                  border: '1px solid #b7eb8f',
+                  background: '#f6ffed',
+                  color: '#389e0d',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  lineHeight: 1,
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                }}
+                title="开始轮询"
+              >
+                开始
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#8c8c8c',
+                cursor: 'pointer',
+                fontSize: 16,
+                lineHeight: 1,
+                padding: 0,
+              }}
+              title="收起"
+            >
+              −
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#cf1322' }}>
           <span>涨幅 &gt;</span>
@@ -527,6 +746,53 @@ const SurgeAlert = () => {
             }}
           />
           <span>%</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#a8071a', marginTop: 4 }}>
+          <span>自动下单 &gt;</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={autoOrderPctInput}
+            onChange={e => setAutoOrderPctInput(e.target.value)}
+            onBlur={() => applyAutoOrderPct(autoOrderPctInput)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.target.blur();
+              }
+            }}
+            style={{
+              width: 40,
+              height: 22,
+              border: '1px solid #ffa39e',
+              borderRadius: 4,
+              padding: '0 4px',
+              fontSize: 12,
+              color: '#a8071a',
+              background: '#fff',
+              outline: 'none',
+              cursor: 'text',
+            }}
+          />
+          <span>%</span>
+          <button
+            type="button"
+            onClick={toggleAutoOrder}
+            title="按回测阶梯模型自动下单（真实签名请求，当前用 mock API Key）"
+            style={{
+              marginLeft: 2,
+              border: autoOrderEnabled ? '1px solid #b7eb8f' : '1px solid #d9d9d9',
+              background: autoOrderEnabled ? '#f6ffed' : '#fafafa',
+              color: autoOrderEnabled ? '#389e0d' : '#8c8c8c',
+              cursor: 'pointer',
+              fontSize: 10,
+              lineHeight: 1,
+              padding: '2px 6px',
+              borderRadius: 4,
+            }}
+          >
+            {autoOrderEnabled ? '已开启' : '已关闭'}
+          </button>
         </div>
         <div style={{ color: '#8c8c8c', marginTop: 4 }}>{status}</div>
         {lastPoll && (
@@ -612,6 +878,56 @@ const SurgeAlert = () => {
               </div>
             </div>
           ))
+        )}
+
+        {autoBatches.length > 0 && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#a8071a', marginTop: 4 }}>
+              自动下单（真实签名请求 · 当前是 mock key）
+            </div>
+            {autoBatches.map(b => {
+              const firstLeg = (b.legs || [])[0];
+              const errText = firstLeg?.response?.msg || firstLeg?.response?.message || firstLeg?.error;
+              return (
+                <div
+                  key={b.id}
+                  style={{
+                    background: '#fff',
+                    border: '1px dashed #ffa39e',
+                    borderRadius: 6,
+                    padding: '8px 8px 6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a8071a' }}>{b.symbol}</span>
+                    <span style={{ fontSize: 10, color: '#8c8c8c' }}>
+                      {b.exchange === 'binance' ? 'Binance' : 'Bitget'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 2, color: b.status === 'failed' ? '#cf1322' : '#595959' }}>
+                    {STATUS_LABEL[b.status] || b.status}
+                    {b.exitReason ? `（${EXIT_REASON_LABEL[b.exitReason] || b.exitReason}）` : ''}
+                    {b.skipReason ? `（${SKIP_REASON_LABEL[b.skipReason] || b.skipReason}）` : ''}
+                  </div>
+                  {b.legs?.length > 0 && (
+                    <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+                      挂单价：{b.legs.map(leg => leg.price.toFixed(4)).join(' / ')}
+                    </div>
+                  )}
+                  {Number.isFinite(b.stopPrice) && Number.isFinite(b.targetPrice) && (
+                    <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+                      止损 {b.stopPrice.toFixed(4)} · 止盈 {b.targetPrice.toFixed(4)}
+                    </div>
+                  )}
+                  {errText && (
+                    <div style={{ fontSize: 10, color: '#cf1322', marginTop: 2, wordBreak: 'break-all' }}>
+                      交易所响应：{errText}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
         )}
       </div>
     </div>
