@@ -154,3 +154,18 @@ export const getFutureTicker = async symbol => {
     return {};
   }
 };
+
+/** 获取 USDT 本位合约当前资金费率。 */
+export const getFutureFundingRate = async symbol => {
+  const response = await fetch(
+    `${exchange.baseUrl}/api/v2/mix/market/current-fund-rate?productType=USDT-FUTURES&symbol=${encodeURIComponent(symbol)}`
+  );
+  const body = await response.json();
+  if (!response.ok || body?.code !== '00000') {
+    throw new Error(body?.msg || `Bitget 资金费率请求失败 (${response.status})`);
+  }
+  const item = Array.isArray(body.data) ? body.data[0] : body.data;
+  const fundingRate = Number(item?.fundingRate);
+  if (!Number.isFinite(fundingRate)) throw new Error('Bitget 资金费率响应无效');
+  return { symbol, fundingRate, fundingTime: Number(item?.fundingTime) || null, raw: body };
+};

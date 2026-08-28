@@ -3,7 +3,8 @@ import { placeFutureBatchLimitOrders as placeBitgetBatchLimit, placeFutureMarket
 import { placeFutureBatchLimitOrders as placeBinanceBatchLimit, placeFutureMarketOrder as placeBinanceMarket } from '@root/src/container/binance/api/order';
 import { getSinglePosition as getBitgetPosition, getPendingOrders as getBitgetPendingOrders } from '@root/src/container/bitget/api/query';
 import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceOpenOrders, getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
-import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
+import { getContracts as getBinanceContracts, getFutureFundingRate as getBinanceFundingRate } from '@root/src/container/binance/api';
+import { getFutureFundingRate as getBitgetFundingRate } from '@root/src/container/bitget/api';
 import { getTradeSession } from '@root/src/utils/tradeSession';
 
 /**
@@ -87,6 +88,8 @@ export const EXIT_REASON_LABEL = {
 export const STATUS_LABEL = {
   submitting: '提交中…',
   open: '已挂单',
+  partial: '部分成功',
+  unknown: '结果待确认',
   closed: '已离场',
   failed: '提交失败',
   skipped: '已跳过',
@@ -99,6 +102,9 @@ export const SKIP_REASON_LABEL = {
   query_error: '查询持仓/委托异常',
   unsupported_exchange: '不支持的交易所',
   auto_order_disabled: '自动下单未启用/未解锁',
+  funding_rate_too_low: '资金费率低于 -1%',
+  funding_rate_unavailable: '资金费率不可用',
+  funding_rate_query_failed: '资金费率查询失败',
 };
 
 const todayKey = () => {
@@ -210,6 +216,29 @@ const parseExposure = (exchange, posResult, orderResult) => {
  * 查询请求本身失败（鉴权失败、网络异常等）时保守按「已有仓位」处理，不确定账户
  * 状态就不继续开新仓。
  */
+export const checkFundingRate = async ({ symbol, exchange }) => {
+  if (!isLiveOrderEnabled()) return { allowed: false, reason: 'auto_order_disabled' };
+  try {
+    const result = exchange === 'binance'
+      ? await getBinanceFundingRate(symbol)
+      : exchange === 'bitget'
+        ? await getBitgetFundingRate(symbol)
+        : null;
+    if (!result) return { allowed: true, fundingRate: null, fundingRateUnavailable: true, reason: 'unsupported_exchange' };
+    const fundingRate = Number(result.fundingRate);
+    if (!Number.isFinite(fundingRate)) {
+      return { allowed: true, fundingRate: null, fundingRateUnavailable: true, reason: 'funding_rate_unavailable' };
+    }
+    if (fundingRate < -0.01) {
+      return { allowed: false, reason: 'funding_rate_too_low', fundingRate };
+    }
+    return { allowed: true, fundingRate };
+  } catch (e) {
+    console.error(`[SurgeAlert][FUNDING] ${exchange} ${symbol} 查询资金费率失败，继续下单`, e);
+    return { allowed: true, fundingRate: null, fundingRateUnavailable: true, reason: 'funding_rate_query_failed', error: e.message };
+  }
+};
+
 export const checkExistingExposure = async ({ symbol, exchange }) => {
   if (!isLiveOrderEnabled()) {
     return { exposed: true, reason: 'auto_order_disabled' };
@@ -246,15 +275,40 @@ const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
 // maximum defined for this asset），得按具体合约的精度四舍五入。exchangeInfo
 // 一次请求拉回全部合约，缓存起来，同一次会话不用重复请求。
 let binanceContractsPromise = null;
-const getBinanceSymbolPrecision = async symbol => {
+const getBinanceSymbolRules = async symbol => {
   if (!binanceContractsPromise) binanceContractsPromise = getBinanceContracts();
   const contracts = await binanceContractsPromise;
   const contract = contracts.find(c => c.symbol === symbol);
+  const filters = Array.isArray(contract?.filters) ? contract.filters : [];
+  const findFilter = (...types) => filters.find(filter => types.includes(filter.filterType));
+  const priceFilter = findFilter('PRICE_FILTER');
+  const lotFilter = findFilter('LOT_SIZE');
+  const marketLotFilter = findFilter('MARKET_LOT_SIZE') || lotFilter;
+  const notionalFilter = findFilter('NOTIONAL', 'MIN_NOTIONAL');
   return {
     pricePrecision: contract?.pricePrecision ?? 8,
     quantityPrecision: contract?.quantityPrecision ?? 8,
+    tickSize: Number(priceFilter?.tickSize) || null,
+    stepSize: Number(lotFilter?.stepSize) || null,
+    minQty: Number(lotFilter?.minQty) || null,
+    marketStepSize: Number(marketLotFilter?.stepSize) || null,
+    marketMinQty: Number(marketLotFilter?.minQty) || null,
+    minNotional: Number(notionalFilter?.minNotional) || null,
   };
 };
+export const quantizePrice = (price, tickSize, digits = 8) => {
+  if (!(price > 0)) return 0;
+  if (!(tickSize > 0)) return roundNum(price, digits);
+  return roundNum(Math.ceil((price / tickSize) - 1e-10) * tickSize, digits);
+};
+
+export const quantizeQuantity = (qty, stepSize, digits = 8) => {
+  if (!(qty > 0)) return 0;
+  if (!(stepSize > 0)) return roundNum(qty, digits);
+  return roundNum(Math.floor((qty / stepSize) + 1e-10) * stepSize, digits);
+};
+
+const getBinanceSymbolPrecision = async symbol => getBinanceSymbolRules(symbol);
 
 // 账户是单向持仓还是双向持仓（Hedge Mode）决定要不要传 positionSide，同一次会话查一次就够。
 let binancePositionModePromise = null;
@@ -271,18 +325,26 @@ const EXCHANGE_BATCH_LIMIT_API = {
       orders: orders.map(o => ({ side: o.side, price: roundNum(o.price), size: roundNum(o.qty), clientOid: o.clientOid })),
     }),
   binance: async ({ symbol, orders }) => {
-    const [{ pricePrecision, quantityPrecision }, hedgeMode] = await Promise.all([
-      getBinanceSymbolPrecision(symbol),
+    const [rules, hedgeMode] = await Promise.all([
+      getBinanceSymbolRules(symbol),
       isBinanceHedgeMode(),
     ]);
-    const rounded = orders.map(o => ({ ...o, price: roundNum(o.price, pricePrecision), qty: roundNum(o.qty, quantityPrecision) }));
-    // 四舍五入到合约精度后数量变成 0 的档，发出去毫无意义，直接跳过不发请求
-    const sendable = rounded.filter(o => o.qty > 0);
-    const skipped = rounded.filter(o => o.qty <= 0);
+    const rounded = orders.map(o => ({
+      ...o,
+      price: quantizePrice(o.price, rules.tickSize, rules.pricePrecision),
+      qty: quantizeQuantity(o.qty, rules.stepSize, rules.quantityPrecision),
+    }));
+    const skipped = rounded
+      .filter(o => o.qty <= 0 || (rules.minQty && o.qty < rules.minQty) ||
+        (rules.minNotional && o.price * o.qty < rules.minNotional))
+      .map(o => ({
+        ...o,
+        error: o.qty <= 0 ? '数量量化后为 0' : rules.minQty && o.qty < rules.minQty
+          ? `数量低于最小值 ${rules.minQty}` : `名义金额低于最小值 ${rules.minNotional}`,
+      }));
+    const sendable = rounded.filter(o => !skipped.some(item => item.clientOid === o.clientOid));
 
-    if (!sendable.length) {
-      return { request: null, response: null, httpStatus: null, ok: false, skipped };
-    }
+    if (!sendable.length) return { request: null, response: null, httpStatus: null, ok: false, skipped };
 
     const result = await placeBinanceBatchLimit({
       orders: sendable.map(o => ({
@@ -291,7 +353,6 @@ const EXCHANGE_BATCH_LIMIT_API = {
         price: o.price,
         quantity: o.qty,
         newClientOrderId: o.clientOid,
-        // 双向持仓下必须传 positionSide；单向持仓下不能传
         ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
       })),
     });
@@ -303,13 +364,17 @@ const EXCHANGE_MARKET_API = {
   bitget: ({ symbol, side, qty, clientOid }) =>
     placeBitgetMarket({ symbol, side, size: roundNum(qty), reduceOnly: side === 'buy', clientOid }),
   binance: async ({ symbol, side, qty, clientOid }) => {
-    const [{ quantityPrecision }, hedgeMode] = await Promise.all([
-      getBinanceSymbolPrecision(symbol),
+    const [rules, hedgeMode] = await Promise.all([
+      getBinanceSymbolRules(symbol),
       isBinanceHedgeMode(),
     ]);
-    const roundedQty = roundNum(qty, quantityPrecision);
-    if (roundedQty <= 0) {
-      throw new Error('数量四舍五入到合约精度后为 0，无法平仓');
+    const roundedQty = quantizeQuantity(
+      qty,
+      rules.marketStepSize || rules.stepSize,
+      rules.quantityPrecision
+    );
+    if (roundedQty <= 0 || (rules.marketMinQty && roundedQty < rules.marketMinQty)) {
+      throw new Error('数量量化后低于交易所最小平仓数量');
     }
     return placeBinanceMarket({
       symbol,
@@ -336,7 +401,28 @@ const applyBatchResult = (exchange, legs, result) => {
   const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid));
 
   let sentResults;
-  if (exchange === 'bitget') {
+  if (exchange === 'binance' && Array.isArray(result.response)) {
+    const responseByOid = new Map();
+    result.response.forEach(item => {
+      const oid = item?.clientOrderId || item?.origClientOrderId || item?.newClientOrderId;
+      if (oid) responseByOid.set(oid, item);
+    });
+    const canUseIndex = result.response.length === sendableLegs.length;
+    sentResults = sendableLegs.map((leg, index) => {
+      const item = responseByOid.get(leg.clientOid) || (canUseIndex ? result.response[index] : null);
+      if (!item) return { ...leg, ok: null, status: 'unknown', response: null, httpStatus: result.httpStatus };
+      const rejected = item.code != null || item.msg && !item.orderId;
+      return {
+        ...leg,
+        ok: !rejected,
+        status: rejected ? 'rejected' : 'submitted',
+        orderId: item.orderId ?? null,
+        response: item,
+        httpStatus: result.httpStatus,
+        error: rejected ? item.msg : undefined,
+      };
+    });
+  } else if (exchange === 'bitget') {
     const data = result.response?.data;
     if (data && (Array.isArray(data.successList) || Array.isArray(data.failureList))) {
       const successMap = new Map((data.successList || []).map(item => [item.clientOid, item]));
@@ -353,27 +439,38 @@ const applyBatchResult = (exchange, legs, result) => {
         };
       });
     }
-  } else if (exchange === 'binance' && Array.isArray(result.response) && result.response.length === sendableLegs.length) {
-    sentResults = sendableLegs.map((leg, i) => {
-      const item = result.response[i];
-      const ok = !!result.ok && !item?.code;
-      return { ...leg, ok, status: ok ? 'submitted' : 'rejected', orderId: item?.orderId ?? null, response: item, httpStatus: result.httpStatus };
-    });
   }
-
   if (!sentResults) {
+    const unknown = result.response == null || !result.ok;
     sentResults = sendableLegs.map(leg => ({
       ...leg,
-      ok: false,
-      status: result.ok ? 'unknown' : 'rejected',
+      ok: unknown ? null : false,
+      status: unknown ? 'unknown' : 'rejected',
       response: result.response,
       httpStatus: result.httpStatus,
-      error: result.error,
+      error: result.error || (unknown ? '未收到逐档响应，需查询确认' : undefined),
     }));
   }
 
   const byOid = new Map([...skippedResults, ...sentResults].map(r => [r.clientOid, r]));
-  return legs.map(leg => byOid.get(leg.clientOid));
+  return legs.map(leg => byOid.get(leg.clientOid) || {
+    ...leg,
+    ok: null,
+    status: 'unknown',
+    error: '未收到该档位的交易所响应',
+  });
+};
+
+const getBatchStatus = legs => {
+  const submitted = legs.filter(leg => leg.status === 'submitted').length;
+  const rejected = legs.filter(leg => leg.status === 'rejected').length;
+  const unknown = legs.filter(leg => leg.status === 'unknown').length;
+  const skipped = legs.filter(leg => leg.status === 'skipped').length;
+  if (submitted > 0 && (rejected > 0 || unknown > 0 || skipped > 0)) return 'partial';
+  if (submitted > 0) return 'open';
+  if (unknown > 0) return 'unknown';
+  if (skipped === legs.length) return 'skipped';
+  return 'failed';
 };
 
 /**
@@ -409,13 +506,11 @@ export const submitLadderPlan = async plan => {
     );
 
     const legs = applyBatchResult(plan.exchange, legsWithOid, result);
-    const anySucceeded = legs.some(l => l.ok);
-    const allSkipped = legs.every(l => l.status === 'skipped');
     return {
       ...plan,
       legs,
       batchRequest: result.request,
-      status: anySucceeded ? 'open' : allSkipped ? 'skipped' : 'failed',
+      status: getBatchStatus(legs),
     };
   } catch (e) {
     console.error(`[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} 批量下单请求失败`, e);
@@ -469,7 +564,7 @@ export const closeLadderPlan = async (batch, reason, exitPrice) => {
   const closeOrder = await placeExchangeMarketOrder({ symbol: batch.symbol, exchange: batch.exchange, side: 'buy', qty });
   return {
     ...batch,
-    status: 'closed',
+    status: closeOrder.ok ? 'closed' : closeOrder.status === 'unknown' ? 'unknown' : 'failed',
     exitReason: reason,
     exitPrice,
     closeOrder,

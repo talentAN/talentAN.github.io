@@ -10,7 +10,6 @@ import Simulate from './Simulate';
 import SimulateRetrospective from './SimulateRetrospective';
 import DeathMechanism from './DeathMechanism';
 import MilestoneWarning from './MilestoneWarning';
-import SurgeAlert from './SurgeAlert';
 const SYSTEM1_BASE_PATH = '/quick-calc/system_1';
 const SYSTEM1_PATHS = {
   rule: `${SYSTEM1_BASE_PATH}/rule`,
@@ -76,8 +75,6 @@ const System1 = ({ location }) => {
   }, [cleanPath]);
 
   return (
-    <>
-      <SurgeAlert />
       <Card bodyStyle={{padding: '0 12px 12px'}}>
         <Menu
           className='quick-calc-menu'
@@ -97,7 +94,6 @@ const System1 = ({ location }) => {
         {showMilestoneWarning && <MilestoneWarning />}
         {showDeathMechanism && <DeathMechanism />}
       </Card>
-    </>
   );
 };
 

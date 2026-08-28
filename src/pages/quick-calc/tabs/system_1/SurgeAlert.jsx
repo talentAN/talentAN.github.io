@@ -20,6 +20,7 @@ import {
   closeLadderPlan,
   evaluateExit,
   checkExistingExposure,
+  checkFundingRate,
 } from './_autoOrderModel';
 import TradeUnlockPrompt from './TradeUnlockPrompt';
 
@@ -37,6 +38,8 @@ const GRANULARITY = '1Dutc';
 const BATCH_STATUS_COLOR = {
   submitting: { bg: '#fff7e6', color: '#d48806', border: '#ffd591' },
   open: { bg: '#f6ffed', color: '#389e0d', border: '#b7eb8f' },
+  partial: { bg: '#fffbe6', color: '#d48806', border: '#ffe58f' },
+  unknown: { bg: '#fff7e6', color: '#d46b08', border: '#ffd591' },
   closed: { bg: '#e6f4ff', color: '#1677ff', border: '#91caff' },
   failed: { bg: '#fff1f0', color: '#cf1322', border: '#ffa39e' },
   skipped: { bg: '#fafafa', color: '#8c8c8c', border: '#d9d9d9' },
@@ -56,12 +59,12 @@ const loadPct = () => {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_PCT;
 };
 
-/** 默认落在主内容右侧空位（红框区域） */
+/** 默认落在页面左上角，止盈计算器位于其下方 */
 const defaultPos = () => {
-  if (typeof window === 'undefined') return { x: 16, y: 120 };
+  if (typeof window === 'undefined') return { x: 16, y: 16 };
   return {
-    x: Math.max(16, window.innerWidth - PANEL_W - 16),
-    y: 120,
+    x: 16,
+    y: 16,
   };
 };
 
@@ -203,6 +206,7 @@ const SurgeAlert = () => {
   const autoOrderPctRef = useRef(DEFAULT_AUTO_ORDER_PCT);
   const autoOrderEnabledRef = useRef(true);
   const autoBatchesRef = useRef(new Map());
+  const autoOrderInFlightRef = useRef(new Set());
   const restartRef = useRef(false);
   const abortRef = useRef(false);
   const dragRef = useRef(null);
@@ -308,7 +312,8 @@ const SurgeAlert = () => {
       document.title = originalTitleRef.current;
     };
   }, []);
-// 轮询：running=true 时启动，false 或卸载时 abort
+
+  // 轮询：running=true 时启动，false 或卸载时 abort
   useEffect(() => {
     if (!running) return undefined;
 
@@ -351,10 +356,12 @@ const SurgeAlert = () => {
     const handleAutoOrder = async (info) => {
       const batchKey = `${todayKey()}:${info.exchange}:${info.symbol}`;
       const existing = autoBatchesRef.current.get(batchKey);
+      if (autoOrderInFlightRef.current.has(batchKey)) return null;
 
-      if (existing) {
-        if (existing.status !== 'open') return null;
-        const reason = evaluateExit(existing, info.last);
+      try {
+        if (existing) {
+          if (existing.status !== 'open') return null;
+          const reason = evaluateExit(existing, info.last);
         if (!reason) return null;
         const exitPrice =
           reason === 'stop' ? existing.stopPrice
@@ -374,6 +381,18 @@ const SurgeAlert = () => {
       const autoThreshold = 1 + autoOrderPctRef.current / 100;
       if (info.ratio < autoThreshold) return null;
 
+      autoOrderInFlightRef.current.add(batchKey);
+      const submittingBatch = {
+        ...(existing || {}),
+        id: batchKey,
+        symbol: info.symbol,
+        exchange: info.exchange,
+        status: 'submitting',
+        createdAt: existing?.createdAt || Date.now(),
+      };
+      autoBatchesRef.current.set(batchKey, submittingBatch);
+      syncAutoBatches();
+
       // 下单前先查一遍该币对是否已有持仓 / 未成交委托，命中就跳过，当天不再重复查询
       const exposure = await checkExistingExposure({ symbol: info.symbol, exchange: info.exchange });
       if (exposure.exposed) {
@@ -383,6 +402,21 @@ const SurgeAlert = () => {
           exchange: info.exchange,
           status: 'skipped',
           skipReason: exposure.reason,
+          createdAt: Date.now(),
+        };
+        autoBatchesRef.current.set(batchKey, skipped);
+        syncAutoBatches();
+        return null;
+      }
+      const funding = await checkFundingRate({ symbol: info.symbol, exchange: info.exchange });
+      if (!funding.allowed) {
+        const skipped = {
+          id: batchKey,
+          symbol: info.symbol,
+          exchange: info.exchange,
+          status: 'skipped',
+          skipReason: funding.reason,
+          ...(Number.isFinite(funding.fundingRate) ? { fundingRate: funding.fundingRate } : {}),
           createdAt: Date.now(),
         };
         autoBatchesRef.current.set(batchKey, skipped);
@@ -410,6 +444,12 @@ const SurgeAlert = () => {
         autoBatchesRef.current.set(batchKey, { ...pendingBatch, status: 'failed' });
         syncAutoBatches();
         return null;
+      }
+      } catch (e) {
+        console.error('[SurgeAlert][AutoOrder] unexpected', batchKey, e);
+        return null;
+      } finally {
+        autoOrderInFlightRef.current.delete(batchKey);
       }
     };
 
@@ -609,8 +649,7 @@ const SurgeAlert = () => {
           userSelect: 'none',
           touchAction: 'none',
         }}
-
-        >
+      >
         暴涨
         {hasHits ? (
           <span
@@ -850,9 +889,13 @@ const SurgeAlert = () => {
             const batchTitle = batch
               ? [
                   STATUS_LABEL[batch.status] || batch.status,
+                  batch.legs && `${batch.legs.filter(leg => leg.status === 'submitted').length}/${batch.legs.length} 档已提交`,
                   batch.exitReason && EXIT_REASON_LABEL[batch.exitReason],
                   batch.skipReason && SKIP_REASON_LABEL[batch.skipReason],
-                  batch.legs?.[0]?.response?.msg || batch.legs?.[0]?.response?.message || batch.legs?.[0]?.error,
+                  ...(batch.legs || [])
+                    .filter(leg => leg.status === 'rejected' || leg.status === 'unknown' || leg.status === 'skipped')
+                    .map(leg => leg.error || leg.response?.msg || leg.response?.message)
+                    .filter(Boolean),
                 ]
                   .filter(Boolean)
                   .join(' · ')

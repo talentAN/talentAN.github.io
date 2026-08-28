@@ -73,6 +73,9 @@ export const useMarkerScan = () => {
         setMarkers([...found]);
       } catch (error) {
         if (error?.name === 'AbortError') break;
+        if (pair.exchange === 'binance' && error?.status && error.status !== 200) {
+          message.error(`Binance 接口异常（${error.status}）：${pair.symbol}`, 5);
+        }
         failed.push({
           symbol: pair.symbol,
           exchange: pair.exchange,

@@ -38,7 +38,11 @@ const fetchWithBackoff = async (url, { signal, retries = 6 } = {}) => {
       continue;
     }
 
-    if (!response.ok) throw new Error(`Binance 请求失败 (${response.status})`);
+    if (!response.ok) {
+      const error = new Error(`Binance 请求失败 (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
 
     const used = Number(response.headers.get('x-mbx-used-weight-1m'));
     if (Number.isFinite(used) && used > WEIGHT_SOFT_LIMIT) {
@@ -188,6 +192,20 @@ export const getFutureTicker = async symbol => {
     console.error('binance getFutureTicker error', e);
     return {};
   }
+};
+
+/** 获取 U 本位合约当前资金费率。 */
+export const getFutureFundingRate = async symbol => {
+  const response = await fetch(
+    `${FUTURES_BASE}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`
+  );
+  const data = await response.json();
+  if (!response.ok || data?.code) {
+    throw new Error(data?.msg || `Binance 资金费率请求失败 (${response.status})`);
+  }
+  const fundingRate = Number(data?.lastFundingRate);
+  if (!Number.isFinite(fundingRate)) throw new Error('Binance 资金费率响应无效');
+  return { symbol, fundingRate, nextFundingTime: Number(data?.nextFundingTime) || null, raw: data };
 };
 
 export const getSpotTicker = async symbol => {

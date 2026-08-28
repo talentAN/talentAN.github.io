@@ -39,6 +39,22 @@ export const placeFutureBatchLimitOrders = async ({ orders, timeInForce = 'GTX' 
   });
 };
 
+/** 单笔限价单，默认用于 reduce-only 止盈平空。 */
+export const placeFutureLimitOrder = async ({ symbol, side, price, quantity, reduceOnly, positionSide, newClientOrderId, timeInForce = 'GTC' }) => {
+  const params = {
+    symbol,
+    side,
+    type: 'LIMIT',
+    timeInForce,
+    quantity: String(quantity),
+    price: String(price),
+    ...(reduceOnly ? { reduceOnly: 'true' } : {}),
+    ...(positionSide ? { positionSide } : {}),
+    ...(newClientOrderId ? { newClientOrderId } : {}),
+  };
+  return signedRequestVerbose({ method: 'POST', base: FUTURES_BASE, path: '/fapi/v1/order', params });
+};
+
 /** 市价单，主要用于止损/止盈/结构失效时的模拟平仓 */
 export const placeFutureMarketOrder = async ({ symbol, side, quantity, reduceOnly, positionSide, newClientOrderId }) => {
   const params = {
