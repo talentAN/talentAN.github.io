@@ -4,7 +4,7 @@ import Backtest from './tabs/backtest/Backtest';
 
 const BacktestPage = ({ location }) => (
   <Layout location={location}>
-    <Backtest />
+    <Backtest location={location} />
   </Layout>
 );
 

@@ -1,11 +1,17 @@
 const config = require('./config');
 
+const isProd = process.env.NODE_ENV === 'production';
+
 module.exports = [
-  'gatsby-plugin-react-helmet',
-  'gatsby-transformer-sharp',
-  'gatsby-plugin-sharp',
-  'gatsby-plugin-less',
-  'gatsby-plugin-offline',
+  // 全部写成 { resolve } 对象形式，避免 develop 时偶发
+  // 「Unexpected token '<' / Unexpected token < in JSON」类热更新错误
+  { resolve: 'gatsby-plugin-react-helmet' },
+  { resolve: 'gatsby-transformer-sharp' },
+  { resolve: 'gatsby-plugin-sharp' },
+  { resolve: 'gatsby-plugin-less' },
+  // offline 只在生产启用：本地 develop 若注册 Service Worker，
+  // 容易把 HTML 缓存成「假 JS chunk」，启动/刷新就报 Unexpected token '<'
+  ...(isProd ? [{ resolve: 'gatsby-plugin-offline' }] : []),
   // {
   //   resolve: `gatsby-plugin-valine`,
   //   options: {
@@ -68,7 +74,7 @@ module.exports = [
             rel: 'nofollow',
           },
         },
-        'gatsby-remark-prismjs',
+        { resolve: 'gatsby-remark-prismjs' },
       ],
     },
   },
@@ -79,8 +85,8 @@ module.exports = [
       useLangKeyLayout: false,
     },
   },
-  'gatsby-plugin-sitemap',
-  'gatsby-plugin-robots-txt',
+  { resolve: 'gatsby-plugin-sitemap' },
+  { resolve: 'gatsby-plugin-robots-txt' },
   {
     resolve: 'gatsby-plugin-antd',
     options: {

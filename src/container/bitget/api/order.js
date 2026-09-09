@@ -19,10 +19,11 @@ const PRODUCT_TYPE = 'USDT-FUTURES';
  */
 export const placeFutureBatchLimitOrders = async ({
   symbol,
-  orders, // [{ side, price, size, clientOid, force? }]
+  orders, // [{ side, price, size, clientOid, force?, presetStopLossPrice? }]
   marginMode = 'crossed',
   marginCoin = 'USDT',
   force = 'post_only',
+  stopLossPrice,
 }) => {
   const body = {
     symbol,
@@ -36,6 +37,10 @@ export const placeFutureBatchLimitOrders = async ({
       orderType: 'limit',
       force: o.force || force,
       ...(o.clientOid ? { clientOid: o.clientOid } : {}),
+      // 开仓单直接带预设止损，成交后写入仓位止损，无需二次下单
+      ...((o.presetStopLossPrice || stopLossPrice)
+        ? { presetStopLossPrice: String(o.presetStopLossPrice || stopLossPrice) }
+        : {}),
     })),
   };
   return authenticatedRequestVerbose('POST', '/api/v2/mix/order/batch-place-order', {}, body);
@@ -63,4 +68,31 @@ export const placeFutureMarketOrder = async ({
     ...(clientOid ? { clientOid } : {}),
   };
   return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-order', {}, body);
+};
+
+/**
+ * 仓位止损计划单：POST /api/v2/mix/order/place-tpsl-order
+ * planType=pos_loss 时 size 可不传，触发后平掉该方向全部仓位。
+ * 单向持仓空单 holdSide=sell；双向持仓空单 holdSide=short。
+ */
+export const placeFuturePosStopLoss = async ({
+  symbol,
+  triggerPrice,
+  holdSide = 'sell',
+  marginCoin = 'USDT',
+  clientOid,
+  triggerType = 'mark_price',
+}) => {
+  const body = {
+    symbol,
+    productType: PRODUCT_TYPE,
+    marginCoin,
+    planType: 'pos_loss',
+    triggerPrice: String(triggerPrice),
+    triggerType,
+    holdSide,
+    executePrice: '0',
+    ...(clientOid ? { clientOid } : {}),
+  };
+  return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-tpsl-order', {}, body);
 };

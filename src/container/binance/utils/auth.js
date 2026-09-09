@@ -6,6 +6,10 @@
  * 凭证一样，不进 CI/发布产物。Bitget 那边不受影响，继续走 workers/exchange-proxy。
  */
 
+const FUTURES_TIME_URL = 'https://fapi.binance.com/fapi/v1/time';
+const TIME_SYNC_TTL_MS = 5 * 60 * 1000;
+const RECV_WINDOW_MS = 10000;
+
 export const getApiConfig = () => ({
   apiKey: process.env.GATSBY_BINANCE_API_KEY,
   privateKey: process.env.GATSBY_BINANCE_PRIVATE_KEY,
@@ -55,6 +59,43 @@ const mask = value => {
   return str.length <= 8 ? '***' : `${str.slice(0, 4)}...${str.slice(-4)}`;
 };
 
+/** 本地时钟相对币安服务器的偏移：serverNow ≈ Date.now() + offset */
+let serverTimeOffsetMs = 0;
+let lastTimeSyncAt = 0;
+let timeSyncPromise = null;
+
+const syncServerTime = async (force = false) => {
+  if (!force && Date.now() - lastTimeSyncAt < TIME_SYNC_TTL_MS) return serverTimeOffsetMs;
+  if (timeSyncPromise) return timeSyncPromise;
+
+  timeSyncPromise = (async () => {
+    const localBefore = Date.now();
+    const res = await fetch(FUTURES_TIME_URL);
+    const localAfter = Date.now();
+    if (!res.ok) throw new Error(`同步币安服务器时间失败 HTTP ${res.status}`);
+    const data = await res.json();
+    const serverTime = Number(data?.serverTime);
+    if (!Number.isFinite(serverTime)) throw new Error('同步币安服务器时间失败：无 serverTime');
+    // 用 RTT 中点近似请求到达服务器时的本地时间
+    const localMid = Math.floor((localBefore + localAfter) / 2);
+    serverTimeOffsetMs = serverTime - localMid;
+    lastTimeSyncAt = Date.now();
+    return serverTimeOffsetMs;
+  })().finally(() => {
+    timeSyncPromise = null;
+  });
+
+  return timeSyncPromise;
+};
+
+const serverTimestamp = () => Date.now() + serverTimeOffsetMs;
+
+const isTimestampError = response => {
+  const code = response?.code;
+  const msg = String(response?.msg || response?.message || '');
+  return code === -1021 || /timestamp/i.test(msg);
+};
+
 /**
  * 同时返回实际发出的请求明细（url/headers，敏感字段打码）和交易所原始响应，
  * 用于下单这类「先看请求再验证参数」的场景。
@@ -65,27 +106,46 @@ export const signedRequestVerbose = async ({ method = 'GET', base, path, params 
     throw new Error('请先配置 API Key（GATSBY_BINANCE_API_KEY / GATSBY_BINANCE_PRIVATE_KEY）');
   }
 
-  const query = { ...params, timestamp: Date.now(), recvWindow: 5000 };
-  const qs = new URLSearchParams(query).toString();
-  const signature = await sign(qs, privateKey);
-  // Base64 签名含 + / = 等字符，必须 encodeURIComponent 后才能安全拼进 URL
-  const url = `${base}${path}?${qs}&signature=${encodeURIComponent(signature)}`;
-  const headers = { 'X-MBX-APIKEY': apiKey };
+  const sendOnce = async () => {
+    await syncServerTime();
+    const query = { ...params, timestamp: serverTimestamp(), recvWindow: RECV_WINDOW_MS };
+    const qs = new URLSearchParams(query).toString();
+    const signature = await sign(qs, privateKey);
+    // Base64 签名含 + / = 等字符，必须 encodeURIComponent 后才能安全拼进 URL
+    const url = `${base}${path}?${qs}&signature=${encodeURIComponent(signature)}`;
+    const headers = { 'X-MBX-APIKEY': apiKey };
 
-  const request = {
-    url: `${base}${path}?${qs}&signature=${mask(signature)}`,
-    method,
-    headers: { 'X-MBX-APIKEY': mask(apiKey) },
-    body: null,
+    const request = {
+      url: `${base}${path}?${qs}&signature=${mask(signature)}`,
+      method,
+      headers: { 'X-MBX-APIKEY': mask(apiKey) },
+      body: null,
+    };
+
+    try {
+      const res = await fetch(url, { method, headers });
+      const httpStatus = res.status;
+      const ok = res.ok;
+      const response = await res.json().catch(() => null);
+      return { request, response, httpStatus, ok };
+    } catch (e) {
+      return { request, response: null, httpStatus: null, ok: false, error: e.message };
+    }
   };
 
-  try {
-    const res = await fetch(url, { method, headers });
-    const httpStatus = res.status;
-    const ok = res.ok;
-    const response = await res.json().catch(() => null);
-    return { request, response, httpStatus, ok };
-  } catch (e) {
-    return { request, response: null, httpStatus: null, ok: false, error: e.message };
+  let result = await sendOnce();
+  // -1021：本地时钟漂移，强制重同步后再签一次
+  if (!result.ok && isTimestampError(result.response)) {
+    try {
+      await syncServerTime(true);
+      result = await sendOnce();
+    } catch (e) {
+      return {
+        ...result,
+        ok: false,
+        error: e.message || result.error,
+      };
+    }
   }
+  return result;
 };

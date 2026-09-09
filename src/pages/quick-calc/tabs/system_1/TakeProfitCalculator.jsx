@@ -55,8 +55,8 @@ const clamp = (x, y) => ({
   y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - 80)),
 });
 
-const TakeProfitCalculator = () => {
-  const [expanded, setExpanded] = useState(true);
+const TakeProfitCalculator = ({ docked = false }) => {
+  const [expanded, setExpanded] = useState(false);
   const [pos, setPos] = useState(loadPos);
   const [symbol, setSymbol] = useState('');
   const [open, setOpen] = useState('');
@@ -65,6 +65,7 @@ const TakeProfitCalculator = () => {
   const [drag, setDrag] = useState(null);
 
   const startDrag = event => {
+    if (docked) return;
     if (event.target.closest('input,button')) return;
     event.preventDefault();
     const origin = { ...pos, x0: event.clientX, y0: event.clientY };
@@ -81,52 +82,50 @@ const TakeProfitCalculator = () => {
   };
 
   const submit = async () => {
-    const normalizedSymbol = symbol.trim().toUpperCase();
-    const markerOpen = Number(open);
-    if (!normalizedSymbol || !(markerOpen > 0)) {
-      setStatus('请输入有效的币对和开仓价');
+    const cleanSymbol = symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const openPrice = Number(open);
+    if (!cleanSymbol || !(openPrice > 0)) {
+      setStatus('请填写币对和有效的标记日开仓价');
       return;
     }
-    setStatus('查询持仓和交易规则…');
-    setOrders([]);
+    setStatus('查询仓位中…');
     try {
-      const [{ response: positionResponse }, [rules, modeResult]] = await Promise.all([
-        getPositionRisk({ symbol: normalizedSymbol }),
-        Promise.all([getRules(normalizedSymbol), getPositionMode()]),
+      const [positions, mode, rules] = await Promise.all([
+        getPositionRisk(cleanSymbol),
+        getPositionMode(),
+        getRules(cleanSymbol),
       ]);
-      const positions = Array.isArray(positionResponse) ? positionResponse : [];
-      const position = positions.find(item => Math.abs(Number(item.positionAmt || 0)) > 0);
-      if (!position) {
-        setStatus('当前没有持仓，未提交止盈委托');
+      const list = Array.isArray(positions?.response) ? positions.response : [];
+      const short = list.find(item => {
+        const amt = Number(item.positionAmt || 0);
+        return item.symbol === cleanSymbol && (item.positionSide === 'SHORT' || amt < 0);
+      });
+      const qty = Math.abs(Number(short?.positionAmt || 0));
+      if (!(qty > 0)) {
+        setStatus('未找到该币对空仓');
+        setOrders([]);
         return;
       }
-      const amount = Number(position.positionAmt);
-      if (!(amount < 0)) {
-        setStatus('当前是多仓，本计算器只处理空仓止盈');
+      const hedgeMode = Boolean(mode?.dualSidePosition);
+      const planned = TARGETS.map(target => {
+        const price = quantizePrice(openPrice * target.mult, rules.tickSize, rules.pricePrecision);
+        const quantity = quantizeDown(qty * target.ratio, rules.stepSize, rules.quantityPrecision);
+        return { ...target, price, quantity };
+      }).filter(item => item.quantity > 0 && !(rules.minQty > 0 && item.quantity < rules.minQty));
+      if (!planned.length) {
+        setStatus('按合约精度换算后没有可提交档位');
+        setOrders([]);
         return;
       }
-      const totalQty = Math.abs(amount);
-      const hedgeMode = modeResult?.response?.dualSidePosition === true;
-      const plan = TARGETS.map(target => ({
-        ...target,
-        price: quantizePrice(markerOpen * target.mult, rules.tickSize, rules.pricePrecision),
-        quantity: quantizeDown(totalQty * target.ratio, rules.stepSize, rules.quantityPrecision),
-      })).map(target => ({
-        ...target,
-        valid: target.quantity > 0 && (!rules.minQty || target.quantity >= rules.minQty),
-      }));
+      setStatus('提交止盈限价单…');
       const results = [];
-      for (const target of plan) {
-        if (!target.valid) {
-          results.push({ ...target, status: 'skipped', error: '数量低于交易所最小下单量' });
-          continue;
-        }
+      for (const target of planned) {
         try {
           const result = await placeFutureLimitOrder({
-            symbol: normalizedSymbol,
+            symbol: cleanSymbol,
             side: 'BUY',
-            price: target.price,
             quantity: target.quantity,
+            price: target.price,
             timeInForce: 'GTX',
             reduceOnly: !hedgeMode,
             ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
@@ -144,33 +143,200 @@ const TakeProfitCalculator = () => {
     }
   };
 
-  const header = (
-      <div onPointerDown={startDrag} style={{ background: '#e6f4ff', padding: '10px 12px', fontSize: 11, color: '#0958d9', lineHeight: 1.5, borderBottom: '1px solid #91caff', cursor: 'grab' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>止盈计算器</div>
-          <button type="button" onClick={() => setExpanded(value => !value)} style={{ border: 'none', background: 'transparent', color: '#595959', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }} title={expanded ? '收起' : '展开'}>{expanded ? '−' : '+'}</button>
-        </div>
-        {expanded && <div style={{ color: '#595959', fontSize: 11 }}>Binance 空仓 · 25% / 30% / 25%</div>}
-      </div>
-  );
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="qc-tool-chip qc-tool-chip--tp"
+        onClick={() => setExpanded(true)}
+        title="打开止盈计算器"
+        style={docked ? undefined : {
+          position: 'fixed',
+          left: pos.x,
+          top: pos.y,
+          zIndex: 1001,
+          height: 40,
+          padding: '0 14px',
+          borderRadius: 20,
+          fontSize: 13,
+          cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        }}
+      >
+        止盈
+        <span className="qc-tool-chip__muted">计算器</span>
+      </button>
+    );
+  }
 
   return (
-    <div style={{ position: 'fixed', left: pos.x, top: pos.y, width: PANEL_W, maxHeight: '70vh', zIndex: 1001, display: 'flex', flexDirection: 'column', gap: 8, background: '#fff', border: '1px solid #91caff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}>
-      {header}
-      {expanded && <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 10px', maxHeight: 'calc(70vh - 72px)', touchAction: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-          <input value={symbol} onChange={event => setSymbol(event.target.value)} placeholder="币对" style={{ width: 78, minWidth: 0, height: 28, border: '1px solid #d9d9d9', borderRadius: 4, padding: '0 7px', fontSize: 12, color: '#262626', outline: 'none' }} />
-          <input value={open} onChange={event => setOpen(event.target.value)} placeholder="标记日开仓价" type="number" style={{ flex: 1, width: 0, height: 28, border: '1px solid #d9d9d9', borderRadius: 4, padding: '0 7px', fontSize: 12, color: '#262626', outline: 'none' }} />
+    <>
+      {docked && (
+        <button
+          type="button"
+          className="qc-tool-chip qc-tool-chip--tp is-open"
+          onClick={() => setExpanded(false)}
+          title="收起止盈计算器"
+        >
+          止盈
+          <span className="qc-tool-chip__muted">计算器</span>
+        </button>
+      )}
+      <div
+        className={docked ? 'qc-tool-panel qc-tool-panel--tp' : undefined}
+        style={docked ? undefined : {
+          position: 'fixed',
+          left: pos.x,
+          top: pos.y,
+          width: PANEL_W,
+          maxHeight: '70vh',
+          zIndex: 1001,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          background: '#fff',
+          border: '1px solid #91caff',
+          borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+          userSelect: 'none',
+          touchAction: 'none',
+        }}
+      >
+      <div
+        onPointerDown={startDrag}
+        style={{
+          background: '#e6f4ff',
+          padding: '10px 12px',
+          fontSize: 11,
+          color: '#0958d9',
+          lineHeight: 1.5,
+          borderBottom: '1px solid #91caff',
+          cursor: docked ? 'default' : 'grab',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>止盈计算器</div>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: '#8c8c8c',
+              cursor: 'pointer',
+              fontSize: 16,
+              lineHeight: 1,
+              padding: 0,
+            }}
+            title="收起"
+          >
+            −
+          </button>
         </div>
-        <button type="button" onClick={submit} style={{ width: '100%', height: 30, border: '1px solid #91caff', borderRadius: 4, background: '#e6f4ff', color: '#0958d9', fontSize: 12, cursor: 'pointer' }}>查询并挂止盈</button>
-        <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 4, background: '#fafafa', color: '#8c8c8c', fontSize: 11, lineHeight: 1.4 }}>{status}</div>
-        {orders.map(order => <div key={order.mult} style={{ marginTop: 6, padding: '6px 8px', border: `1px solid ${order.status === 'submitted' ? '#b7eb8f' : '#ffa39e'}`, borderRadius: 6, background: order.status === 'submitted' ? '#f6ffed' : '#fff1f0', fontSize: 11, color: order.status === 'submitted' ? '#389e0d' : '#cf1322' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}><strong>{order.mult}O · {order.ratio * 100}%</strong><span>{order.status === 'submitted' ? '已提交' : order.status === 'skipped' ? '已跳过' : order.status === 'unknown' ? '待确认' : '失败'}</span></div>
-          <div style={{ marginTop: 2, color: '#595959' }}>价格 {order.price} · 数量 {order.quantity}</div>
-          {order.error && <div style={{ marginTop: 2 }}>{order.error}</div>}
-        </div>)}
-      </div>}
-    </div>
+        <div style={{ color: '#595959', fontSize: 11 }}>Binance 空仓 · 25% / 30% / 25%</div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 10px', maxHeight: 'calc(70vh - 72px)', touchAction: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+          <input
+            value={symbol}
+            onChange={event => setSymbol(event.target.value)}
+            placeholder="币对"
+            style={{
+              width: 78,
+              minWidth: 0,
+              height: 28,
+              border: '1px solid #d9d9d9',
+              borderRadius: 4,
+              padding: '0 7px',
+              fontSize: 12,
+              color: '#262626',
+              outline: 'none',
+            }}
+          />
+          <input
+            value={open}
+            onChange={event => setOpen(event.target.value)}
+            placeholder="标记日开仓价"
+            type="number"
+            style={{
+              flex: 1,
+              width: 0,
+              height: 28,
+              border: '1px solid #d9d9d9',
+              borderRadius: 4,
+              padding: '0 7px',
+              fontSize: 12,
+              color: '#262626',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={submit}
+          style={{
+            width: '100%',
+            height: 30,
+            border: '1px solid #91caff',
+            borderRadius: 4,
+            background: '#e6f4ff',
+            color: '#0958d9',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          查询并挂止盈
+        </button>
+        <div
+          style={{
+            marginTop: 6,
+            padding: '6px 8px',
+            borderRadius: 4,
+            background: '#fafafa',
+            color: '#8c8c8c',
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+        >
+          {status}
+        </div>
+        {orders.map(order => (
+          <div
+            key={order.mult}
+            style={{
+              marginTop: 6,
+              padding: '6px 8px',
+              border: `1px solid ${order.status === 'submitted' ? '#b7eb8f' : '#ffa39e'}`,
+              borderRadius: 6,
+              background: order.status === 'submitted' ? '#f6ffed' : '#fff1f0',
+              fontSize: 11,
+              color: order.status === 'submitted' ? '#389e0d' : '#cf1322',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+              <strong>
+                {order.mult}O · {order.ratio * 100}%
+              </strong>
+              <span>
+                {order.status === 'submitted'
+                  ? '已提交'
+                  : order.status === 'skipped'
+                    ? '已跳过'
+                    : order.status === 'unknown'
+                      ? '待确认'
+                      : '失败'}
+              </span>
+            </div>
+            <div style={{ marginTop: 2, color: '#595959' }}>
+              价格 {order.price} · 数量 {order.quantity}
+            </div>
+            {order.error && <div style={{ marginTop: 2 }}>{order.error}</div>}
+          </div>
+        ))}
+      </div>
+      </div>
+    </>
   );
 };
 

@@ -18,6 +18,9 @@ const DataList = ({ columns, rows, empty, defaultSort }) => {
     return [...rows].sort((a, b) => {
       const av = col.sortBy(a);
       const bv = col.sortBy(b);
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+      }
       if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
       if (!Number.isFinite(av)) return 1;
       if (!Number.isFinite(bv)) return -1;
@@ -64,7 +67,11 @@ const DataList = ({ columns, rows, empty, defaultSort }) => {
             style={{ gridTemplateColumns: gridTemplate }}
           >
             {columns.map(col => (
-              <div key={col.key} className={s.cell} style={{ textAlign: col.align || 'left' }}>
+              <div
+                key={col.key}
+                className={cx(s.cell, col.wrap && s.cellWrap)}
+                style={{ textAlign: col.align || 'left' }}
+              >
                 {col.render(row)}
               </div>
             ))}

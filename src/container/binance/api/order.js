@@ -15,9 +15,8 @@ const FUTURES_BASE = 'https://fapi.binance.com';
  * reduceOnly（币安会报参数冲突）。调用方（_autoOrderModel.js）会先查账户实际是哪种
  * 模式再决定传不传 positionSide。
  *
- * ⚠️ 响应是一个跟请求顺序一致的数组，每项要么是订单对象（成功），要么是 { code, msg }
- * （失败）——这是按官方文档写的，还没能用真实 Key 验证过实际返回结构，换真实 Key 后
- * 建议核对一次。
+ * ⚠️ USDS-M Futures Open API 无法在限价开仓单上附带止损（无 spot orderList/oto、
+ * 无 attachAlgoOrds）；条件单请另走 /fapi/v1/algoOrder。
  */
 export const placeFutureBatchLimitOrders = async ({ orders, timeInForce = 'GTX' }) => {
   // orders: [{ symbol, side, price, quantity, newClientOrderId, timeInForce?, positionSide? }]
@@ -67,4 +66,97 @@ export const placeFutureMarketOrder = async ({ symbol, side, quantity, reduceOnl
     ...(newClientOrderId ? { newClientOrderId } : {}),
   };
   return signedRequestVerbose({ method: 'POST', base: FUTURES_BASE, path: '/fapi/v1/order', params });
+};
+
+/**
+ * 按数量挂 STOP_MARKET 条件单（空单止损：BUY + quantity）。
+ * 双向仓带 positionSide=SHORT；单向仓带 reduceOnly。
+ */
+export const placeFutureQtyStopAlgo = async ({
+  symbol,
+  side,
+  quantity,
+  triggerPrice,
+  positionSide,
+  clientAlgoId,
+  workingType = 'CONTRACT_PRICE',
+  priceProtect = true,
+}) => {
+  const algoParams = {
+    algoType: 'CONDITIONAL',
+    symbol,
+    side,
+    type: 'STOP_MARKET',
+    triggerPrice: String(triggerPrice),
+    quantity: String(quantity),
+    workingType,
+    ...(priceProtect ? { priceProtect: 'true' } : {}),
+    ...(positionSide ? { positionSide } : { reduceOnly: 'true' }),
+    ...(clientAlgoId ? { clientAlgoId } : {}),
+  };
+  return signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: algoParams,
+  }).then(r => ({ ...r, via: 'algoOrder' }));
+};
+
+/**
+ * 仓位止损 / 止盈条件单（平掉全部仓位）。
+ * 2025-12 起条件单应走 /fapi/v1/algoOrder；若返回 -4120 以外的旧环境错误，再回退
+ * 到 /fapi/v1/order。
+ *
+ * 空单止损：side=BUY + STOP_MARKET + closePosition
+ * 空单止盈：side=BUY + TAKE_PROFIT_MARKET + closePosition
+ */
+export const placeFutureClosePositionAlgo = async ({
+  symbol,
+  side,
+  triggerPrice,
+  orderType = 'STOP_MARKET',
+  positionSide,
+  clientAlgoId,
+  workingType = 'CONTRACT_PRICE',
+}) => {
+  const algoParams = {
+    algoType: 'CONDITIONAL',
+    symbol,
+    side,
+    type: orderType,
+    triggerPrice: String(triggerPrice),
+    closePosition: 'true',
+    workingType,
+    ...(positionSide ? { positionSide } : {}),
+    ...(clientAlgoId ? { clientAlgoId } : {}),
+  };
+  const algoResult = await signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: algoParams,
+  });
+  if (algoResult.ok) return { ...algoResult, via: 'algoOrder' };
+
+  const code = algoResult.response?.code;
+  // -4120 表示必须走 algo；其它错误（如端点不存在）再试旧接口
+  if (code === -4120) return { ...algoResult, via: 'algoOrder' };
+
+  const legacyParams = {
+    symbol,
+    side,
+    type: orderType,
+    stopPrice: String(triggerPrice),
+    closePosition: 'true',
+    workingType,
+    ...(positionSide ? { positionSide } : {}),
+    ...(clientAlgoId ? { newClientOrderId: clientAlgoId } : {}),
+  };
+  const legacyResult = await signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/order',
+    params: legacyParams,
+  });
+  return { ...legacyResult, via: 'order' };
 };

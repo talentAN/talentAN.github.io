@@ -17,10 +17,9 @@ import {
   saveAutoOrderBatches,
   buildLadderPlan,
   submitLadderPlan,
-  closeLadderPlan,
-  evaluateExit,
   checkExistingExposure,
   checkFundingRate,
+  checkHigh100Eligibility,
 } from './_autoOrderModel';
 import TradeUnlockPrompt from './TradeUnlockPrompt';
 
@@ -183,18 +182,20 @@ const getPairSurgeInfo = async pair => {
     high,
     ratio: high / open,
     last: last || high,
+    candleTs: Number(candle[0]),
     link: getTradeUrl(symbol, exchange),
   };
 };
 
-const SurgeAlert = () => {
+const SurgeAlert = ({ docked = false }) => {
   const [pct, setPct] = useState(DEFAULT_PCT);
   const [pctInput, setPctInput] = useState(String(DEFAULT_PCT));
   const [alerts, setAlerts] = useState([]);
   const [status, setStatus] = useState('启动中…');
   const [lastPoll, setLastPoll] = useState(null);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [pos, setPos] = useState({ x: 16, y: 120 });
+  /** 暴涨100 监控默认开启；用户可手动停止 */
   const [running, setRunning] = useState(true);
   const [autoOrderPct, setAutoOrderPct] = useState(DEFAULT_AUTO_ORDER_PCT);
   const [autoOrderPctInput, setAutoOrderPctInput] = useState(String(DEFAULT_AUTO_ORDER_PCT));
@@ -249,6 +250,7 @@ const SurgeAlert = () => {
   }, []);
 
   const startDrag = (e) => {
+    if (docked) return;
     // 输入框 / 按钮上不启动拖拽
     if (e.target.closest('input,button,a')) return;
     e.preventDefault();
@@ -352,33 +354,36 @@ const SurgeAlert = () => {
       return list;
     };
 
-    // 涨幅达到自动下单阈值：按回测阶梯模型挂单（MOCK）；已有批次则只检查是否该离场
+    // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单；平仓由用户自行处理，系统不再自动发平仓单。
+    // skipped/failed 允许重试（否则会锁死整天且 Network 里看不到后续查询）
     const handleAutoOrder = async (info) => {
       const batchKey = `${todayKey()}:${info.exchange}:${info.symbol}`;
       const existing = autoBatchesRef.current.get(batchKey);
       if (autoOrderInFlightRef.current.has(batchKey)) return null;
 
       try {
-        if (existing) {
-          if (existing.status !== 'open') return null;
-          const reason = evaluateExit(existing, info.last);
-        if (!reason) return null;
-        const exitPrice =
-          reason === 'stop' ? existing.stopPrice
-            : reason === 'target' ? existing.targetPrice
-              : info.last;
-        try {
-          const closed = await closeLadderPlan(existing, reason, exitPrice);
-          autoBatchesRef.current.set(batchKey, closed);
-          syncAutoBatches();
-          return { type: 'closed', batch: closed };
-        } catch (e) {
-          console.error('[SurgeAlert][AutoOrder] close', batchKey, e);
+        // 已挂出的批次：不再监控止损/止盈/结构失效，也不市价平仓
+        if (existing && (existing.status === 'open' || existing.status === 'partial')) {
           return null;
         }
-      }
 
-      const autoThreshold = 1 + autoOrderPctRef.current / 100;
+        if (
+          existing &&
+          existing.status !== 'skipped' &&
+          existing.status !== 'failed'
+        ) {
+          return null;
+        }
+
+        // skipped/failed：冷却后再查，避免每轮都拉全量日 K + 持仓
+        if (
+          existing &&
+          (existing.status === 'skipped' || existing.status === 'failed') &&
+          Date.now() - (existing.createdAt || 0) < 60000
+        ) {
+          return null;
+        } 
+        const autoThreshold = 1 + autoOrderPctRef.current / 100;
       if (info.ratio < autoThreshold) return null;
 
       autoOrderInFlightRef.current.add(batchKey);
@@ -388,12 +393,37 @@ const SurgeAlert = () => {
         symbol: info.symbol,
         exchange: info.exchange,
         status: 'submitting',
+        skipReason: undefined,
+        skipDetail: undefined,
         createdAt: existing?.createdAt || Date.now(),
       };
       autoBatchesRef.current.set(batchKey, submittingBatch);
       syncAutoBatches();
 
-      // 下单前先查一遍该币对是否已有持仓 / 未成交委托，命中就跳过，当天不再重复查询
+      // high100 口径：上市未满 30 天 / 历史新高突破 → 跳过（与回测标记日一致）
+      const eligibility = await checkHigh100Eligibility({
+        symbol: info.symbol,
+        exchange: info.exchange,
+        candleTs: info.candleTs,
+      });
+      if (!eligibility.allowed) {
+        const skipped = {
+          id: batchKey,
+          symbol: info.symbol,
+          exchange: info.exchange,
+          status: 'skipped',
+          skipReason: eligibility.reason,
+          ...(Number.isFinite(eligibility.listingDays)
+            ? { listingDays: eligibility.listingDays }
+            : {}),
+          createdAt: Date.now(),
+        };
+        autoBatchesRef.current.set(batchKey, skipped);
+        syncAutoBatches();
+        return null;
+      }
+
+      // 下单前查持仓 / 未成交委托；查询失败也跳过（保守）
       const exposure = await checkExistingExposure({ symbol: info.symbol, exchange: info.exchange });
       if (exposure.exposed) {
         const skipped = {
@@ -402,12 +432,14 @@ const SurgeAlert = () => {
           exchange: info.exchange,
           status: 'skipped',
           skipReason: exposure.reason,
+          ...(exposure.detail ? { skipDetail: exposure.detail } : {}),
           createdAt: Date.now(),
         };
         autoBatchesRef.current.set(batchKey, skipped);
         syncAutoBatches();
         return null;
       }
+
       const funding = await checkFundingRate({ symbol: info.symbol, exchange: info.exchange });
       if (!funding.allowed) {
         const skipped = {
@@ -417,6 +449,7 @@ const SurgeAlert = () => {
           status: 'skipped',
           skipReason: funding.reason,
           ...(Number.isFinite(funding.fundingRate) ? { fundingRate: funding.fundingRate } : {}),
+          ...(funding.detail || funding.error ? { skipDetail: funding.detail || funding.error } : {}),
           createdAt: Date.now(),
         };
         autoBatchesRef.current.set(batchKey, skipped);
@@ -429,6 +462,7 @@ const SurgeAlert = () => {
         exchange: info.exchange,
         open: info.open,
         triggerHigh: info.high,
+        candleTs: info.candleTs,
       });
       const pendingBatch = { ...plan, id: batchKey, status: 'submitting' };
       autoBatchesRef.current.set(batchKey, pendingBatch);
@@ -441,7 +475,11 @@ const SurgeAlert = () => {
         return { type: 'submitted', batch: submitted };
       } catch (e) {
         console.error('[SurgeAlert][AutoOrder] submit', batchKey, e);
-        autoBatchesRef.current.set(batchKey, { ...pendingBatch, status: 'failed' });
+        autoBatchesRef.current.set(batchKey, {
+          ...pendingBatch,
+          status: 'failed',
+          skipDetail: e?.message || String(e),
+        });
         syncAutoBatches();
         return null;
       }
@@ -608,71 +646,57 @@ const SurgeAlert = () => {
 
   const hasHits = alerts.length > 0;
 
-  // 收起态：小角标，位置跟随拖拽坐标
+  const chip = (
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerDown={docked ? undefined : startDrag}
+      onClick={() => {
+        if (!docked && movedRef.current) return;
+        setExpanded(v => (docked ? !v : true));
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setExpanded(v => (docked ? !v : true));
+        }
+      }}
+      title={docked ? status : `${status}（可拖拽）`}
+      className={[
+        'qc-tool-chip',
+        'qc-tool-chip--surge',
+        hasHits ? 'is-hit' : '',
+        !running ? 'is-stopped' : '',
+        docked && expanded ? 'is-open' : '',
+      ].filter(Boolean).join(' ')}
+      style={docked ? undefined : {
+        position: 'fixed',
+        left: pos.x,
+        top: pos.y,
+        zIndex: 1000,
+        height: 40,
+        padding: '0 14px',
+        borderRadius: 20,
+        fontSize: 13,
+        cursor: 'grab',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        touchAction: 'none',
+      }}
+    >
+      暴涨
+      {hasHits ? (
+        <span className="qc-tool-chip__badge">{alerts.length}</span>
+      ) : (
+        <span className="qc-tool-chip__muted">{running ? '监控中' : '已停止'}</span>
+      )}
+    </div>
+  );
+  // 收起态：小角标；docked 时嵌入工具坞
   if (!expanded) {
     return (
       <>
-      <TradeUnlockPrompt active={autoOrderEnabled} />
-      <div
-        role="button"
-        tabIndex={0}
-        onPointerDown={startDrag}
-        onClick={() => {
-          if (movedRef.current) return;
-          setExpanded(true);
-        }}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setExpanded(true);
-          }
-        }}
-        title={`${status}（可拖拽）`}
-        style={{
-          position: 'fixed',
-          left: pos.x,
-          top: pos.y,
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          height: 40,
-          padding: '0 14px',
-          border: hasHits ? '1px solid #ff4d4f' : '1px solid #d9d9d9',
-          borderRadius: 20,
-          background: hasHits ? '#fff1f0' : '#fff',
-          color: hasHits ? '#cf1322' : '#595959',
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: 'grab',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-          userSelect: 'none',
-          touchAction: 'none',
-        }}
-      >
-        暴涨
-        {hasHits ? (
-          <span
-            style={{
-              minWidth: 20,
-              height: 20,
-              borderRadius: 10,
-              background: '#ff4d4f',
-              color: '#fff',
-              fontSize: 12,
-              lineHeight: '20px',
-              textAlign: 'center',
-              padding: '0 6px',
-            }}
-          >
-            {alerts.length}
-          </span>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 400, color: '#8c8c8c' }}>
-            {running ? '监控中' : '已停止'}
-          </span>
-        )}
-      </div>
+        <TradeUnlockPrompt active={autoOrderEnabled} />
+        {chip}
       </>
     );
   }
@@ -680,8 +704,10 @@ const SurgeAlert = () => {
   return (
     <>
     <TradeUnlockPrompt active={autoOrderEnabled} />
+    {docked && chip}
     <div
-      style={{
+      className={docked ? 'qc-tool-panel qc-tool-panel--surge' : undefined}
+      style={docked ? undefined : {
         position: 'fixed',
         left: pos.x,
         top: pos.y,
@@ -884,22 +910,46 @@ const SurgeAlert = () => {
           </div>
         ) : (
           alerts.map(item => {
-            const batch = autoBatchesRef.current.get(`${todayKey()}:${item.exchange}:${item.symbol}`);
+            const batch = autoBatches.find(
+              b => b.id === `${todayKey()}:${item.exchange}:${item.symbol}`
+            ) || autoBatchesRef.current.get(`${todayKey()}:${item.exchange}:${item.symbol}`);
             const batchColor = batch && BATCH_STATUS_COLOR[batch.status];
-            const batchTitle = batch
-              ? [
-                  STATUS_LABEL[batch.status] || batch.status,
-                  batch.legs && `${batch.legs.filter(leg => leg.status === 'submitted').length}/${batch.legs.length} 档已提交`,
-                  batch.exitReason && EXIT_REASON_LABEL[batch.exitReason],
-                  batch.skipReason && SKIP_REASON_LABEL[batch.skipReason],
-                  ...(batch.legs || [])
-                    .filter(leg => leg.status === 'rejected' || leg.status === 'unknown' || leg.status === 'skipped')
-                    .map(leg => leg.error || leg.response?.msg || leg.response?.message)
-                    .filter(Boolean),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
+            const skipLabel = batch?.skipReason
+              ? SKIP_REASON_LABEL[batch.skipReason] || batch.skipReason
               : '';
+            const skipDetail = [
+              skipLabel,
+              batch?.skipDetail,
+              Number.isFinite(batch?.listingDays) ? `已上线 ${batch.listingDays} 天` : '',
+              Number.isFinite(batch?.fundingRate)
+                ? `资金费率 ${(batch.fundingRate * 100).toFixed(4)}%`
+                : '',
+              batch?.stopOrder
+                ? batch.stopOrder.ok
+                  ? `止损已挂 @ ${Number(batch.stopOrder.triggerPrice).toPrecision(6)}`
+                  : `止损挂单失败：${batch.stopOrder.error || batch.stopOrder.status}`
+                : '',
+              batch?.exitAttempt?.skipped
+                ? `离场跳过：${batch.exitAttempt.error || ''}`
+                : batch?.exitAttempt && !batch.exitAttempt.skipped
+                  ? `离场失败：${batch.closeOrder?.error || batch.exitAttempt.closeOrder?.error || ''}`
+                  : '',
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            const legErrors = (batch?.legs || [])
+              .filter(leg => leg.status === 'rejected' || leg.status === 'unknown' || leg.status === 'skipped')
+              .map(leg => leg.error || leg.response?.msg || leg.response?.message)
+              .filter(Boolean);
+            const statusDetail = [
+              batch?.legs &&
+                `${batch.legs.filter(leg => leg.status === 'submitted').length}/${batch.legs.length} 档已提交`,
+              batch?.status === 'closed' && batch?.exitReason && EXIT_REASON_LABEL[batch.exitReason],
+              skipDetail,
+              ...legErrors,
+            ]
+              .filter(Boolean)
+              .join(' · ');
             return (
               <div
                 key={`${item.exchange}-${item.symbol}`}
@@ -928,7 +978,6 @@ const SurgeAlert = () => {
                     </a>
                     {batch && (
                       <span
-                        title={batchTitle}
                         style={{
                           fontSize: 10,
                           lineHeight: '16px',
@@ -964,6 +1013,19 @@ const SurgeAlert = () => {
                 <div style={{ fontSize: 11, color: '#389e0d', fontWeight: 600, marginTop: 2 }}>
                   +{((item.ratio - 1) * 100).toFixed(1)}%
                 </div>
+                {statusDetail ? (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: batch?.status === 'skipped' || batch?.status === 'failed' ? '#cf1322' : '#8c8c8c',
+                      marginTop: 2,
+                      lineHeight: 1.4,
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {statusDetail}
+                  </div>
+                ) : null}
                 <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
                   {item.exchange === 'binance' ? 'Binance' : 'Bitget'}
                 </div>

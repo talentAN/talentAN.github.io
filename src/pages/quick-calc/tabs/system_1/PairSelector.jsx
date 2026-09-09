@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, message } from 'antd';
+import { Button } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getMergedTradingPairs, getFutureKlineData, getTradeUrl } from '@root/src/container/market';
 import watchData from '@root/contract-record/watch.json';
@@ -8,10 +8,8 @@ import PositionCalculatorButton from '@trade/system_1/PositionCalculatorButton';
 import {
   SPIKE_CONFIG,
   HOLD_CONFIG,
-  MARKET_CONFIG,
   RATIO_COLOR,
 } from '@root/src/consts/pairSelectorConfig';
-import { MARKET_DATA_CONFIG } from '@root/src/configs/pairSelectorConfig';
 import { getSingleDaySpike, getWindowPeakSignal, getHoldReference } from './_pairSelectorRules';
 import DataList from './_DataList';
 import UsStockPanel from './_UsStockPanel';
@@ -48,8 +46,6 @@ const Badge = ({ tone, children }) => <span className={cx(s.badge, s[tone])}>{ch
 const PairSelector = () => {
   const [market, setMarket] = useState(MARKET_CRYPTO);
   const [tradingPairs, setTradingPairs] = useState([]);
-  const [marketData, setMarketData] = useState({ BTC: {}, ETH: {} });
-  const [loadingMarket, setLoadingMarket] = useState(true);
   const [mode, setMode] = useState(MODE_SPIKE);
   const [spikeResults, setSpikeResults] = useState([]);
   const [holdResults, setHoldResults] = useState([]);
@@ -57,99 +53,6 @@ const PairSelector = () => {
   const [spikeProgress, setSpikeProgress] = useState({ checked: 0, total: 0 });
   const [spikeRunning, setSpikeRunning] = useState(false);
   const abortRef = useRef(false);
-
-  const calculatePriceChange = (klineData, days) => {
-    if (!klineData || klineData.length < days) return null;
-    const latestPrice = parseFloat(klineData[klineData.length - 1][4]);
-    const pastPrice = parseFloat(klineData[klineData.length - 1 - days][4]);
-    return (((latestPrice - pastPrice) / pastPrice) * 100).toFixed(2);
-  };
-
-  const renderMarketStats = (symbol, data) => {
-    const latest = data && data.latest ? Number(data.latest) : null;
-    return (
-      <div className={s.marketItem}>
-        <span className={s.marketSymbol}>{symbol}</span>
-        {latest ? (
-          <a
-            className={s.marketPrice}
-            href={getTradeUrl(`${symbol}USDT`, 'binance')}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {latest.toLocaleString()}
-          </a>
-        ) : (
-          <span className={s.muted}>-</span>
-        )}
-        {MARKET_DATA_CONFIG.displayPeriods.map(days => {
-          const key = `day${days}`;
-          const raw = data && (data[key] === 0 || data[key] ? data[key] : null);
-          const val = raw !== null ? parseFloat(raw) : null;
-          const tone = val === null ? s.chipFlat : val >= 0 ? s.chipUp : s.chipDown;
-          return (
-            <span key={days} className={cx(s.chip, tone)}>
-              <span className={s.chipLabel}>{days}日</span>
-              {val === null ? '-' : `${val.toFixed(2)}%`}
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const fetchMarketData = async () => {
-    setLoadingMarket(true);
-    try {
-      const endTime = moment().valueOf();
-      const startTime = moment().subtract(MARKET_CONFIG.klineDays, 'days').valueOf();
-
-      const [btcData, ethData] = await Promise.all([
-        getFutureKlineData(
-          {
-            symbol: 'BTCUSDT',
-            granularity: '1D',
-            limit: MARKET_CONFIG.klineDays,
-            startTime,
-            endTime,
-          },
-          'binance'
-        ),
-        getFutureKlineData(
-          {
-            symbol: 'ETHUSDT',
-            granularity: '1D',
-            limit: MARKET_CONFIG.klineDays,
-            startTime,
-            endTime,
-          },
-          'binance'
-        ),
-      ]);
-
-      const mkChange = (data, days) => calculatePriceChange(data, days);
-      const safeLatest = data =>
-        data && Array.isArray(data) && data.length ? parseFloat(data[data.length - 1][4]) : null;
-      setMarketData({
-        BTC: {
-          latest: safeLatest(btcData.data),
-          day7: mkChange(btcData.data, MARKET_CONFIG.periods[0]),
-          day15: mkChange(btcData.data, MARKET_CONFIG.periods[1]),
-          day45: mkChange(btcData.data, MARKET_CONFIG.periods[2]),
-        },
-        ETH: {
-          latest: safeLatest(ethData.data),
-          day7: mkChange(ethData.data, MARKET_CONFIG.periods[0]),
-          day15: mkChange(ethData.data, MARKET_CONFIG.periods[1]),
-          day45: mkChange(ethData.data, MARKET_CONFIG.periods[2]),
-        },
-      });
-    } catch (error) {
-      message.error('获取市场数据失败：' + error.message);
-    } finally {
-      setLoadingMarket(false);
-    }
-  };
 
   const loadData = () => {
     abortRef.current = true;
@@ -286,10 +189,8 @@ const PairSelector = () => {
 
   const handleRun = () => (mode === MODE_SPIKE ? runSpikeFilter() : runHoldFilter());
 
-  // 合并拉取两所币对 + 大盘数据（不再切换交易所）
   useEffect(() => {
     loadData();
-    fetchMarketData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -415,141 +316,125 @@ const PairSelector = () => {
       ? rows.filter(r => r.trigger === triggerFilter)
       : rows;
 
-      return (
-        <div className={s.panel}>
-          <div className={s.toolbar}>
-            <div className={s.cascade}>
-              <div className={s.pillGroup}>
-                {MARKET_TABS.map(t => (
-                  <span
-                    key={t.value}
-                    onClick={() => setMarket(t.value)}
-                    className={cx(
-                      s.pill,
-                      market === t.value && s.pillActive,
-                      market === t.value && s.pillActivePrimary
-                    )}
-                  >
-                    {t.label}
-                  </span>
-                ))}
-              </div>
-              <span className={s.cascadeSep}>›</span>
-              <div className={s.pillGroup}>
-                {MODE_OPTIONS.map(o => (
-                  <span
-                    key={o.value}
-                    onClick={() => {
-                      setMode(o.value);
-                      setSpikeProgress({ checked: 0, total: 0 });
-                    }}
-                    className={cx(s.pill, mode === o.value && s.pillActive)}
-                  >
-                    {o.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-    
-            {market === MARKET_US ? (
-              <PositionCalculatorButton />
-            ) : (
-              <div className={s.actions}>
-                <PositionCalculatorButton />
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<ReloadOutlined />}
-                  onClick={handleRun}
-                  loading={spikeRunning}
-                >
-                  {spikeRunning ? '筛选中...' : '开始筛选'}
-                </Button>
-                {spikeRunning && (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      abortRef.current = true;
-                      setSpikeRunning(false);
-                    }}
-                  >
-                    停止
-                  </Button>
+  return (
+    <div className={s.panel}>
+      <div className={s.toolbar}>
+        <div className={s.cascade}>
+          <div className={s.pillGroup}>
+            {MARKET_TABS.map(t => (
+              <span
+                key={t.value}
+                onClick={() => setMarket(t.value)}
+                className={cx(
+                  s.pill,
+                  market === t.value && s.pillActive,
+                  market === t.value && s.pillActivePrimary
                 )}
-              </div>
+              >
+                {t.label}
+              </span>
+            ))}
+          </div>
+          <span className={s.cascadeSep}>›</span>
+          <div className={s.pillGroup}>
+            {MODE_OPTIONS.map(o => (
+              <span
+                key={o.value}
+                onClick={() => {
+                  setMode(o.value);
+                  setSpikeProgress({ checked: 0, total: 0 });
+                }}
+                className={cx(s.pill, mode === o.value && s.pillActive)}
+              >
+                {o.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {market === MARKET_US ? (
+          <PositionCalculatorButton />
+        ) : (
+          <div className={s.actions}>
+            <PositionCalculatorButton />
+            <Button
+              size="small"
+              type="primary"
+              icon={<ReloadOutlined />}
+              onClick={handleRun}
+              loading={spikeRunning}
+            >
+              {spikeRunning ? '筛选中...' : '开始筛选'}
+            </Button>
+            {spikeRunning && (
+              <Button
+                size="small"
+                onClick={() => {
+                  abortRef.current = true;
+                  setSpikeRunning(false);
+                }}
+              >
+                停止
+              </Button>
             )}
           </div>
-    
-          {market === MARKET_US ? (
-            <UsStockPanel mode={mode} />
-          ) : (
-            <>
-              <div className={s.stickyBar}>
-                <div className={s.marketBar}>
-                  {loadingMarket ? (
-                    <span className={s.muted} style={{ fontSize: 11 }}>
-                      加载市场数据...
-                    </span>
-                  ) : (
-                    <>
-                      {renderMarketStats('BTC', marketData.BTC)}
-                      {renderMarketStats('ETH', marketData.ETH)}
-                    </>
-                  )}
-                </div>
-              </div>
-    
-              <div className={s.metaRow}>
-                <span className={s.ruleText}>
-                  {mode === MODE_SPIKE
-                    ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}% 或过去 ${SPIKE_CONFIG.windowDays} 天的最高价高于最远一天开盘价的 ${SPIKE_CONFIG.peakRatio * 100}%`
-                    : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}% 或存在连续 4 天，4 天内最高价高于第一天开盘价的 ${HOLD_CONFIG.fourDayRunRatio * 100}%，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
+        )}
+      </div>
+
+      {market === MARKET_US ? (
+        <UsStockPanel mode={mode} />
+      ) : (
+        <>
+          <div className={s.metaRow}>
+            <span className={s.ruleText}>
+              {mode === MODE_SPIKE
+                ? `过去 ${SPIKE_CONFIG.windowDays} 天内单日涨幅 ≥${SPIKE_CONFIG.riseRatio * 100}% 或过去 ${SPIKE_CONFIG.windowDays} 天的最高价高于最远一天开盘价的 ${SPIKE_CONFIG.peakRatio * 100}%`
+                : `${HOLD_CONFIG.klineLimit} 天内最近一次暴涨 ≥${HOLD_CONFIG.riseRatio * 100}% 或存在连续 4 天，4 天内最高价高于第一天开盘价的 ${HOLD_CONFIG.fourDayRunRatio * 100}%，且当前价 ≥ 基准价 × ${HOLD_CONFIG.priceRatio * 100}%`}
+            </span>
+            {visibleRows.length > 0 && (
+              <span className={s.countBadge}>共 {visibleRows.length} 条</span>
+            )}
+          </div>
+
+          {mode === MODE_HOLD && rows.length > 0 && (
+            <div className={s.filterRow}>
+              {TRIGGER_FILTERS.map(f => (
+                <span
+                  key={f}
+                  onClick={() => setTriggerFilter(f)}
+                  className={cx(s.filterChip, triggerFilter === f && s.filterChipActive)}
+                >
+                  {f}
                 </span>
-                {visibleRows.length > 0 && (
-                  <span className={s.countBadge}>共 {visibleRows.length} 条</span>
-                )}
-              </div>
-    
-              {mode === MODE_HOLD && rows.length > 0 && (
-                <div className={s.filterRow}>
-                  {TRIGGER_FILTERS.map(f => (
-                    <span
-                      key={f}
-                      onClick={() => setTriggerFilter(f)}
-                      className={cx(s.filterChip, triggerFilter === f && s.filterChipActive)}
-                    >
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              )}
-    
-              {spikeProgress.total > 0 && (
-                <div className={s.progressRow}>
-                  <div className={s.progressTrack}>
-                    <div
-                      className={s.progressBar}
-                      style={{ width: `${(spikeProgress.checked / spikeProgress.total) * 100}%` }}
-                    />
-                  </div>
-                  <span className={s.progressText}>
-                    {spikeProgress.checked} / {spikeProgress.total}
-                  </span>
-                </div>
-              )}
-    
-              <DataList
-                key={mode}
-                columns={mode === MODE_SPIKE ? spikeColumns : holdColumns}
-                rows={visibleRows}
-                empty={spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据'}
-                defaultSort={mode === MODE_HOLD ? { key: 'ratio', dir: 'desc' } : null}
-              />
-            </>
+              ))}
+            </div>
           )}
-        </div>
-      );
-    };
-    
-    export default PairSelector;
-    
+
+          {spikeProgress.total > 0 && (
+            <div className={s.progressRow}>
+              <div className={s.progressTrack}>
+                <div
+                  className={s.progressBar}
+                  style={{ width: `${(spikeProgress.checked / spikeProgress.total) * 100}%` }}
+                />
+              </div>
+              <span className={s.progressText}>
+                {spikeProgress.checked} / {spikeProgress.total}
+              </span>
+            </div>
+          )}
+
+          <DataList
+            key={mode}
+            columns={mode === MODE_SPIKE ? spikeColumns : holdColumns}
+            rows={visibleRows}
+            empty={spikeRunning ? '筛选中...' : '点击「开始筛选」获取数据'}
+            defaultSort={mode === MODE_HOLD ? { key: 'ratio', dir: 'desc' } : null}
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
+export default PairSelector;

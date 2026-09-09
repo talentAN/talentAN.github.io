@@ -1,19 +1,216 @@
 // quick-calc 页面的紧凑导航菜单（antd 横向 Menu 默认 46px 行高，太占地方）
 
+// 去掉全局 .outerPadding / .container 的页边距，避免行情条下方、左侧出现大块空白
+.quick-calc-layout {
+  padding: 0;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.quick-calc-container {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+}
+
 .quick-calc-menu.ant-menu-horizontal {
-    line-height: 32px;
-    font-size: 13px;
-    border-bottom: 1px solid #f0f1f3;
-  
-    > .ant-menu-item {
-      top: 0;
-      margin: 0;
-      padding: 0 12px;
-  
-      &::after {
-        left: 12px;
-        right: 12px;
-      }
+  display: flex;
+  line-height: 32px;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f1f3;
+
+  > .ant-menu-item {
+    top: 0;
+    margin: 0;
+    padding: 0 12px;
+
+    &::after {
+      left: 12px;
+      right: 12px;
     }
   }
-  
+
+  > .ant-menu-submenu {
+    top: 0;
+    margin: 0;
+    padding: 0;
+
+    > .ant-menu-submenu-title {
+      padding: 0 12px;
+      line-height: 32px;
+
+      .ant-menu-submenu-arrow {
+        display: none;
+      }
+    }
+
+    // 「更多」固定到导航最右侧（红框位置）
+    &:last-child {
+      margin-left: auto;
+    }
+  }
+
+  // 下拉里已选中时，标题也高亮
+  > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+    color: #1890ff;
+  }
+}
+
+.quick-calc-more-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 右侧给「暴涨 / 止盈」工具坞留位 —— 已移到行情条内，菜单不再预留 */
+.quick-calc-menu.ant-menu-horizontal {
+  padding-right: 0;
+}
+
+.quick-calc-ticker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.quick-calc-ticker .marketBar,
+.quick-calc-ticker > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-calc-tool-dock {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  height: 28px;
+  pointer-events: none;
+}
+
+.quick-calc-tool-dock > * {
+  pointer-events: auto;
+}
+
+.qc-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.qc-tool-chip:hover {
+  border-color: #bfbfbf;
+}
+
+.qc-tool-chip__muted {
+  font-size: 11px;
+  font-weight: 400;
+  color: inherit;
+  opacity: 0.72;
+}
+
+.qc-tool-chip__badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* 暴涨：对齐止盈的描边胶囊样式，红色系 */
+.qc-tool-chip--surge {
+  color: #cf1322;
+  border-color: #ffa39e;
+  background: #fff1f0;
+}
+
+.qc-tool-chip--surge:hover {
+  border-color: #ff7875;
+  background: #ffccc7;
+}
+
+.qc-tool-chip--surge.is-hit {
+  border-color: #ff4d4f;
+  background: #fff1f0;
+  color: #a8071a;
+}
+
+.qc-tool-chip--surge.is-stopped {
+  opacity: 0.85;
+}
+
+.qc-tool-chip--tp {
+  color: #0958d9;
+  border-color: #91caff;
+  background: #f0f7ff;
+}
+
+.qc-tool-chip--tp:hover {
+  border-color: #69b1ff;
+  background: #e6f4ff;
+}
+
+.qc-tool-chip--surge.is-open {
+  border-color: #ff4d4f;
+  box-shadow: inset 0 0 0 1px rgba(255, 77, 79, 0.18);
+}
+
+.qc-tool-chip--tp.is-open {
+  border-color: #1677ff;
+  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.15);
+}
+
+.qc-tool-panel {
+  position: fixed;
+  top: 48px;
+  z-index: 1003;
+  max-height: calc(70vh);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.qc-tool-panel--surge {
+  right: 10px;
+  width: 220px;
+  border: 1px solid #ffa39e;
+}
+
+.qc-tool-panel--tp {
+  right: 236px;
+  width: 220px;
+  border: 1px solid #91caff;
+}

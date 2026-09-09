@@ -1,6 +1,11 @@
 import { DEFAULT_LADDER } from '../backtest/_ladderRules';
-import { placeFutureBatchLimitOrders as placeBitgetBatchLimit, placeFutureMarketOrder as placeBitgetMarket } from '@root/src/container/bitget/api/order';
-import { placeFutureBatchLimitOrders as placeBinanceBatchLimit, placeFutureMarketOrder as placeBinanceMarket } from '@root/src/container/binance/api/order';
+import { MIN_LISTING_DAYS } from '../backtest/_rise100Rules';
+import { isBreakoutHistoricalHigh } from '@root/src/utils/kline-pattern';
+import { getAllFutureDailyKlines } from '@root/src/container/market';
+import { placeFutureBatchLimitOrders as placeBitgetBatchLimit } from '@root/src/container/bitget/api/order';
+import {
+  placeFutureBatchLimitOrders as placeBinanceBatchLimit,
+} from '@root/src/container/binance/api/order';
 import { getSinglePosition as getBitgetPosition, getPendingOrders as getBitgetPendingOrders } from '@root/src/container/bitget/api/query';
 import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceOpenOrders, getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
 import { getContracts as getBinanceContracts, getFutureFundingRate as getBinanceFundingRate } from '@root/src/container/binance/api';
@@ -17,11 +22,10 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
  *      Binance: POST /fapi/v1/batchOrders），全部是 orderType=限价 + 只做 maker
  *      （Bitget force=post_only，Binance timeInForce=GTX），价格已经能立即成交
  *      的档会被交易所直接拒绝，不会意外变成吃单的 taker
- *   - 止损：开盘价 × stopMult；止盈：开盘价 × targetMult（用市价单平仓，只有一笔，
- *     不需要走批量接口）
- *   - 结构失效离场：现价重新站上触发时刻的当日最高价（exitOnNewHigh）
+ *   - 自动侧只挂开仓限价空单（DEFAULT_LADDER 四档）；不附带交易所止损，
+ *     也不做本地止损/止盈/结构失效市价平仓——平仓委托由用户自行处理
  *
- * ⚠️ 当前状态：submitLadderPlan / closeLadderPlan 会调用
+ * ⚠️ 当前状态：submitLadderPlan 会调用
  * container/bitget/api/order.js、container/binance/api/order.js 里真实的签名下单
  * 请求（endpoint、参数都是按官方文档 + 实测响应验证过路径确实存在）。签名这一步
  * 两边都已经挪到 workers/exchange-proxy 这个 Cloudflare Worker 里做——Bitget 走
@@ -48,11 +52,14 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
  *      tradeSide、Binance 需要 positionSide，目前都没处理）
  *   4. 风控：单币种最大仓位、总敞口上限、下单失败重试策略
  *
- * 下单前置检查：checkExistingExposure 会先查该币对当前是否已有持仓或未成交委托
+ * 下单前置检查：
+ *   0. high100 资格（与回测一致）：拉全量日 K；上市未满 30 天、或当日最高价为历史新高 → skipped
+ *   1. checkExistingExposure 查该币对当前是否已有持仓或未成交委托
  * （Bitget: single-position + orders-pending；Binance: positionRisk + openOrders），
  * 只要命中任意一项就跳过自动下单（标记为 skipped，当天不再重复触发/查询）。查询本身
  * 失败时保守按「已有仓位」处理。这些接口返回的字段名是按官方文档写的，还没能用真实
  * Key 验证过实际结构，换真实 Key 后第一次触发建议核对一下。
+ *   2. checkFundingRate：资金费率低于 -1% → skipped
  *
  * LIVE_NOTIONAL_SCALE 控制 DEFAULT_LADDER 每档下单金额相对回测配置的缩放比例，只影响
  * 这里的实盘下单，不影响 backtest 那边的回测计算（那边仍然读原始 DEFAULT_LADDER）。
@@ -69,6 +76,8 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
 
 // 不缩放，按 DEFAULT_LADDER 原始金额下单（不改 DEFAULT_LADDER 本身，backtest 页面还在用它)
 const LIVE_NOTIONAL_SCALE = 1;
+/** 实盘止损：基准开盘价 × 该倍数（回测仍用 DEFAULT_LADDER.stopMult=5） */
+export const LIVE_STOP_MULT = 10;
 
 // 本地开发直接放行；线上没有 GATSBY_ENABLE_AUTO_ORDER，取决于有没有解锁过的交易 session
 export const isLiveOrderEnabled = () =>
@@ -100,16 +109,80 @@ export const SKIP_REASON_LABEL = {
   has_orders: '已有未成交委托',
   query_failed: '查询持仓/委托失败',
   query_error: '查询持仓/委托异常',
+  api_key_missing: '未配置交易所 API Key',
   unsupported_exchange: '不支持的交易所',
   auto_order_disabled: '自动下单未启用/未解锁',
   funding_rate_too_low: '资金费率低于 -1%',
   funding_rate_unavailable: '资金费率不可用',
   funding_rate_query_failed: '资金费率查询失败',
+  listing_too_new: `上市未满 ${MIN_LISTING_DAYS} 天`,
+  ath_breakout: '当日最高价为历史新高',
+  history_unavailable: '历史K线不足，无法校验上市天数',
 };
+
+const LISTING_MS = MIN_LISTING_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * high100 自动下单资格：与回测标记日口径一致
+ * - 上市未满 MIN_LISTING_DAYS（30）天 → 排除
+ * - 当日最高价相对此前全部日 K 为历史新高突破 → 排除
+ *
+ * 仅在即将下单时拉取完整日 K（新币全量很少；老币也只触发一次/天）。
+ */
+export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs }) => {
+  try {
+    const candles = await getAllFutureDailyKlines({ symbol }, exchange);
+    const sorted = [...(candles || [])]
+      .filter(c => Array.isArray(c) && c.length >= 5 && Number.isFinite(Number(c[0])))
+      .sort((a, b) => Number(a[0]) - Number(b[0]));
+
+    if (sorted.length < 2) {
+      return { allowed: false, reason: 'history_unavailable', listingDays: 0 };
+    }
+
+    const listedAt = Number(sorted[0][0]);
+    const markerTs = Number.isFinite(Number(candleTs))
+      ? Number(candleTs)
+      : Number(sorted[sorted.length - 1][0]);
+
+    if (!Number.isFinite(listedAt) || !Number.isFinite(markerTs)) {
+      return { allowed: false, reason: 'history_unavailable', listingDays: 0 };
+    }
+
+    const listingDays = Math.floor((markerTs - listedAt) / (24 * 60 * 60 * 1000));
+    if (markerTs - listedAt < LISTING_MS) {
+      return { allowed: false, reason: 'listing_too_new', listingDays };
+    }
+
+    const ath = isBreakoutHistoricalHigh(markerTs, sorted);
+    if (ath.isBreakout) {
+      return {
+        allowed: false,
+        reason: 'ath_breakout',
+        listingDays,
+        prevAth: ath.prevAth,
+      };
+    }
+
+    return { allowed: true, listingDays, candleCount: sorted.length };
+  } catch (e) {
+    console.warn('[AutoOrder] high100 eligibility', symbol, e);
+    return { allowed: false, reason: 'history_unavailable', listingDays: 0 };
+  }
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const todayKey = () => {
   const d = new Date();
   return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+};
+
+/** UTC 日 00:00 的毫秒时间戳（与 1Dutc K 线、todayKey 对齐） */
+export const utcDayStartTs = ts => {
+  const d = new Date(Number(ts));
+  if (!Number.isFinite(d.getTime())) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
 export const loadAutoOrderPct = () => {
@@ -153,8 +226,15 @@ export const saveAutoOrderBatches = batches => {
   }
 };
 
-/** 用当日开盘价把回测阶梯模型换算成可执行的挂单计划（金额按 LIVE_NOTIONAL_SCALE 缩小） */
-export const buildLadderPlan = ({ symbol, exchange, open, triggerHigh, ladder = DEFAULT_LADDER }) => {
+/** 用当日开盘价把回测阶梯模型换算成可执行的挂单计划（金额按 LIVE_NOTIONAL_SCALE；止损用 LIVE_STOP_MULT） */
+export const buildLadderPlan = ({
+  symbol,
+  exchange,
+  open,
+  triggerHigh,
+  candleTs,
+  ladder = DEFAULT_LADDER,
+}) => {
   const legs = ladder.levels.map(level => {
     const price = open * level.mult;
     const notional = level.notional * LIVE_NOTIONAL_SCALE;
@@ -166,16 +246,21 @@ export const buildLadderPlan = ({ symbol, exchange, open, triggerHigh, ladder = 
     };
   });
 
+  const markerDayStartTs = utcDayStartTs(candleTs) ?? utcDayStartTs(Date.now());
+
   return {
     id: `${todayKey()}:${exchange}:${symbol}`,
     symbol,
     exchange,
     open,
     legs,
-    stopPrice: open * ladder.stopMult,
+    stopPrice: open * LIVE_STOP_MULT,
     targetPrice: open * ladder.targetMult,
     structureHigh: triggerHigh,
     exitOnNewHigh: !!ladder.exitOnNewHigh,
+    /** 标记日 UTC 日界；结构失效必须严格晚于该日 */
+    markerDayStartTs,
+    candleTs: Number.isFinite(Number(candleTs)) ? Number(candleTs) : undefined,
     status: 'pending',
     createdAt: Date.now(),
   };
@@ -189,7 +274,20 @@ export const buildLadderPlan = ({ symbol, exchange, open, triggerHigh, ladder = 
  */
 const parseExposure = (exchange, posResult, orderResult) => {
   if (!posResult?.ok || !orderResult?.ok) {
-    return { exposed: true, reason: 'query_failed' };
+    const pickErr = result =>
+      result?.error ||
+      result?.response?.msg ||
+      result?.response?.message ||
+      (result?.httpStatus != null ? `HTTP ${result.httpStatus}` : null);
+    return {
+      exposed: true,
+      reason: 'query_failed',
+      detail: [pickErr(posResult), pickErr(orderResult)].filter(Boolean).join(' / ') || '持仓或委托查询返回失败',
+      posOk: !!posResult?.ok,
+      orderOk: !!orderResult?.ok,
+      posHttpStatus: posResult?.httpStatus ?? null,
+      orderHttpStatus: orderResult?.httpStatus ?? null,
+    };
   }
 
   if (exchange === 'bitget') {
@@ -260,13 +358,14 @@ export const checkExistingExposure = async ({ symbol, exchange }) => {
     }
     return { exposed: true, reason: 'unsupported_exchange' };
   } catch (e) {
+    const msg = e?.message || String(e);
     console.error(`[SurgeAlert][EXPOSURE] ${exchange} ${symbol} 查询持仓/委托失败`, e);
-    return { exposed: true, reason: 'query_error', error: e.message };
+    if (/请先配置 API Key|GATSBY_BINANCE|GATSBY_BITGET|签名代理/i.test(msg)) {
+      return { exposed: true, reason: 'api_key_missing', detail: msg, error: msg };
+    }
+    return { exposed: true, reason: 'query_error', detail: msg, error: msg };
   }
 };
-
-let orderSeq = 0;
-
 // 浮点数换算出来的价格/数量做个粗糙的截位，避免请求体里出现一长串浮点误差尾数
 const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
 
@@ -296,6 +395,7 @@ const getBinanceSymbolRules = async symbol => {
     minNotional: Number(notionalFilter?.minNotional) || null,
   };
 };
+
 export const quantizePrice = (price, tickSize, digits = 8) => {
   if (!(price > 0)) return 0;
   if (!(tickSize > 0)) return roundNum(price, digits);
@@ -319,10 +419,16 @@ const isBinanceHedgeMode = async () => {
 };
 
 const EXCHANGE_BATCH_LIMIT_API = {
-  bitget: ({ symbol, orders }) =>
+  bitget: ({ symbol, orders, stopLossPrice }) =>
     placeBitgetBatchLimit({
       symbol,
-      orders: orders.map(o => ({ side: o.side, price: roundNum(o.price), size: roundNum(o.qty), clientOid: o.clientOid })),
+      stopLossPrice: stopLossPrice > 0 ? roundNum(stopLossPrice) : undefined,
+      orders: orders.map(o => ({
+        side: o.side,
+        price: roundNum(o.price),
+        size: roundNum(o.qty),
+        clientOid: o.clientOid,
+      })),
     }),
   binance: async ({ symbol, orders }) => {
     const [rules, hedgeMode] = await Promise.all([
@@ -357,34 +463,6 @@ const EXCHANGE_BATCH_LIMIT_API = {
       })),
     });
     return { ...result, skipped };
-  },
-};
-
-const EXCHANGE_MARKET_API = {
-  bitget: ({ symbol, side, qty, clientOid }) =>
-    placeBitgetMarket({ symbol, side, size: roundNum(qty), reduceOnly: side === 'buy', clientOid }),
-  binance: async ({ symbol, side, qty, clientOid }) => {
-    const [rules, hedgeMode] = await Promise.all([
-      getBinanceSymbolRules(symbol),
-      isBinanceHedgeMode(),
-    ]);
-    const roundedQty = quantizeQuantity(
-      qty,
-      rules.marketStepSize || rules.stepSize,
-      rules.quantityPrecision
-    );
-    if (roundedQty <= 0 || (rules.marketMinQty && roundedQty < rules.marketMinQty)) {
-      throw new Error('数量量化后低于交易所最小平仓数量');
-    }
-    return placeBinanceMarket({
-      symbol,
-      side: side === 'sell' ? 'SELL' : 'BUY',
-      quantity: roundedQty,
-      // 双向持仓下不能传 reduceOnly（跟 positionSide 冲突），单向持仓才需要
-      reduceOnly: !hedgeMode && side === 'buy',
-      ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
-      newClientOrderId: clientOid,
-    });
   },
 };
 
@@ -473,9 +551,25 @@ const getBatchStatus = legs => {
   return 'failed';
 };
 
+/** 阶梯限价挂出后，再挂交易所侧仓位止损（平掉该方向全部仓位）
+ * ⚠️ 已停用：平仓由用户自行处理，不再自动挂交易所止损。
+ */
+export const placeExchangeStopLoss = async plan => {
+  console.warn(
+    `[SurgeAlert][STOP] placeExchangeStopLoss disabled — skip ${plan?.exchange} ${plan?.symbol}`
+  );
+  return {
+    ok: false,
+    status: 'disabled',
+    error: 'auto_stop_disabled',
+    clientOid: `surgestop${plan?.createdAt || Date.now()}`,
+    submittedAt: Date.now(),
+  };
+};
+
 /**
- * 一次批量请求把阶梯的几档限价空单全部挂出去（真实签名请求；key 换成真实的之前会被
- * 交易所整体拒绝）。
+ * 一次批量请求把阶梯限价空单全部挂出。
+ * 仅开仓限价；不附带 presetStopLoss / 条件止损（平仓由用户自行下）。
  */
 export const submitLadderPlan = async plan => {
   const legsWithOid = plan.legs.map((leg, idx) => ({ ...leg, clientOid: `surge${plan.createdAt}${idx}` }));
@@ -497,6 +591,8 @@ export const submitLadderPlan = async plan => {
   try {
     const result = await api({
       symbol: plan.symbol,
+      // 明确不传止损价，避免 Bitget 挂出附带平仓条件单
+      stopLossPrice: undefined,
       orders: legsWithOid.map(l => ({ side: 'sell', price: l.price, qty: l.qty, clientOid: l.clientOid })),
     });
 
@@ -506,11 +602,14 @@ export const submitLadderPlan = async plan => {
     );
 
     const legs = applyBatchResult(plan.exchange, legsWithOid, result);
+    const status = getBatchStatus(legs);
+
     return {
       ...plan,
       legs,
       batchRequest: result.request,
-      status: getBatchStatus(legs),
+      status,
+      peakPrice: plan.triggerHigh || plan.structureHigh || undefined,
     };
   } catch (e) {
     console.error(`[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} 批量下单请求失败`, e);
@@ -522,63 +621,73 @@ export const submitLadderPlan = async plan => {
   }
 };
 
-const placeExchangeMarketOrder = async ({ symbol, exchange, side, qty }) => {
-  orderSeq += 1;
-  const clientOid = `surge${Date.now()}${orderSeq}`;
-
-  if (!isLiveOrderEnabled()) {
-    return { clientOid, orderId: null, ok: false, status: 'error', error: 'auto_order_disabled', submittedAt: Date.now() };
-  }
-
-  const api = EXCHANGE_MARKET_API[exchange];
-
-  if (!api) {
-    return { orderId: null, ok: false, status: 'unsupported_exchange', submittedAt: Date.now() };
-  }
-
-  try {
-    const result = await api({ symbol, side, qty, clientOid });
-    console.warn(
-      `[SurgeAlert][ORDER] ${exchange} ${symbol} ${side} market qty=${qty} ok=${result.ok} httpStatus=${result.httpStatus}`,
-      result
-    );
-    return {
-      clientOid,
-      orderId: result.response?.data?.orderId || result.response?.orderId || null,
-      ok: !!result.ok,
-      status: result.ok ? 'submitted' : 'rejected',
-      httpStatus: result.httpStatus,
-      request: result.request,
-      response: result.response,
-      submittedAt: Date.now(),
-    };
-  } catch (e) {
-    console.error(`[SurgeAlert][ORDER] ${exchange} ${symbol} 平仓请求失败`, e);
-    return { clientOid, orderId: null, ok: false, status: 'error', error: e.message, submittedAt: Date.now() };
-  }
-};
-
-/** 触发止损 / 止盈 / 结构失效时，用市价单平仓（真实签名请求，只有一笔，不用批量接口） */
+/** 触发止损 / 止盈 / 结构失效时，用市价单平仓（真实签名请求，只有一笔，不用批量接口）
+ * ⚠️ 已停用：用户自行平仓；保留函数避免旧引用报错，但绝不再发市价单。
+ */
 export const closeLadderPlan = async (batch, reason, exitPrice) => {
-  const qty = (batch.legs || []).reduce((sum, leg) => sum + (leg.qty || 0), 0);
-  const closeOrder = await placeExchangeMarketOrder({ symbol: batch.symbol, exchange: batch.exchange, side: 'buy', qty });
+  console.warn(
+    `[SurgeAlert][ORDER] closeLadderPlan disabled — skip market close ${batch?.exchange} ${batch?.symbol} reason=${reason}`
+  );
   return {
     ...batch,
-    status: closeOrder.ok ? 'closed' : closeOrder.status === 'unknown' ? 'unknown' : 'failed',
-    exitReason: reason,
-    exitPrice,
-    closeOrder,
-    closedAt: Date.now(),
+    status: batch.status === 'open' || batch.status === 'partial' ? batch.status : 'open',
+    exitAttempt: {
+      reason,
+      exitPrice,
+      skipped: true,
+      error: 'auto_close_disabled',
+      at: Date.now(),
+    },
   };
 };
 
-/** 用最新价判断已挂出的阶梯批次是否触发离场；命中返回原因，否则 null */
-export const evaluateExit = (batch, lastPrice) => {
+/**
+ * 用最新价判断已挂出的阶梯批次是否触发离场。
+ * 止盈 targetMult（如 1.4×开盘）在触发时现价常已 >1× 但仍 < target，不能当成已到止盈；
+ * 必须现价曾触及最低挂空档（或已有 peak）后，再回落到 target 才离场。
+ *
+ * @param {object} options
+ * @param {number} [options.candleTs] 当前用于判定的日 K openTime；结构失效必须晚于标记日
+ */
+export const evaluateExit = (batch, lastPrice, options = {}) => {
   if (!Number.isFinite(lastPrice)) return null;
-  if (lastPrice >= batch.stopPrice) return 'stop';
-  if (lastPrice <= batch.targetPrice) return 'target';
+  if (Number.isFinite(batch.stopPrice) && lastPrice >= batch.stopPrice) return 'stop';
+
+  const minEntry = Math.min(...(batch.legs || []).map(l => l.price).filter(n => Number.isFinite(n) && n > 0));
+  const peak = Math.max(
+    Number.isFinite(batch.peakPrice) ? batch.peakPrice : 0,
+    lastPrice
+  );
+  if (
+    Number.isFinite(batch.targetPrice) &&
+    lastPrice <= batch.targetPrice &&
+    Number.isFinite(minEntry) &&
+    peak >= minEntry
+  ) {
+    return 'target';
+  }
   if (batch.exitOnNewHigh && Number.isFinite(batch.structureHigh) && lastPrice > batch.structureHigh) {
+    // 与回测一致：标记日当天不判结构失效（simulateLadder 要求 index > 0）
+    if (!isPastMarkerDay(batch, options.candleTs)) return null;
     return 'structure';
   }
   return null;
+};
+
+/** 当前 K 线日是否已严格晚于批次标记日（结构失效前置条件） */
+export const isPastMarkerDay = (batch, candleTs) => {
+  const markerStart = Number.isFinite(batch?.markerDayStartTs)
+    ? batch.markerDayStartTs
+    : utcDayStartTs(batch?.candleTs);
+  const candleStart = utcDayStartTs(candleTs);
+
+  if (Number.isFinite(markerStart) && Number.isFinite(candleStart)) {
+    return candleStart > markerStart;
+  }
+
+  // 旧 localStorage 批次没有标记日字段：创建后 24h 内保守不判结构失效
+  if (Number.isFinite(batch?.createdAt) && Date.now() - batch.createdAt < DAY_MS) {
+    return false;
+  }
+  return true;
 };
