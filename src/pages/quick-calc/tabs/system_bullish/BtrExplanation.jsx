@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography, Tag } from 'antd';
-import { UNIVERSE_V01, SUCCESS_V01 } from './patternV01';
+import { UNIVERSE_V01, SUCCESS_V01 } from './_patternV01';
 
 const { Title, Paragraph, Text } = Typography;
 const pct = value => `${(value * 100).toFixed(0)}%`;

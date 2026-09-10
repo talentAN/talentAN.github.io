@@ -5,7 +5,7 @@ import {
   UNIVERSE_V01,
   BASE_RATE_V01,
   SOIL_V01,
-} from './patternV01';
+} from './_patternV01';
 
 const { Title, Paragraph, Text } = Typography;
 const pct = value => `${(value * 100).toFixed(0)}%`;

@@ -9,7 +9,7 @@ import {
   SLOPE_SCAN_V01,
   evaluatePositiveSlope,
   normalizeBars,
-} from './patternV01';
+} from './_patternV01';
 
 const fmtPct = value =>
   value == null || !Number.isFinite(Number(value)) ? '—' : `${(Number(value) * 100).toFixed(1)}%`;

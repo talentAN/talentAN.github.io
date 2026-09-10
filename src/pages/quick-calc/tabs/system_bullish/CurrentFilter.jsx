@@ -10,7 +10,7 @@ import {
   UNIVERSE_V01,
   findRecentSoilHits,
   normalizeBars,
-} from './patternV01';
+} from './_patternV01';
 
 const ALL = 'ALL';
 const cx = (...names) => names.filter(Boolean).join(' ');

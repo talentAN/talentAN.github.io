@@ -3,7 +3,7 @@ import { Button, Input, message } from 'antd';
 // import reviewPack from '@root/src/data/market/binance/bullish-base-rate/soil-entry-review-v0.1.json';
 import DataList from '../system_1/_DataList';
 import * as s from '../system_1/pairSelector.module.less';
-import { SOIL_V01 } from './patternV01';
+import { SOIL_V01 } from './_patternV01';
 
 const reviewPack = {}
 const STORAGE_KEY = 'bullish-soil-entry-timing-v0.1';
