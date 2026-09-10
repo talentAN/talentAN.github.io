@@ -18,4 +18,8 @@ export const PATTERN_Array = [
     key: PATTERN.low_rise_ready_to_break,
     label: '低量高低点抬升',
   },
+  {
+    key: PATTERN.trial_water,
+    label: '试水',
+  },
 ];

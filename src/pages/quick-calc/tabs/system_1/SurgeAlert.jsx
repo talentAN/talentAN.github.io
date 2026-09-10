@@ -28,6 +28,8 @@ const BATCH_MS = 1000;
 const DEFAULT_PCT = 90;
 const STORAGE_KEY = 'surge-alert-threshold-pct';
 const POS_KEY = 'surge-alert-pos';
+/** 暴涨监控开关：'1' 开 / '0' 关；缺省视为开启 */
+const RUNNING_KEY = 'surge-alert-monitor-running';
 const PANEL_W = 220;
 const TITLE_FLASH_MS = 8000;
 /** 当日 K 线粒度（UTC 日线，与 todayKey 对齐） */
@@ -76,6 +78,19 @@ const loadPos = () => {
     /* ignore */
   }
   return defaultPos();
+};
+
+/** 无记录时默认开启；有记录则尊重上次开始/停止 */
+const loadMonitorRunning = () => {
+  if (typeof window === 'undefined') return true;
+  const raw = localStorage.getItem(RUNNING_KEY);
+  if (raw == null || raw === '') return true;
+  return raw === '1' || raw === 'true';
+};
+
+const saveMonitorRunning = enabled => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(RUNNING_KEY, enabled ? '1' : '0');
 };
 
 const clampPos = (x, y, w = PANEL_W, h = 80) => {
@@ -191,12 +206,12 @@ const SurgeAlert = ({ docked = false }) => {
   const [pct, setPct] = useState(DEFAULT_PCT);
   const [pctInput, setPctInput] = useState(String(DEFAULT_PCT));
   const [alerts, setAlerts] = useState([]);
-  const [status, setStatus] = useState('启动中…');
+  const [status, setStatus] = useState(() => (loadMonitorRunning() ? '启动中…' : '已停止'));
   const [lastPoll, setLastPoll] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [pos, setPos] = useState({ x: 16, y: 120 });
-  /** 暴涨100 监控默认开启；用户可手动停止 */
-  const [running, setRunning] = useState(true);
+  /** 暴涨监控开关由 localStorage 记忆；无记录时默认开 */
+  const [running, setRunning] = useState(() => loadMonitorRunning());
   const [autoOrderPct, setAutoOrderPct] = useState(DEFAULT_AUTO_ORDER_PCT);
   const [autoOrderPctInput, setAutoOrderPctInput] = useState(String(DEFAULT_AUTO_ORDER_PCT));
   const [autoOrderEnabled, setAutoOrderEnabled] = useState(true);
@@ -352,8 +367,7 @@ const SurgeAlert = ({ docked = false }) => {
       setAutoBatches(list);
       saveAutoOrderBatches(list);
       return list;
-    };
-
+    }; 
     // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单；平仓由用户自行处理，系统不再自动发平仓单。
     // skipped/failed 允许重试（否则会锁死整天且 Network 里看不到后续查询）
     const handleAutoOrder = async (info) => {
@@ -382,8 +396,9 @@ const SurgeAlert = ({ docked = false }) => {
           Date.now() - (existing.createdAt || 0) < 60000
         ) {
           return null;
-        } 
-        const autoThreshold = 1 + autoOrderPctRef.current / 100;
+        }
+
+      const autoThreshold = 1 + autoOrderPctRef.current / 100;
       if (info.ratio < autoThreshold) return null;
 
       autoOrderInFlightRef.current.add(batchKey);
@@ -591,11 +606,13 @@ const SurgeAlert = ({ docked = false }) => {
 
   const stopMonitor = () => {
     abortRef.current = true;
+    saveMonitorRunning(false);
     setRunning(false);
     setStatus('已停止');
   };
 
   const startMonitor = () => {
+    saveMonitorRunning(true);
     setStatus('启动中…');
     setRunning(true);
   };
@@ -691,6 +708,7 @@ const SurgeAlert = ({ docked = false }) => {
       )}
     </div>
   );
+
   // 收起态：小角标；docked 时嵌入工具坞
   if (!expanded) {
     return (

@@ -1,26 +1,24 @@
 import localRecords from '@root/contract-record/all.json';
-import { enrichRecordsWithBestPrices, fillMissingBestPrices } from './_enrich';
+import { fillMissingBestPrices } from './_enrich';
 import { fillMaxDrawdowns } from './_maxDrawdown';
-import { mergeRemoteWithLocal } from './_merge';
 import { EXCHANGE, EXCHANGE_LABEL, ensureNotionals } from './_schema';
-import { fetchBitgetTradeRecords } from './exchanges/_bitget';
 
 /**
- * 远程自动拉取的交易所列表。
+ * 历史仓位：只读本地 `contract-record/all.json`，人工维护，不走交易所接口。
  *
- * 为何不自动拉 Binance：
- * - 币安 U 本位没有与 Bitget `history-position` 对等的「历史仓位」接口，
- *   只能用 income + userTrades 自行重建，准确度/覆盖窗口都不如官方仓位单。
- * - 浏览器直连私有接口还有 CORS 问题，本地代理也仅 develop 可用。
- * - 因此 Binance 仓位改为人工导出后写入本地 all.json（标准格式），再走合并展示；
- *   schema 仍保留 exchange=binance，便于链接与 K 线 enrich。
+ * 原因：Binance 无 Bitget 式 history-position，用成交重建不可靠且易与手写 id 重复；
+ * 下单/持仓查询仍用 Binance 签名 API，与本模块无关。
+ *
+ * 维护约定：
+ * - 新平仓后往 all.json 追加标准字段（见 _schema.createStandardRecord）
+ * - `exchange`: `binance` | `bitget`（缺省按 bitget）
+ * - `ignore: true` 的行不进入列表
+ * - 最优价差 / 最大回撤缺省时仍按 exchange 拉公开 K 线补齐（非仓位接口）
  */
-const EXCHANGE_FETCHERS = [
-  { id: EXCHANGE.BITGET, label: EXCHANGE_LABEL[EXCHANGE.BITGET], fetch: fetchBitgetTradeRecords },
-];
+const EXCHANGE_FETCHERS = [];
 
 /**
- * 缺开仓最优差 / 最大回撤时，按记录来源交易所拉 K 线补齐
+ * 缺开仓最优差 / 最大回撤时，按记录来源交易所拉公开 K 线补齐
  */
 async function fillMissingMetrics(records) {
   const withBest = await fillMissingBestPrices(records);
@@ -28,48 +26,25 @@ async function fillMissingMetrics(records) {
 }
 
 /**
- * 依次获取各所交易数据 → 标准格式 → 最优价 enrich → 与本地合并排序 → 缺值补齐
- * @param {{ startTime?: string, endTime?: string }} params
- * @returns {Promise<{ records: object[], stats: object, errors: object[] }>}
+ * 加载本地交易记录 → 补齐缺省指标
+ * @param {{ startTime?: string, endTime?: string }} [_params] 保留参数位；历史仓位不再按接口日期拉取
+ * @returns {Promise<{ records: object[], stats: object, errors: object[], fallback: boolean }>}
  */
-export async function fetchAllTradeRecords(params = {}) {
+export async function fetchAllTradeRecords(_params = {}) {
   const localData = (localRecords || []).filter(r => !r.ignore).map(ensureNotionals);
-  const remoteAll = [];
-  const stats = {};
-  const errors = [];
+  const byExchange = localData.reduce((acc, row) => {
+    if (row.type === 'summery') return acc;
+    const ex = row.exchange || EXCHANGE.BITGET;
+    acc[ex] = (acc[ex] || 0) + 1;
+    return acc;
+  }, {});
 
-  for (const ex of EXCHANGE_FETCHERS) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      const list = await ex.fetch(params);
-      stats[ex.id] = list.length;
-      remoteAll.push(...list);
-      console.log(`[trade-record] ${ex.label}: ${list.length} 条`);
-    } catch (error) {
-      console.warn(`[trade-record] ${ex.label} 拉取失败`, error);
-      stats[ex.id] = 0;
-      errors.push({ exchange: ex.id, message: error?.message || String(error) });
-    }
-  }
-
-  if (remoteAll.length === 0) {
-    const filled = await fillMissingMetrics(localData);
-    return {
-      records: filled.map(ensureNotionals),
-      stats,
-      errors,
-      fallback: true,
-    };
-  }
-
-  const enriched = await enrichRecordsWithBestPrices(remoteAll);
-  const merged = mergeRemoteWithLocal(enriched, localData).map(ensureNotionals);
-  const filled = await fillMissingMetrics(merged);
+  const filled = await fillMissingMetrics(localData);
 
   return {
     records: filled.map(ensureNotionals),
-    stats,
-    errors,
+    stats: byExchange,
+    errors: [],
     fallback: false,
   };
 }

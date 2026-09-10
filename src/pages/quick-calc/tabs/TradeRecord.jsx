@@ -274,7 +274,7 @@ const TradeRecord = () => {
         }
       }
 
-      // 取各笔手填最大回撤的峰值（按绝对值）
+      // 取各笔最大回撤%的峰值
       const dd = parseFloat(record.maxDrawdown);
       if (!Number.isNaN(dd)) {
         const mag = Math.abs(dd);
@@ -337,7 +337,7 @@ const TradeRecord = () => {
         expectation: stats.expectation.toFixed(4),
         expectationNum: stats.expectation,
         maxDrawdown:
-          stats.maxDrawdown == null ? '-' : Number(stats.maxDrawdown).toFixed(2)+'%',
+          stats.maxDrawdown == null ? '-' : `${Number(stats.maxDrawdown).toFixed(2)}%`,
         diffLt10: `${stats.diffLt10}(${pct(stats.diffLt10)}%)`,
         diff10to20: `${stats.diff10to20}(${pct(stats.diff10to20)}%)`,
         diff20to40: `${stats.diff20to40}(${pct(stats.diff20to40)}%)`,
@@ -542,7 +542,7 @@ const TradeRecord = () => {
           <div style={{ whiteSpace: 'pre-wrap' }}>
             {record.openBestPrice3d != null ? formatCompactNumber(record.openBestPrice3d) : '-'}
             {'\n'}
-            {record.openPriceDiff ? (
+            {record.openPriceDiff != null && record.openPriceDiff !== '' ? (
               <span style={{ color: getDiffColor(record.openPriceDiff) }}>
                 {parseFloat(record.openPriceDiff).toFixed(2)}%
               </span>
@@ -558,7 +558,6 @@ const TradeRecord = () => {
       dataIndex: 'maxDrawdown',
       key: 'maxDrawdown',
       width: 88,
-      
       render: (val, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const display =
@@ -690,30 +689,21 @@ const TradeRecord = () => {
         requestParams.endTime = safeEndTime.toString();
       }
 
-      const { records: mergedData, stats, errors, fallback } = await fetchAllTradeRecords(
-        requestParams
-      );
+      // 历史仓位只读本地 all.json（人工维护，不拉交易所仓位接口）
+      const { records: mergedData, stats } = await fetchAllTradeRecords(requestParams);
       setRecords(mergedData);
 
       const parts = Object.entries(stats || {})
         .map(([ex, n]) => `${EXCHANGE_LABEL[ex] || ex} ${n}`)
         .join(' / ');
 
-      if (fallback) {
-        message.warning(
-          `远程拉取失败，已回退本地 ${mergedData.length} 条${errors?.length ? `（${errors.map(e => e.message).join('; ')}）` : ''}`
-        );
-      } else if (errors?.length) {
-        message.warning(
-          `合并 ${mergedData.length} 条（${parts}）；部分失败：${errors.map(e => `${EXCHANGE_LABEL[e.exchange] || e.exchange} ${e.message}`).join('; ')}`
-        );
-      } else {
-        message.success(`合并成功，共 ${mergedData.length} 条（${parts}）`);
-      }
+      message.success(
+        `已加载本地 ${mergedData.length} 条${parts ? `（${parts}）` : ''}`
+      );
     } catch (error) {
       console.warn('TradeRecord fetchData 异常，使用本地数据回退', error);
       setRecords((localRecords || []).filter(r => !r.ignore).map(ensureNotionals));
-      message.error(error?.message || '拉取失败，已回退本地数据');
+      message.error(error?.message || '加载本地记录失败');
     } finally {
       setLoading(false);
     }
