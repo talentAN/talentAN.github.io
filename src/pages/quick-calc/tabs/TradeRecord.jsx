@@ -451,8 +451,7 @@ const TradeRecord = () => {
     {
       title: '平/开仓日期',
       key: 'time',
-      width: 120,
-      fixed: 'left',
+      width: 82,
       render: (_, record) => {
         if (record.type === 'summery') {
           return {
@@ -465,9 +464,9 @@ const TradeRecord = () => {
           };
         }
         return (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
+          <div style={{ whiteSpace: 'nowrap' }}>
             {moment(record.utime * 1).format('YYYY-MM-DD')}
-            {'\n'}
+            <br />
             {moment(record.ctime * 1).format('YYYY-MM-DD')}
           </div>
         );
@@ -477,7 +476,7 @@ const TradeRecord = () => {
       title: '合约',
       dataIndex: 'symbol',
       key: 'symbol',
-      width: 80,
+      width: 86,
       render: (symbol, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
@@ -491,25 +490,30 @@ const TradeRecord = () => {
       title: '方向',
       dataIndex: 'holdSide',
       key: 'holdSide',
-      width: 60,
+      width: 40,
       render: (side, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <Tag color={side === 'long' ? 'green' : 'red'}>{side === 'long' ? '做多' : '做空'}</Tag>
+          <Tag
+            color={side === 'long' ? 'green' : 'red'}
+            style={{ margin: 0, padding: '0 3px', lineHeight: '18px', fontSize: 12 }}
+          >
+            {side === 'long' ? '做多' : '做空'}
+          </Tag>
         );
       },
     },
     {
       title: '开/平仓价值',
       key: 'notional',
-      width: 100,
+      width: 72,
       align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
+          <div style={{ whiteSpace: 'nowrap' }}>
             {formatCompactNumber(record.openNotional)}
-            {'\n'}
+            <br />
             {formatCompactNumber(record.closeNotional)}
           </div>
         );
@@ -518,14 +522,14 @@ const TradeRecord = () => {
     {
       title: '开/平仓价',
       key: 'price',
-      width: 100,
+      width: 72,
       align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
+          <div style={{ whiteSpace: 'nowrap' }}>
             {formatCompactNumber(record.openAvgPrice)}
-            {'\n'}
+            <br />
             {formatCompactNumber(record.closeAvgPrice)}
           </div>
         );
@@ -534,14 +538,14 @@ const TradeRecord = () => {
     {
       title: '开仓最优差',
       key: 'openBestPriceDiff',
-      width: 120,
+      width: 72,
       align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
+          <div style={{ whiteSpace: 'nowrap' }}>
             {record.openBestPrice3d != null ? formatCompactNumber(record.openBestPrice3d) : '-'}
-            {'\n'}
+            <br />
             {record.openPriceDiff != null && record.openPriceDiff !== '' ? (
               <span style={{ color: getDiffColor(record.openPriceDiff) }}>
                 {parseFloat(record.openPriceDiff).toFixed(2)}%
@@ -557,7 +561,8 @@ const TradeRecord = () => {
       title: '最大回撤',
       dataIndex: 'maxDrawdown',
       key: 'maxDrawdown',
-      width: 88,
+      width: 58,
+      align: 'right',
       render: (val, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const display =
@@ -586,7 +591,8 @@ const TradeRecord = () => {
     {
       title: '收益率',
       key: 'returnRate',
-      width: 80,
+      width: 58,
+      align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const openN = parseFloat(record.openNotional);
@@ -597,7 +603,7 @@ const TradeRecord = () => {
         const openDirection = record.holdSide === 'long' ? -1 : 1;
         const returnRate = ((openN - closeN) / openN) * openDirection * 100;
         return (
-          <span style={{ color: returnRate >= 0 ? 'green' : 'red' }}>
+          <span style={{ color: returnRate >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
             {returnRate.toFixed(2)}%
           </span>
         );
@@ -607,14 +613,14 @@ const TradeRecord = () => {
       title: '净盈亏(R倍)',
       dataIndex: 'netProfit',
       key: 'netProfit',
-      fixed: 'right',
-      width: 90,
+      width: 78,
+      align: 'right',
       render: (profit, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const R = getRMultiplier(record.utime);
         const rMultiple = parseFloat(profit) / R;
         return (
-          <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red' }}>
+          <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
             {rMultiple.toFixed(2)}
           </span>
         );
@@ -625,8 +631,7 @@ const TradeRecord = () => {
       title: '入场理由',
       dataIndex: 'entryReason',
       key: 'entryReason',
-      width: 150,
-      fixed: 'right',
+      width: 78,
       render: (reason, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         const label = getEntryReasonLabel(reason);
@@ -642,6 +647,7 @@ const TradeRecord = () => {
                 fontWeight: active ? 'bold' : 'normal',
                 background: active ? 'rgba(24,144,255,0.08)' : undefined,
                 padding: active ? '0 2px' : undefined,
+                whiteSpace: 'nowrap',
               }}
               title={active ? '点击取消筛选' : '点击只展示此类'}
               onClick={() => toggleEntryReasonFilter(reason)}
@@ -657,8 +663,6 @@ const TradeRecord = () => {
       title: '备注',
       dataIndex: 'remark',
       key: 'remark',
-      width: 300,
-      fixed: 'right',
       render: (text, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
         return (
@@ -805,8 +809,8 @@ const TradeRecord = () => {
         dataSource={recordsToDisplay}
         loading={loading}
         size="small"
-        style={{ fontSize: 12 }}
-        className="trade-record-table"
+        style={{ fontSize: 12, width: '100%' }}
+        className="trade-record-table trade-record-data-table"
         rowKey={record => record.positionId}
         pagination={{
           pageSize: 100,
@@ -815,7 +819,6 @@ const TradeRecord = () => {
           showTotal: total => `共 ${total} 条记录`,
           size: 'small',
         }}
-        scroll={{ x: 'max-content' }}
       />
       <style>{`
         .trade-record-table,
@@ -825,6 +828,10 @@ const TradeRecord = () => {
         .trade-record-table .ant-pagination {
           font-size: 12px !important;
         }
+        .trade-record-table .ant-table-thead > tr > th,
+        .trade-record-table .ant-table-tbody > tr > td {
+          padding: 2px 4px !important;
+        }
         .trade-record-stats-table .ant-table-thead > tr > th,
         .trade-record-stats-table .ant-table-tbody > tr > td {
           padding: 2px 6px !important;
@@ -832,6 +839,21 @@ const TradeRecord = () => {
         }
         .trade-record-stats-table .ant-table-container table {
           width: max-content !important;
+        }
+        .trade-record-data-table .ant-table-container table {
+          width: 100% !important;
+          table-layout: auto;
+        }
+        /* 其它列尽量按内容收缩，备注列吃掉剩余宽度 */
+        .trade-record-data-table .ant-table-thead > tr > th:not(:last-child),
+        .trade-record-data-table .ant-table-tbody > tr > td:not(:last-child) {
+          white-space: nowrap;
+          width: 1%;
+        }
+        .trade-record-data-table .ant-table-thead > tr > th:last-child,
+        .trade-record-data-table .ant-table-tbody > tr > td:last-child {
+          white-space: normal;
+          width: auto;
         }
       `}</style>
     </Card>

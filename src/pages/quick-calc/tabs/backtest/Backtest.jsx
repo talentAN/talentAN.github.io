@@ -4,6 +4,7 @@ import { navigate } from 'gatsby';
 import Rise100Backtest from './Rise100Backtest';
 import LadderBacktest from './LadderBacktest';
 import DayHighGain from './DayHighGain';
+import After100Gain from './After100Gain';
 import * as s from './backtest.module.less';
 
 const cx = (...names) => names.filter(Boolean).join(' ');
@@ -13,17 +14,18 @@ const PATHS = {
   rise100: `${BASE}/rise-100`,
   ladder: `${BASE}/ladder`,
   dayHighGain: `${BASE}/day-high-gain`,
+  after100Gain: `${BASE}/after-100-gain`,
 };
 
 const TABS = [
   { key: PATHS.rise100, label: '涨幅100%回测' },
   { key: PATHS.ladder, label: '阶梯开仓回测' },
   { key: PATHS.dayHighGain, label: 'data-单日最高涨幅' },
-  { key: 'pending-4', label: '回测4（待定）', disabled: true },
+  { key: PATHS.after100Gain, label: 'data-涨幅100后' },
   { key: 'pending-5', label: '回测5（待定）', disabled: true },
 ];
 
-const ACTIVE_PATHS = [PATHS.rise100, PATHS.ladder, PATHS.dayHighGain];
+const ACTIVE_PATHS = [PATHS.rise100, PATHS.ladder, PATHS.dayHighGain, PATHS.after100Gain];
 
 const Backtest = ({ location }) => {
   const cleanPath = (location?.pathname || PATHS.rise100).split('?')[0];
@@ -59,6 +61,7 @@ const Backtest = ({ location }) => {
         {selectedKey === PATHS.rise100 && <Rise100Backtest />}
         {selectedKey === PATHS.ladder && <LadderBacktest />}
         {selectedKey === PATHS.dayHighGain && <DayHighGain />}
+        {selectedKey === PATHS.after100Gain && <After100Gain />}
       </div>
     </Card>
   );

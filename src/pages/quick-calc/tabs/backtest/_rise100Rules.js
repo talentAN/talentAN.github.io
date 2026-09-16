@@ -30,7 +30,8 @@ const windowStats = (sorted, index, days, threshold) => {
 };
 
 /**
- * 标记日：日内最高价严格超过开盘价的 2 倍；上架未满 30 天、或当日最高价为历史新高，均不算。
+ * 标记日：日内最高价严格超过开盘价的 2 倍；上架未满 30 天、或
+ * max(当日最高价, 开盘×4) 相对此前日 K 为历史新高，均不算。
  * 成功：之后 14 根日 K 的最低价严格低于标记日开盘价的 2 倍。
  * 最新不足 14 根的样本标为 pending，不进入成功率分母。
  * later30 / later60 / later90：同一口径在更长窗口上的结果。
@@ -50,7 +51,8 @@ export const findRise100Markers = (candles, pair) => {
     const listedAt = Number(sorted[0][0]);
     if (!Number.isFinite(listedAt) || Number(candle[0]) - listedAt < LISTING_MS) continue;
 
-    const ath = isBreakoutHistoricalHigh(candle[0], sorted);
+    const athProbe = Math.max(high, open * 4);
+    const ath = isBreakoutHistoricalHigh(candle[0], sorted, athProbe);
     if (ath.isBreakout) continue;
 
     const threshold = open * 2;

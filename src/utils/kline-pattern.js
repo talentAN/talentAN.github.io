@@ -202,9 +202,11 @@ export const getEntrySignals = klines => ({
   bearish: isBearishEntrySignal(klines, 3),
 });
 
-// 指定日最高价是否严格高于该日之前全部 K 线的历史最高价
-export const isBreakoutHistoricalHigh = (date, candles) => {
-  const empty = { found: false, isBreakout: false, dateHigh: null, prevAth: null, prevAthDate: null };
+// 指定日是否相对此前全部 K 线创历史新高。
+// probePrice 可选：不传则用当日最高价；传入则用该价（如 max(当日高, 开盘×4)）与历史 ATH 比较。
+// 若目标日 K 尚未进入全量历史，且传入了 probePrice，则用「全部已有日 K」的 ATH 与 probe 比较。
+export const isBreakoutHistoricalHigh = (date, candles, probePrice = null) => {
+  const empty = { found: false, isBreakout: false, dateHigh: null, probePrice: null, prevAth: null, prevAthDate: null };
   const target = toIsoDate(date);
   if (!target) return empty;
 
@@ -212,12 +214,36 @@ export const isBreakoutHistoricalHigh = (date, candles) => {
     .filter(c => c != null && Number.isFinite(candleTs(c)))
     .sort((a, b) => candleTs(a) - candleTs(b));
 
-  const index = sorted.findIndex(c => toIsoDate(candleTs(c)) === target);
-  if (index < 0) return empty;
+  if (!sorted.length) return empty;
+
+  let index = sorted.findIndex(c => toIsoDate(candleTs(c)) === target);
+  const probed = finite(probePrice);
+  // 当日 K 还没进历史：只能在有探测价时，拿全部已有高点当 prevAth
+  if (index < 0) {
+    if (probed == null) return empty;
+    let prevAth = null;
+    let prevAthDate = null;
+    for (let i = 0; i < sorted.length; i++) {
+      const high = finite(normalizeKline(sorted[i]).H);
+      if (high == null) continue;
+      if (prevAth == null || high > prevAth) {
+        prevAth = high;
+        prevAthDate = toIsoDate(candleTs(sorted[i]));
+      }
+    }
+    return {
+      found: true,
+      isBreakout: prevAth != null && probed > prevAth,
+      dateHigh: null,
+      probePrice: probed,
+      prevAth,
+      prevAthDate,
+    };
+  }
 
   const dateHigh = finite(normalizeKline(sorted[index]).H);
   if (dateHigh == null || index === 0) {
-    return { found: true, isBreakout: false, dateHigh, prevAth: null, prevAthDate: null };
+    return { found: true, isBreakout: false, dateHigh, probePrice: probed, prevAth: null, prevAthDate: null };
   }
 
   let prevAth = null;
@@ -231,10 +257,13 @@ export const isBreakoutHistoricalHigh = (date, candles) => {
     }
   }
 
+  const checkPrice = probed != null ? probed : dateHigh;
+
   return {
     found: true,
-    isBreakout: prevAth != null && dateHigh > prevAth,
+    isBreakout: prevAth != null && checkPrice != null && checkPrice > prevAth,
     dateHigh,
+    probePrice: checkPrice,
     prevAth,
     prevAthDate,
   };

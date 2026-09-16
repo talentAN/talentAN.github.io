@@ -64,6 +64,12 @@
   font-weight: 600;
   letter-spacing: 0.3px;
   color: @ink;
+  text-decoration: none;
+
+  &:hover {
+    color: @blue;
+    text-decoration: underline;
+  }
 }
 
 .resonanceHint {
@@ -90,6 +96,7 @@
 .marketPrice {
   color: @blue;
   font-variant-numeric: tabular-nums;
+  text-decoration: none;
 
   &:hover {
     text-decoration: underline;
@@ -314,7 +321,7 @@
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
-} 
+}
 
 .symbolLink {
   color: @blue;

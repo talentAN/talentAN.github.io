@@ -367,7 +367,25 @@ const SurgeAlert = ({ docked = false }) => {
       setAutoBatches(list);
       saveAutoOrderBatches(list);
       return list;
-    }; 
+    };
+
+    /** 当日基本不变的跳过原因：不再每轮重查 / 重提醒 */
+    const TERMINAL_SKIP_REASONS = new Set(['ath_breakout', 'listing_too_new']);
+
+    /** 写入跳过结果；同一币对同一原因只提醒一次 */
+    const commitSkip = (batchKey, existing, skipped) => {
+      const isRepeat =
+        existing?.status === 'skipped' && existing.skipReason === skipped.skipReason;
+      const next = {
+        ...skipped,
+        createdAt: isRepeat ? existing.createdAt || Date.now() : Date.now(),
+        checkedAt: Date.now(),
+      };
+      autoBatchesRef.current.set(batchKey, next);
+      syncAutoBatches();
+      return isRepeat ? null : { type: 'skipped', batch: next };
+    };
+
     // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单；平仓由用户自行处理，系统不再自动发平仓单。
     // skipped/failed 允许重试（否则会锁死整天且 Network 里看不到后续查询）
     const handleAutoOrder = async (info) => {
@@ -389,11 +407,19 @@ const SurgeAlert = ({ docked = false }) => {
           return null;
         }
 
-        // skipped/failed：冷却后再查，避免每轮都拉全量日 K + 持仓
+        // 历史新高 / 上市过新：当日不再反复查、不反复提醒
+        if (
+          existing?.status === 'skipped' &&
+          TERMINAL_SKIP_REASONS.has(existing.skipReason)
+        ) {
+          return null;
+        }
+
+        // 其它 skipped/failed：冷却后再查，避免每轮都拉全量日 K + 持仓
         if (
           existing &&
           (existing.status === 'skipped' || existing.status === 'failed') &&
-          Date.now() - (existing.createdAt || 0) < 60000
+          Date.now() - (existing.checkedAt || existing.createdAt || 0) < 60000
         ) {
           return null;
         }
@@ -414,15 +440,16 @@ const SurgeAlert = ({ docked = false }) => {
       };
       autoBatchesRef.current.set(batchKey, submittingBatch);
       syncAutoBatches();
-
-      // high100 口径：上市未满 30 天 / 历史新高突破 → 跳过（与回测标记日一致）
+// high100 口径：上市未满 30 天 / max(当日最高,开盘×4) 历史新高 → 跳过（与回测标记日一致）
       const eligibility = await checkHigh100Eligibility({
         symbol: info.symbol,
         exchange: info.exchange,
         candleTs: info.candleTs,
+        open: info.open,
+        high: info.high,
       });
       if (!eligibility.allowed) {
-        const skipped = {
+        return commitSkip(batchKey, existing, {
           id: batchKey,
           symbol: info.symbol,
           exchange: info.exchange,
@@ -431,33 +458,30 @@ const SurgeAlert = ({ docked = false }) => {
           ...(Number.isFinite(eligibility.listingDays)
             ? { listingDays: eligibility.listingDays }
             : {}),
-          createdAt: Date.now(),
-        };
-        autoBatchesRef.current.set(batchKey, skipped);
-        syncAutoBatches();
-        return null;
+          ...(Number.isFinite(eligibility.athProbe) ? { athProbe: eligibility.athProbe } : {}),
+          ...(Number.isFinite(eligibility.prevAth) ? { prevAth: eligibility.prevAth } : {}),
+          ...(eligibility.prevAthDate ? { prevAthDate: eligibility.prevAthDate } : {}),
+          ...(Number.isFinite(eligibility.open) ? { open: eligibility.open } : {}),
+          ...(Number.isFinite(eligibility.high) ? { high: eligibility.high } : {}),
+        });
       }
 
       // 下单前查持仓 / 未成交委托；查询失败也跳过（保守）
       const exposure = await checkExistingExposure({ symbol: info.symbol, exchange: info.exchange });
       if (exposure.exposed) {
-        const skipped = {
+        return commitSkip(batchKey, existing, {
           id: batchKey,
           symbol: info.symbol,
           exchange: info.exchange,
           status: 'skipped',
           skipReason: exposure.reason,
           ...(exposure.detail ? { skipDetail: exposure.detail } : {}),
-          createdAt: Date.now(),
-        };
-        autoBatchesRef.current.set(batchKey, skipped);
-        syncAutoBatches();
-        return null;
+        });
       }
 
       const funding = await checkFundingRate({ symbol: info.symbol, exchange: info.exchange });
       if (!funding.allowed) {
-        const skipped = {
+        return commitSkip(batchKey, existing, {
           id: batchKey,
           symbol: info.symbol,
           exchange: info.exchange,
@@ -465,11 +489,7 @@ const SurgeAlert = ({ docked = false }) => {
           skipReason: funding.reason,
           ...(Number.isFinite(funding.fundingRate) ? { fundingRate: funding.fundingRate } : {}),
           ...(funding.detail || funding.error ? { skipDetail: funding.detail || funding.error } : {}),
-          createdAt: Date.now(),
-        };
-        autoBatchesRef.current.set(batchKey, skipped);
-        syncAutoBatches();
-        return null;
+        });
       }
 
       const plan = buildLadderPlan({
@@ -490,13 +510,19 @@ const SurgeAlert = ({ docked = false }) => {
         return { type: 'submitted', batch: submitted };
       } catch (e) {
         console.error('[SurgeAlert][AutoOrder] submit', batchKey, e);
-        autoBatchesRef.current.set(batchKey, {
+        const failed = {
           ...pendingBatch,
           status: 'failed',
           skipDetail: e?.message || String(e),
-        });
+          createdAt: existing?.status === 'failed' ? existing.createdAt || Date.now() : Date.now(),
+          checkedAt: Date.now(),
+        };
+        autoBatchesRef.current.set(batchKey, failed);
         syncAutoBatches();
-        return null;
+        if (existing?.status === 'failed' && existing.skipDetail === failed.skipDetail) {
+          return null;
+        }
+        return { type: 'skipped', batch: failed };
       }
       } catch (e) {
         console.error('[SurgeAlert][AutoOrder] unexpected', batchKey, e);
@@ -576,19 +602,22 @@ const SurgeAlert = ({ docked = false }) => {
               : `轮询 ${checked}/${total} · 无命中`
           );
 
-          if (freshHits.length || orderEvents.length) {
+          // 新命中 / 成功挂单才响铃；未开仓原因只写在卡片上，不每轮提醒
+          if (freshHits.length || orderEvents.some(e => e.type === 'submitted')) {
             const hitLabels = freshHits
               .slice(0, 3)
               .map(item => `${item.symbol}(+${((item.ratio - 1) * 100).toFixed(0)}%)`);
-            const orderLabels = orderEvents.slice(0, 3).map(e =>
-              e.type === 'submitted'
-                ? `${e.batch.symbol}已自动挂单`
-                : `${e.batch.symbol}${EXIT_REASON_LABEL[e.batch.exitReason] || ''}离场`
-            );
+            const orderLabels = orderEvents
+              .filter(e => e.type === 'submitted')
+              .slice(0, 3)
+              .map(e => `${e.batch.symbol}已自动挂单`);
             const label = [...hitLabels, ...orderLabels].slice(0, 3).join(' ');
             setExpanded(true);
             playAlertSound();
             bringTabToFront(label);
+          } else if (orderEvents.some(e => e.type === 'skipped')) {
+            // 首次跳过只展开面板，不响铃
+            setExpanded(true);
           }
 
           const elapsed = Date.now() - batchStart;
@@ -859,6 +888,7 @@ const SurgeAlert = ({ docked = false }) => {
                 e.target.blur();
               }
             }}
+
             style={{
               width: 40,
               height: 22,
@@ -935,9 +965,27 @@ const SurgeAlert = ({ docked = false }) => {
             const skipLabel = batch?.skipReason
               ? SKIP_REASON_LABEL[batch.skipReason] || batch.skipReason
               : '';
+            const fmtPx = v =>
+              Number.isFinite(Number(v))
+                ? Number(v) >= 1
+                  ? Number(v).toPrecision(6)
+                  : Number(v).toPrecision(4)
+                : '';
             const skipDetail = [
-              skipLabel,
-              batch?.skipDetail,
+              batch?.status === 'skipped' || batch?.status === 'failed'
+                ? `未开仓：${
+                    skipLabel ||
+                    batch?.skipDetail ||
+                    (batch?.status === 'failed' ? '提交失败' : '未知原因')
+                  }`
+                : skipLabel,
+              batch?.skipReason === 'ath_breakout' && Number.isFinite(batch?.athProbe)
+                ? `探测价 ${fmtPx(batch.athProbe)}（max高/开×4）`
+                : '',
+              batch?.skipReason === 'ath_breakout' && Number.isFinite(batch?.prevAth)
+                ? `前高 ${fmtPx(batch.prevAth)}${batch.prevAthDate ? `@${batch.prevAthDate}` : ''}`
+                : '',
+              batch?.status === 'skipped' && batch?.skipDetail && skipLabel ? batch.skipDetail : '',
               Number.isFinite(batch?.listingDays) ? `已上线 ${batch.listingDays} 天` : '',
               Number.isFinite(batch?.fundingRate)
                 ? `资金费率 ${(batch.fundingRate * 100).toFixed(4)}%`

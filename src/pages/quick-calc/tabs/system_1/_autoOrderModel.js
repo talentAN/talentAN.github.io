@@ -53,7 +53,7 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
  *   4. 风控：单币种最大仓位、总敞口上限、下单失败重试策略
  *
  * 下单前置检查：
- *   0. high100 资格（与回测一致）：拉全量日 K；上市未满 30 天、或当日最高价为历史新高 → skipped
+ *   0. high100 资格（与回测一致）：拉全量日 K；上市未满 30 天、或 max(当日最高, 开盘×4) 为历史新高 → skipped
  *   1. checkExistingExposure 查该币对当前是否已有持仓或未成交委托
  * （Bitget: single-position + orders-pending；Binance: positionRisk + openOrders），
  * 只要命中任意一项就跳过自动下单（标记为 skipped，当天不再重复触发/查询）。查询本身
@@ -116,7 +116,7 @@ export const SKIP_REASON_LABEL = {
   funding_rate_unavailable: '资金费率不可用',
   funding_rate_query_failed: '资金费率查询失败',
   listing_too_new: `上市未满 ${MIN_LISTING_DAYS} 天`,
-  ath_breakout: '当日最高价为历史新高',
+  ath_breakout: 'max(当日最高,开盘×4) 为历史新高',
   history_unavailable: '历史K线不足，无法校验上市天数',
 };
 
@@ -125,11 +125,11 @@ const LISTING_MS = MIN_LISTING_DAYS * 24 * 60 * 60 * 1000;
 /**
  * high100 自动下单资格：与回测标记日口径一致
  * - 上市未满 MIN_LISTING_DAYS（30）天 → 排除
- * - 当日最高价相对此前全部日 K 为历史新高突破 → 排除
+ * - max(当日最高价, 开盘×4) 相对此前全部日 K 为历史新高突破 → 排除
  *
  * 仅在即将下单时拉取完整日 K（新币全量很少；老币也只触发一次/天）。
  */
-export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs }) => {
+export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs, open: openHint, high: highHint }) => {
   try {
     const candles = await getAllFutureDailyKlines({ symbol }, exchange);
     const sorted = [...(candles || [])]
@@ -154,13 +154,28 @@ export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs }) =>
       return { allowed: false, reason: 'listing_too_new', listingDays };
     }
 
-    const ath = isBreakoutHistoricalHigh(markerTs, sorted);
+    const markerDay = new Date(markerTs).toISOString().slice(0, 10);
+    const markerCandle =
+      sorted.find(c => new Date(Number(c[0])).toISOString().slice(0, 10) === markerDay) ||
+      sorted[sorted.length - 1];
+    const open = Number(openHint) > 0 ? Number(openHint) : Number(markerCandle?.[1]);
+    const high = Number(highHint) > 0 ? Number(highHint) : Number(markerCandle?.[2]);
+    if (!(open > 0) || !(high > 0)) {
+      return { allowed: false, reason: 'history_unavailable', listingDays };
+    }
+
+    const athProbe = Math.max(high, open * 4);
+    const ath = isBreakoutHistoricalHigh(markerTs, sorted, athProbe);
     if (ath.isBreakout) {
       return {
         allowed: false,
         reason: 'ath_breakout',
         listingDays,
         prevAth: ath.prevAth,
+        prevAthDate: ath.prevAthDate,
+        athProbe,
+        open,
+        high,
       };
     }
 
@@ -366,6 +381,7 @@ export const checkExistingExposure = async ({ symbol, exchange }) => {
     return { exposed: true, reason: 'query_error', detail: msg, error: msg };
   }
 };
+
 // 浮点数换算出来的价格/数量做个粗糙的截位，避免请求体里出现一长串浮点误差尾数
 const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
 

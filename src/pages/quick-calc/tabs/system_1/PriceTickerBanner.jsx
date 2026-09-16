@@ -71,22 +71,29 @@ const PriceTickerBanner = () => {
     };
   }, []);
 
-  const renderStats = (symbol, data) => (
-    <div className={s.marketItem} key={symbol}>
-      <span className={s.marketSymbol}>{symbol}</span>
-      <span className={s.marketPrice}>{data.latest == null ? '-' : data.latest.toLocaleString()}</span>
-      {MARKET_DATA_CONFIG.displayPeriods.map(days => {
-        const value = data[`day${days}`];
-        const tone = value == null ? s.chipFlat : value >= 0 ? s.chipUp : s.chipDown;
-        return (
-          <span key={days} className={`${s.chip} ${tone}`}>
-            <span className={s.chipLabel}>{days}日</span>
-            {value == null ? '-' : `${value.toFixed(2)}%`}
-          </span>
-        );
-      })}
-    </div>
-  );
+  const renderStats = (symbol, data) => {
+    const href = `https://www.binance.com/zh-CN/futures/${symbol}USDT`;
+    return (
+      <div className={s.marketItem} key={symbol}>
+        <a className={s.marketSymbol} href={href} target="_blank" rel="noopener noreferrer">
+          {symbol}
+        </a>
+        <a className={s.marketPrice} href={href} target="_blank" rel="noopener noreferrer">
+          {data.latest == null ? '-' : data.latest.toLocaleString()}
+        </a>
+        {MARKET_DATA_CONFIG.displayPeriods.map(days => {
+          const value = data[`day${days}`];
+          const tone = value == null ? s.chipFlat : value >= 0 ? s.chipUp : s.chipDown;
+          return (
+            <span key={days} className={`${s.chip} ${tone}`}>
+              <span className={s.chipLabel}>{days}日</span>
+              {value == null ? '-' : `${value.toFixed(2)}%`}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="quick-calc-ticker">

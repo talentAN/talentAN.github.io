@@ -60,21 +60,27 @@ const Rise100Backtest = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [exFilter, setExFilter] = useState('all');
   const [riseRange, setRiseRange] = useState(null);
+  const [startDate, setStartDate] = useState('');
 
-  const stats = useMemo(() => summarizeMarkers(rows), [rows]);
-  const riseBuckets10 = useMemo(() => bucketMarkerRise(rows, 10), [rows]);
-  const dropBuckets = useMemo(() => bucketSuccessDrop(rows, 10), [rows]);
+  const datedRows = useMemo(() => {
+    if (!startDate) return rows;
+    return rows.filter(row => row.markerDate && row.markerDate >= startDate);
+  }, [rows, startDate]);
+
+  const stats = useMemo(() => summarizeMarkers(datedRows), [datedRows]);
+  const riseBuckets10 = useMemo(() => bucketMarkerRise(datedRows, 10), [datedRows]);
+  const dropBuckets = useMemo(() => bucketSuccessDrop(datedRows, 10), [datedRows]);
 
   const displayRows = useMemo(() => {
     const query = keyword.trim().toUpperCase();
-    return rows.filter(row => {
+    return datedRows.filter(row => {
       if (query && !row.symbol.includes(query)) return false;
       if (statusFilter !== 'all' && row.status !== statusFilter) return false;
       if (exFilter !== 'all' && row.exchange !== exFilter) return false;
       if (riseRange && !(row.markerRise >= riseRange.start && row.markerRise < riseRange.end)) return false;
       return true;
     });
-  }, [rows, keyword, statusFilter, exFilter, riseRange]);
+  }, [datedRows, keyword, statusFilter, exFilter, riseRange]);
 
   const symbolCell = row => (
     <>
@@ -202,33 +208,33 @@ const Rise100Backtest = () => {
         <div className={s.statItem}>
           <span className={s.statLabel}>成功率</span>
           <span className={cx(s.statValue, s.statBlue)}>
-            {!stats || stats.successRate == null ? '—' : `${stats.successRate.toFixed(2)}%`}
+            {stats.successRate == null ? '—' : `${stats.successRate.toFixed(2)}%`}
           </span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>标记</span>
-          <span className={s.statValue}>{stats?.total || 0}</span>
+          <span className={s.statValue}>{stats.total}</span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>已完成</span>
-          <span className={s.statValue}>{stats?.completed || 0}</span>
+          <span className={s.statValue}>{stats.completed}</span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>成功</span>
-          <span className={cx(s.statValue, s.statGreen)}>{stats?.success || 0}</span>
+          <span className={cx(s.statValue, s.statGreen)}>{stats.success}</span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>失败</span>
-          <span className={cx(s.statValue, s.statRed)}>{stats?.failed || 0}</span>
+          <span className={cx(s.statValue, s.statRed)}>{stats.failed}</span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>待观察</span>
-          <span className={s.statValue}>{stats?.pending || 0}</span>
+          <span className={s.statValue}>{stats.pending}</span>
         </div>
         <div className={s.statItem}>
           <span className={s.statLabel}>后14日最高超成功线</span>
-          <span className={cx(s.statValue, stats?.maxHighVsThreshold > 0 ? s.statRed : s.statGreen)}>
-            {!stats || stats.maxHighVsThreshold == null
+          <span className={cx(s.statValue, stats.maxHighVsThreshold > 0 ? s.statRed : s.statGreen)}>
+            {stats.maxHighVsThreshold == null
               ? '—'
               : `${stats.maxHighVsThreshold >= 0 ? '+' : ''}${stats.maxHighVsThreshold.toFixed(1)}%`}
           </span>
@@ -237,7 +243,7 @@ const Rise100Backtest = () => {
         <Rise100Playbook />
       </div>
 
-      {stats?.riseBuckets?.length > 0 && (
+      {stats.riseBuckets?.length > 0 && (
         <div className={s.distBar}>
           <span className={s.distTitle}>日内最高涨幅</span>
           {stats.riseBuckets.map(bucket => {
@@ -290,7 +296,7 @@ const Rise100Backtest = () => {
               <div className={s.rowTip}>
                 <span className={s.rowTipTitle}>
                   成功样本后 {FOLLOW_UP_DAYS} 日最低价低于成功线（开盘×2）的幅度 · 每 10 个点一档（共{' '}
-                  {stats?.success || 0} 条）
+                  {stats.success} 条）
                 </span>
                 <div className={s.rowTipChips}>
                   {dropBuckets.length === 0 ? (
@@ -316,7 +322,7 @@ const Rise100Backtest = () => {
       <div className={s.metaRow}>
         <span className={s.ruleText}>
           某日最高价 &gt; 开盘价 ×2 记为标记日（上架未满{' '}
-          {MIN_LISTING_DAYS} 天、或当日最高价为历史新高除外），其后 {FOLLOW_UP_DAYS} 个交易日最低价 &lt;
+          {MIN_LISTING_DAYS} 天、或 max(当日最高, 开盘×4) 为历史新高除外），其后 {FOLLOW_UP_DAYS} 个交易日最低价 &lt;
           开盘价 ×2 判定成功，不足 {FOLLOW_UP_DAYS} 天不计入
         </span>
         <div className={s.actions}>
@@ -364,6 +370,20 @@ const Rise100Backtest = () => {
           value={keyword}
           onChange={event => setKeyword(event.target.value)}
         />
+        <span className={s.muted}>起始日</span>
+        <input
+          className={s.search}
+          type="date"
+          value={startDate}
+          onChange={event => setStartDate(event.target.value || '')}
+          title="按标记日 ≥ 该日期筛选（含统计）"
+          style={{ width: 140 }}
+        />
+        {startDate && (
+          <span className={s.filterChip} onClick={() => setStartDate('')} title="清除起始日">
+            清除
+          </span>
+        )}
       </div>
 
       {progress.total > 0 && (
@@ -394,12 +414,18 @@ const Rise100Backtest = () => {
       )}
 
       <ResultList
-        key={`${statusFilter}-${riseRange?.start ?? 'all'}`}
+        key={`${statusFilter}-${riseRange?.start ?? 'all'}-${startDate || 'all'}`}
         columns={columns}
         rows={displayRows}
-        empty={running ? '回测中...' : '点击「开始全量回测」获取数据'}
+        empty={
+          running
+            ? '回测中...'
+            : startDate && datedRows.length === 0
+              ? `无标记日 ≥ ${startDate} 的样本`
+              : '点击「开始全量回测」获取数据'
+        }
         defaultSort={{ key: 'markerDate', dir: 'desc' }}
-        highlightKey={stats?.maxHighVsThresholdKey}
+        highlightKey={stats.maxHighVsThresholdKey}
       />
     </div>
   );

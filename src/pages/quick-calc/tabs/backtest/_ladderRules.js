@@ -3,10 +3,10 @@
 export const DEFAULT_LADDER = {
   capital: 10000,
   levels: [
-    { mult: 2.0, notional: 120 },
-    { mult: 2.4, notional: 140 },
-    { mult: 3.0, notional: 160 },
-    { mult: 4.0, notional: 180 },
+    { mult: 2.0, notional: 150 },
+    { mult: 2.4, notional: 200 },
+    { mult: 3.0, notional: 250 },
+    { mult: 4.0, notional: 300 },
   ],
   stopMult: 5.0,
   targetMult: 1.4,
@@ -31,7 +31,12 @@ const isoDate = timestamp => new Date(Number(timestamp)).toISOString().slice(0, 
 
 // 单个标记日跑一遍阶梯：逐日撮合挂单，同日内先判止损再判止盈（对空单取最坏顺序）
 export const simulateLadder = (marker, cfg = DEFAULT_LADDER) => {
-  const base = { key: marker.key, symbol: marker.symbol, exchange: marker.exchange, markerDate: marker.markerDate };
+  const base = {
+    key: marker.key,
+    symbol: marker.symbol,
+    exchange: marker.exchange,
+    markerDate: marker.markerDate,
+  };
   const open = finite(marker.markerOpen);
   const candles = marker.followCandles;
   if (!(open > 0) || !Array.isArray(candles) || candles.length === 0) {
@@ -79,7 +84,13 @@ export const simulateLadder = (marker, cfg = DEFAULT_LADDER) => {
       break;
     }
     // 收盘站上标记日最高价：注意力没消退，按结构失效离场
-    if (cfg.exitOnNewHigh && markerHigh != null && close != null && close > markerHigh && index > 0) {
+    if (
+      cfg.exitOnNewHigh &&
+      markerHigh != null &&
+      close != null &&
+      close > markerHigh &&
+      index > 0
+    ) {
       exitType = 'newHigh';
       exitPrice = close;
       exitIndex = index;
