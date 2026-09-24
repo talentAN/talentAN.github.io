@@ -96,3 +96,36 @@ export const placeFuturePosStopLoss = async ({
   };
   return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-tpsl-order', {}, body);
 };
+
+/**
+ * 普通计划委托：价格触及 triggerPrice 后按 orderType 成交。
+ * POST /api/v2/mix/order/place-plan-order
+ * planType=normal_plan + orderType=market → 触及后市价开仓（非 track_plan 追踪止损）。
+ */
+export const placeFuturePlanMarketOrder = async ({
+  symbol,
+  size,
+  triggerPrice,
+  side = 'buy',
+  marginMode = 'crossed',
+  marginCoin = 'USDT',
+  triggerType = 'fill_price',
+  tradeSide = 'open',
+  clientOid,
+}) => {
+  const body = {
+    planType: 'normal_plan',
+    symbol,
+    productType: PRODUCT_TYPE,
+    marginMode,
+    marginCoin,
+    size: String(size),
+    triggerPrice: String(triggerPrice),
+    triggerType,
+    side,
+    tradeSide,
+    orderType: 'market',
+    ...(clientOid ? { clientOid } : {}),
+  };
+  return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-plan-order', {}, body);
+};

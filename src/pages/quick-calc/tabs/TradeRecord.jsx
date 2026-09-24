@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Table, Button, Checkbox, message, DatePicker, Tag, Radio, Tooltip, Input } from 'antd';
-import { ReloadOutlined, CopyOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Checkbox, message, Tag, Radio, Tooltip, Input } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
 import {
   fetchAllTradeRecords,
   getTradeLink,
@@ -11,7 +11,6 @@ import localRecords from '@root/contract-record/all.json';
 import { PATTERN, PATTERN_Array } from '@root/src/consts';
 import moment from 'moment';
 
-const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
 /** 双击进入编辑，失焦写回并恢复文本展示 */
@@ -112,7 +111,7 @@ const EditableTextCell = ({ value, multiline = false, emptyText = '-', onCommit 
   return body;
 };
 
-/** 系统统计表展示的入场模式（按此顺序） */
+/** 系统统计表展示的入场模式（按此顺序）；表内与入场理由列均可点击过滤 */
 const STAT_SYSTEMS = [
   {
     key: PATTERN.high_volume_breakout_shrink_stall,
@@ -121,6 +120,10 @@ const STAT_SYSTEMS = [
   {
     key: PATTERN.surge_100_pullback,
     label: '爆100回调',
+  },
+  {
+    key: PATTERN.trial_water,
+    label: '试水',
   },
 ];
 
@@ -157,12 +160,12 @@ const expectationTooltip = (
 const TradeRecord = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState(null);
   const [onlyHighlight, setOnlyHighlight] = useState(false);
   const [entryReasonFilter, setEntryReasonFilter] = useState(null);
   const [onlyTrades, setOnlyTrades] = useState(true);
   const [directionFilter, setDirectionFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedSummeryId, setExpandedSummeryId] = useState(null);
 
   useEffect(
     () => setCurrentPage(1),
@@ -211,6 +214,18 @@ const TradeRecord = () => {
     return `${sign}${text}${suffix}`;
   };
 
+  /** 累积收益：默认两位小数；≥1k 用 s.yyK */
+  const formatCumulativeProfit = value => {
+    const n = parseFloat(value);
+    if (value == null || value === '' || Number.isNaN(n)) return '-';
+    const sign = n < 0 ? '-' : '';
+    const abs = Math.abs(n);
+    if (abs >= 1000) {
+      return `${sign}${(abs / 1000).toFixed(2)}K`;
+    }
+    return `${sign}${abs.toFixed(2)}`;
+  };
+
   const getEntryReasonLabel = reason => {
     if (!reason) return '-';
     const pattern = PATTERN_Array.find(p => p.key === reason);
@@ -241,6 +256,7 @@ const TradeRecord = () => {
     let lossCount = 0;
     let totalProfitR = 0;
     let totalLossR = 0;
+    let cumulativeProfit = 0;
     let diffLt10 = 0;
     let diff10to20 = 0;
     let diff20to40 = 0;
@@ -251,6 +267,10 @@ const TradeRecord = () => {
       const profit = parseFloat(record.netProfit);
       const R = getRMultiplier(record.utime);
       const rMultiple = profit / R;
+
+      if (!Number.isNaN(profit)) {
+        cumulativeProfit += profit;
+      }
 
       if (profit >= 0) {
         profitCount++;
@@ -298,6 +318,7 @@ const TradeRecord = () => {
       avgProfitR,
       avgLossR,
       expectation,
+      cumulativeProfit,
       maxDrawdown,
       diffLt10,
       diff10to20,
@@ -305,8 +326,7 @@ const TradeRecord = () => {
       diffGt40,
     };
   };
-
-  const systemStatsRows = useMemo(() => {
+const systemStatsRows = useMemo(() => {
     return STAT_SYSTEMS.map(system => {
       const stats = calculatePatternStats(system.key);
       const name = `${system.label}（${stats ? stats.totalCount : 0}）`;
@@ -319,6 +339,8 @@ const TradeRecord = () => {
           avgPL: '-',
           expectation: '-',
           expectationNum: null,
+          cumulativeProfit: '-',
+          cumulativeProfitNum: null,
           maxDrawdown: '-',
           diffLt10: '-',
           diff10to20: '-',
@@ -336,6 +358,8 @@ const TradeRecord = () => {
         avgPL: `${stats.avgProfitR.toFixed(2)}/${stats.avgLossR.toFixed(2)}`,
         expectation: stats.expectation.toFixed(4),
         expectationNum: stats.expectation,
+        cumulativeProfit: formatCumulativeProfit(stats.cumulativeProfit),
+        cumulativeProfitNum: stats.cumulativeProfit,
         maxDrawdown:
           stats.maxDrawdown == null ? '-' : `${Number(stats.maxDrawdown).toFixed(2)}%`,
         diffLt10: `${stats.diffLt10}(${pct(stats.diffLt10)}%)`,
@@ -344,6 +368,17 @@ const TradeRecord = () => {
         diffGt40: `${stats.diffGt40}(${pct(stats.diffGt40)}%)`,
       };
     });
+  }, [records, directionFilter]);
+
+  /** 全部合约成交记录净盈亏合计（跟上方方向筛选一致，不含 summery） */
+  const totalAllNetProfit = useMemo(() => {
+    return records.reduce((sum, r) => {
+      if (r.type === 'summery') return sum;
+      if (directionFilter !== 'all' && r.holdSide !== directionFilter) return sum;
+      if (r.ignore) return sum;
+      const profit = parseFloat(r.netProfit);
+      return Number.isFinite(profit) ? sum + profit : sum;
+    }, 0);
   }, [records, directionFilter]);
 
   const toggleEntryReasonFilter = reason => {
@@ -445,6 +480,27 @@ const TradeRecord = () => {
       width: 80,
       render: v => <span style={{ fontWeight: 'bold', color: '#f5222d' }}>{v}</span>,
     },
+    {
+      title: '累积收益',
+      dataIndex: 'cumulativeProfit',
+      key: 'cumulativeProfit',
+      width: 88,
+      align: 'right',
+      render: (v, row) =>
+        v === '-' ? (
+          '-'
+        ) : (
+          <span
+            style={{
+              fontWeight: 'bold',
+              color: row.cumulativeProfitNum >= 0 ? '#52c41a' : '#f5222d',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {v}
+          </span>
+        ),
+    },
   ];
 
   const columns = [
@@ -454,9 +510,18 @@ const TradeRecord = () => {
       width: 82,
       render: (_, record) => {
         if (record.type === 'summery') {
+          const expanded = expandedSummeryId === record.positionId;
           return {
             children: (
-              <div style={{ whiteSpace: 'pre-wrap', padding: '10px', background: '#f0f0f0' }}>
+              <div
+                className={`summery-cell${expanded ? ' summery-cell--expanded' : ''}`}
+                title={expanded ? '双击收起' : '双击展开'}
+                onDoubleClick={() =>
+                  setExpandedSummeryId(prev =>
+                    prev === record.positionId ? null : record.positionId
+                  )
+                }
+              >
                 {record.content}
               </div>
             ),
@@ -589,19 +654,42 @@ const TradeRecord = () => {
       },
     },
     {
+      title: '收益',
+      dataIndex: 'netProfit',
+      key: 'netProfit',
+      width: 72,
+      align: 'right',
+      render: (profit, record) => {
+        if (record.type === 'summery') return { props: { colSpan: 0 } };
+        const n = parseFloat(profit);
+        if (profit == null || profit === '' || Number.isNaN(n)) return '-';
+        return (
+          <span style={{ color: n >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
+            {n.toFixed(2)}
+          </span>
+        );
+      },
+    },
+    {
       title: '收益率',
       key: 'returnRate',
       width: 58,
       align: 'right',
       render: (_, record) => {
         if (record.type === 'summery') return { props: { colSpan: 0 } };
+        // 优先用币安截图录入的已实现收益率；否则用已实现盈亏 / 开仓名义
+        const storedRoi = parseFloat(record.realizedRoi);
+        if (!Number.isNaN(storedRoi) && record.realizedRoi != null && record.realizedRoi !== '') {
+          return (
+            <span style={{ color: storedRoi >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
+              {storedRoi.toFixed(2)}%
+            </span>
+          );
+        }
         const openN = parseFloat(record.openNotional);
-        const closeN = parseFloat(record.closeNotional);
-        if (!openN || Number.isNaN(openN) || Number.isNaN(closeN)) return '-';
-        // （开仓价值 - 平仓价值）/ 开仓价值 × 开仓方向
-        // 开仓方向：做多 -1、做空 +1，保证顺向盈利为正
-        const openDirection = record.holdSide === 'long' ? -1 : 1;
-        const returnRate = ((openN - closeN) / openN) * openDirection * 100;
+        const profit = parseFloat(record.netProfit);
+        if (!openN || Number.isNaN(openN) || Number.isNaN(profit)) return '-';
+        const returnRate = (profit / openN) * 100;
         return (
           <span style={{ color: returnRate >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
             {returnRate.toFixed(2)}%
@@ -609,24 +697,6 @@ const TradeRecord = () => {
         );
       },
     },
-    {
-      title: '净盈亏(R倍)',
-      dataIndex: 'netProfit',
-      key: 'netProfit',
-      width: 78,
-      align: 'right',
-      render: (profit, record) => {
-        if (record.type === 'summery') return { props: { colSpan: 0 } };
-        const R = getRMultiplier(record.utime);
-        const rMultiple = parseFloat(profit) / R;
-        return (
-          <span style={{ color: parseFloat(profit) >= 0 ? 'green' : 'red', whiteSpace: 'nowrap' }}>
-            {rMultiple.toFixed(2)}
-          </span>
-        );
-      },
-    },
-
     {
       title: '入场理由',
       dataIndex: 'entryReason',
@@ -684,17 +754,8 @@ const TradeRecord = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const requestParams = {};
-      if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
-        const latestAllowedEnd = moment().subtract(1, 'day').startOf('day').valueOf();
-        const safeEndTime = Math.min(dateRange[1].startOf('day').valueOf(), latestAllowedEnd);
-        const safeStartTime = Math.min(dateRange[0].startOf('day').valueOf(), safeEndTime);
-        requestParams.startTime = safeStartTime.toString();
-        requestParams.endTime = safeEndTime.toString();
-      }
-
       // 历史仓位只读本地 all.json（人工维护，不拉交易所仓位接口）
-      const { records: mergedData, stats } = await fetchAllTradeRecords(requestParams);
+      const { records: mergedData, stats } = await fetchAllTradeRecords({});
       setRecords(mergedData);
 
       const parts = Object.entries(stats || {})
@@ -762,16 +823,6 @@ const TradeRecord = () => {
           <Radio.Button value="long">做多</Radio.Button>
           <Radio.Button value="short">做空</Radio.Button>
         </Radio.Group>
-        <RangePicker value={dateRange} onChange={setDateRange} size="small" />
-        <Button
-          type="primary"
-          icon={<ReloadOutlined />}
-          onClick={fetchData}
-          loading={loading}
-          size="small"
-        >
-          查询合并
-        </Button>
         <Button icon={<CopyOutlined />} onClick={handleCopy} size="small">
           复制数据
         </Button>
@@ -791,6 +842,13 @@ const TradeRecord = () => {
         >
           只展示成交记录
         </Checkbox>
+        <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+          全部累积盈亏{' '}
+          <strong style={{ color: totalAllNetProfit >= 0 ? '#52c41a' : '#f5222d' }}>
+            {totalAllNetProfit >= 0 ? '+' : ''}
+            {formatCumulativeProfit(totalAllNetProfit)}
+          </strong>
+        </span>
       </div>
 
       {/* 系统统计 */}
@@ -854,6 +912,36 @@ const TradeRecord = () => {
         .trade-record-data-table .ant-table-tbody > tr > td:last-child {
           white-space: normal;
           width: auto;
+        }
+        .summery-cell {
+          white-space: pre-wrap;
+          padding: 8px 10px;
+          background: #f0f0f0;
+          max-height: 96px;
+          overflow: hidden;
+          position: relative;
+          line-height: 1.5;
+          cursor: pointer;
+          user-select: none;
+        }
+        .summery-cell::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 28px;
+          pointer-events: none;
+          background: linear-gradient(transparent, #f0f0f0);
+        }
+        .summery-cell--expanded {
+          max-height: min(70vh, 520px);
+          overflow: auto;
+          user-select: text;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        }
+        .summery-cell--expanded::after {
+          display: none;
         }
       `}</style>
     </Card>

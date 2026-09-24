@@ -12,6 +12,8 @@ const PRIMARY_ITEMS = [
   { key: '/quick-calc/trade-record', label: '合约交易记录' },
   { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
   { key: '/quick-calc/system_bullish', label: '系统-横盘抬头' },
+  { key: '/quick-calc/low-vol-range-blast', label: '低波动横盘暴涨' },
+  { key: '/quick-calc/brewing-pool', label: '酝酿池' },
   { key: '/quick-calc/backtest', label: '回测' },
 ];
 
@@ -30,10 +32,12 @@ const ROUTE_PRIORITY = [
   '/quick-calc/kang-dan',
   '/quick-calc/bitget-monitor',
   '/quick-calc/find-pattern',
+  '/quick-calc/brewing-pool',
   '/quick-calc/newcoin-breakout',
   '/quick-calc/meta-system',
   '/quick-calc/system_1',
   '/quick-calc/system_bullish',
+  '/quick-calc/low-vol-range-blast',
   '/quick-calc/newcoin',
   '/quick-calc/system_2',
   '/quick-calc/backtest',

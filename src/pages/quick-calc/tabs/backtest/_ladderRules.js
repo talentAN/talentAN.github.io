@@ -4,9 +4,9 @@ export const DEFAULT_LADDER = {
   capital: 10000,
   levels: [
     { mult: 2.0, notional: 150 },
-    { mult: 2.4, notional: 200 },
-    { mult: 3.0, notional: 250 },
-    { mult: 4.0, notional: 300 },
+    { mult: 2.4, notional: 175 },
+    { mult: 3.0, notional: 200 },
+    { mult: 4.0, notional: 275 },
   ],
   stopMult: 5.0,
   targetMult: 1.4,
@@ -134,6 +134,64 @@ export const simulateLadder = (marker, cfg = DEFAULT_LADDER) => {
 
 export const runLadder = (markers, cfg = DEFAULT_LADDER) =>
   (markers || []).map(marker => simulateLadder(marker, cfg));
+
+const avgFromFills = fills => {
+  if (!fills.length) return null;
+  const notional = fills.reduce((sum, f) => sum + f.notional, 0);
+  const qty = fills.reduce((sum, f) => sum + f.notional / f.price, 0);
+  return qty > 0 ? notional / qty : null;
+};
+
+/**
+ * 阶梯空单回本天数（相对标记日 / candles[0]）。
+ * 日 K 撮合：当日 high 触档即成交；成交当日不判回本，从次日才看 low≤加权均价。
+ * 之后若某日又有新成交，该日同样跳过（均价刚变，日线分不清先后）。
+ */
+export const daysToLadderBreakeven = (markerOpen, candles, cfg = DEFAULT_LADDER) => {
+  const open = finite(markerOpen);
+  if (!(open > 0) || !Array.isArray(candles) || candles.length === 0) {
+    return { filled: 0, days: null, avgEntry: null, status: 'none' };
+  }
+
+  const pending = cfg.levels.map(level => ({ ...level, price: open * level.mult }));
+  const fills = [];
+  const limit = Math.min(candles.length, cfg.windowDays + 1);
+
+  for (let index = 0; index < limit; index++) {
+    const high = finite(candles[index][2]);
+    const low = finite(candles[index][3]);
+    if (high == null || low == null) continue;
+
+    let added = 0;
+    for (let i = pending.length - 1; i >= 0; i--) {
+      if (high >= pending[i].price) {
+        fills.push(pending[i]);
+        pending.splice(i, 1);
+        added += 1;
+      }
+    }
+    if (fills.length === 0) continue;
+
+    // 成交当日不看回本，从次日开始
+    if (added > 0) continue;
+
+    const avgEntry = avgFromFills(fills);
+    if (avgEntry != null && low <= avgEntry) {
+      return { filled: fills.length, days: index, avgEntry, status: 'recovered' };
+    }
+  }
+
+  if (fills.length === 0) {
+    return { filled: 0, days: null, avgEntry: null, status: 'none' };
+  }
+
+  return {
+    filled: fills.length,
+    days: null,
+    avgEntry: avgFromFills(fills),
+    status: 'open',
+  };
+};
 
 export const summarizeLadder = (rows, cfg = DEFAULT_LADDER) => {
   const traded = rows.filter(row => row.filled > 0);

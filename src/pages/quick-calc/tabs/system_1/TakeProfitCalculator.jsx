@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { getPositionRisk, getPositionMode } from '@root/src/container/binance/api/query';
 import { getContracts } from '@root/src/container/binance/api';
-import { placeFutureLimitOrder } from '@root/src/container/binance/api/order';
+import { placeFutureQtyTakeProfitAlgo } from '@root/src/container/binance/api/order';
 
 const PANEL_W = 220;
 const POS_KEY = 'take-profit-calculator-pos';
@@ -91,22 +91,48 @@ const TakeProfitCalculator = ({ docked = false }) => {
     setStatus('查询仓位中…');
     try {
       const [positions, mode, rules] = await Promise.all([
-        getPositionRisk(cleanSymbol),
+        getPositionRisk({ symbol: cleanSymbol }),
         getPositionMode(),
         getRules(cleanSymbol),
       ]);
-      const list = Array.isArray(positions?.response) ? positions.response : [];
+      if (!positions?.ok) {
+        const msg =
+          positions?.response?.msg ||
+          positions?.response?.message ||
+          positions?.error ||
+          `HTTP ${positions?.httpStatus ?? '?'}`;
+        setStatus(`查询仓位失败：${msg}`);
+        setOrders([]);
+        return;
+      }
+      const list = Array.isArray(positions.response) ? positions.response : [];
       const short = list.find(item => {
         const amt = Number(item.positionAmt || 0);
         return item.symbol === cleanSymbol && (item.positionSide === 'SHORT' || amt < 0);
       });
       const qty = Math.abs(Number(short?.positionAmt || 0));
       if (!(qty > 0)) {
-        setStatus('未找到该币对空仓');
+        const long = list.find(item => {
+          const amt = Number(item.positionAmt || 0);
+          return item.symbol === cleanSymbol && (item.positionSide === 'LONG' || amt > 0);
+        });
+        if (long && Math.abs(Number(long.positionAmt || 0)) > 0) {
+          setStatus(`找到 ${cleanSymbol} 多仓，本工具只挂空仓止盈`);
+        } else {
+          const sides = list
+            .filter(item => item.symbol === cleanSymbol)
+            .map(item => `${item.positionSide || '?'}:${item.positionAmt}`)
+            .join(', ');
+          setStatus(
+            sides
+              ? `未找到空仓（接口返回：${sides}）`
+              : `未找到 ${cleanSymbol} 持仓（接口无该币对仓位）`
+          );
+        }
         setOrders([]);
         return;
       }
-      const hedgeMode = Boolean(mode?.dualSidePosition);
+      const hedgeMode = Boolean(mode?.response?.dualSidePosition);
       const planned = TARGETS.map(target => {
         const price = quantizePrice(openPrice * target.mult, rules.tickSize, rules.pricePrecision);
         const quantity = quantizeDown(qty * target.ratio, rules.stepSize, rules.quantityPrecision);
@@ -117,27 +143,31 @@ const TakeProfitCalculator = ({ docked = false }) => {
         setOrders([]);
         return;
       }
-      setStatus('提交止盈限价单…');
+      setStatus('提交止盈条件单…');
       const results = [];
       for (const target of planned) {
         try {
-          const result = await placeFutureLimitOrder({
+          const result = await placeFutureQtyTakeProfitAlgo({
             symbol: cleanSymbol,
             side: 'BUY',
             quantity: target.quantity,
-            price: target.price,
-            timeInForce: 'GTX',
-            reduceOnly: !hedgeMode,
+            triggerPrice: target.price,
             ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
-            newClientOrderId: `tp${Date.now()}${target.mult}`,
+            clientAlgoId: `tp${Date.now()}${String(target.mult).replace('.', '')}`,
           });
-          results.push({ ...target, status: result.ok ? 'submitted' : 'rejected', error: result.response?.msg });
+          results.push({
+            ...target,
+            status: result.ok ? 'submitted' : 'rejected',
+            error: result.response?.msg || result.response?.message || result.error,
+          });
         } catch (error) {
           results.push({ ...target, status: 'unknown', error: error.message });
         }
       }
       setOrders(results);
-      setStatus(`${results.filter(item => item.status === 'submitted').length}/${results.length} 档止盈委托已提交，剩余20%不挂单`);
+      setStatus(
+        `${results.filter(item => item.status === 'submitted').length}/${results.length} 档止盈条件单已提交，剩余20%不挂单`
+      );
     } catch (error) {
       setStatus(`查询或提交失败：${error.message}`);
     }
@@ -234,7 +264,7 @@ const TakeProfitCalculator = ({ docked = false }) => {
             −
           </button>
         </div>
-        <div style={{ color: '#595959', fontSize: 11 }}>Binance 空仓 · 25% / 30% / 25%</div>
+        <div style={{ color: '#595959', fontSize: 11 }}>Binance 空仓市价止盈 · 25% / 30% / 25%</div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 10px', maxHeight: 'calc(70vh - 72px)', touchAction: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
@@ -286,7 +316,7 @@ const TakeProfitCalculator = ({ docked = false }) => {
             cursor: 'pointer',
           }}
         >
-          查询并挂止盈
+          查询并挂止盈条件单
         </button>
         <div
           style={{

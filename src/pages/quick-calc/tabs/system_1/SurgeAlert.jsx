@@ -467,7 +467,11 @@ const SurgeAlert = ({ docked = false }) => {
       }
 
       // 下单前查持仓 / 未成交委托；查询失败也跳过（保守）
-      const exposure = await checkExistingExposure({ symbol: info.symbol, exchange: info.exchange });
+      const exposure = await checkExistingExposure({
+              symbol: info.symbol,
+              exchange: info.exchange,
+              side: 'short',
+            });
       if (exposure.exposed) {
         return commitSkip(batchKey, existing, {
           id: batchKey,

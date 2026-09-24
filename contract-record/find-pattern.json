@@ -1,63 +1,58 @@
 {
-  "tabs": [
+  "data": [
     {
-      "key": "tab1",
-      "label": "放量 + 长尾流星线",
-      "data": [
-        { "symbol": "ACEUSDT", "keyDate": "260418", "addDate": "2026-04-20" },
-        { "symbol": "SKLUSDT", "keyDate": "260417", "addDate": "2026-04-20" },
-        { "symbol": "KSMUSDT", "keyDate": "260417", "addDate": "2026-04-20" },
-        { "symbol": "ALICEUSDT", "keyDate": "260418", "addDate": "2026-04-20" },
-        { "symbol": "THETAUSDT", "keyDate": "260418", "addDate": "2026-04-20" }
-      ]
+      "exchange": "bitget",
+      "symbol": "BASUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.0128/0.02686/0.169 · 周期 46天",
+      "followUp": ""
     },
     {
-      "key": "tab_1777012187647",
-      "label": "低波动 + 暴涨",
-      "data": [
-        {
-          "symbol": "BASUSDT",
-          "low": "0.0128",
-          "high": "0.02686",
-          "highPoint": "0.169",
-          "period": "46天"
-        },
-        {
-          "symbol": "SIGNUSDT",
-          "low": "0.062",
-          "high": "0.1",
-          "highPoint": "0.13319",
-          "period": "140天"
-        },
-        {
-          "symbol": "XPLUSDT",
-          "low": "0.5255",
-          "high": "0.8788",
-          "highPoint": "1.6923",
-          "period": "28天"
-        },
-        {
-          "symbol": "LIGHTUSDT",
-          "low": "0.72",
-          "high": "1.32",
-          "highPoint": "2.8410",
-          "period": "20天"
-        },
-        {
-          "symbol": "BSBUSDT",
-          "low": "0.159",
-          "high": "0.29",
-          "highPoint": "0.79",
-          "period": "28天"
-        },
-        {
-          "symbol": "KATUSDT",
-          "low": "0.007",
-          "high": "0.13",
-          "highPoint": "0.03",
-          "period": "32天"
-        }
-      ]
+      "exchange": "bitget",
+      "symbol": "SIGNUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.062/0.1/0.13319 · 周期 140天",
+      "followUp": ""
+    },
+    {
+      "exchange": "bitget",
+      "symbol": "XPLUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.5255/0.8788/1.6923 · 周期 28天",
+      "followUp": ""
+    },
+    {
+      "exchange": "bitget",
+      "symbol": "LIGHTUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.72/1.32/2.8410 · 周期 20天",
+      "followUp": ""
+    },
+    {
+      "exchange": "bitget",
+      "symbol": "BSBUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.159/0.29/0.79 · 周期 28天",
+      "followUp": ""
+    },
+    {
+      "exchange": "bitget",
+      "symbol": "KATUSDT",
+      "name": "lowVolRangeBlast",
+      "keyDate": "",
+      "addDate": "",
+      "note": "下沿/上沿/最高 0.007/0.13/0.03 · 周期 32天",
+      "followUp": ""
     }
   ]
 }

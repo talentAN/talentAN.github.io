@@ -52,13 +52,11 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
  *      tradeSide、Binance 需要 positionSide，目前都没处理）
  *   4. 风控：单币种最大仓位、总敞口上限、下单失败重试策略
  *
- * 下单前置检查：
+* 下单前置检查：
  *   0. high100 资格（与回测一致）：拉全量日 K；上市未满 30 天、或 max(当日最高, 开盘×4) 为历史新高 → skipped
- *   1. checkExistingExposure 查该币对当前是否已有持仓或未成交委托
+ *   1. checkExistingExposure 查该币对「同方向」是否已有持仓或未成交开仓委托
  * （Bitget: single-position + orders-pending；Binance: positionRisk + openOrders），
- * 只要命中任意一项就跳过自动下单（标记为 skipped，当天不再重复触发/查询）。查询本身
- * 失败时保守按「已有仓位」处理。这些接口返回的字段名是按官方文档写的，还没能用真实
- * Key 验证过实际结构，换真实 Key 后第一次触发建议核对一下。
+ * 开多只看多头、开空只看空头；对面方向不挡。查询本身失败时保守按「已有仓位」处理。
  *   2. checkFundingRate：资金费率低于 -1% → skipped
  *
  * LIVE_NOTIONAL_SCALE 控制 DEFAULT_LADDER 每档下单金额相对回测配置的缩放比例，只影响
@@ -282,12 +280,73 @@ export const buildLadderPlan = ({
 };
 
 /**
- * 从查询结果里判断该币对是否已有持仓或未成交委托。
- * ⚠️ Bitget 的 total/available/entrustedList、Binance 的 positionAmt 都是按官方
- * 文档写的字段名，还没能用真实 Key 验证过实际返回结构，换真实 Key 后第一次触发
- * 建议核对一下。
+ * 从查询结果里判断该币对在「指定方向」上是否已有持仓或未成交委托。
+ * side: 'long' | 'short' —— 开多只看多头，开空只看空头（双向持仓下两边互不挡）。
+ * ⚠️ Bitget / Binance 字段按官方文档；换真实 Key 后建议核对一次。
  */
-const parseExposure = (exchange, posResult, orderResult) => {
+const isLongHoldSide = holdSide => {
+  const v = String(holdSide || '').toLowerCase();
+  return v === 'long' || v === 'buy';
+};
+
+const isShortHoldSide = holdSide => {
+  const v = String(holdSide || '').toLowerCase();
+  return v === 'short' || v === 'sell';
+};
+
+const isBuySide = side => String(side || '').toLowerCase() === 'buy';
+const isSellSide = side => String(side || '').toLowerCase() === 'sell';
+
+/** 普通挂单是否算作该方向的「开仓侧」敞口（平仓/reduceOnly 不计） */
+const isOpenSideOrder = (order, side) => {
+  const reduceOnly = order.reduceOnly === true || order.reduceOnly === 'true' || order.reduceOnly === 'YES';
+  if (reduceOnly) return false;
+  const tradeSide = String(order.tradeSide || '').toLowerCase();
+  if (tradeSide === 'close') return false;
+
+  if (side === 'long') {
+    if (!isBuySide(order.side)) return false;
+    const ps = String(order.positionSide || '').toUpperCase();
+    if (ps === 'SHORT') return false;
+    return true;
+  }
+  if (side === 'short') {
+    if (!isSellSide(order.side)) return false;
+    const ps = String(order.positionSide || '').toUpperCase();
+    if (ps === 'LONG') return false;
+    return true;
+  }
+  return true;
+};
+
+const hasSidePosition = (exchange, positions, side) => {
+  if (!Array.isArray(positions)) return false;
+  if (exchange === 'bitget') {
+    return positions.some(p => {
+      const size = Math.abs(parseFloat(p.total ?? p.available ?? p.posSize ?? 0));
+      if (!(size > 0)) return false;
+      if (side === 'long') return isLongHoldSide(p.holdSide);
+      if (side === 'short') return isShortHoldSide(p.holdSide);
+      return true;
+    });
+  }
+  if (exchange === 'binance') {
+    return positions.some(p => {
+      const amt = parseFloat(p.positionAmt || 0);
+      if (!Number.isFinite(amt) || amt === 0) return false;
+      const ps = String(p.positionSide || '').toUpperCase();
+      if (ps === 'LONG') return side === 'long';
+      if (ps === 'SHORT') return side === 'short';
+      // 单向：正数多、负数空
+      if (side === 'long') return amt > 0;
+      if (side === 'short') return amt < 0;
+      return true;
+    });
+  }
+  return false;
+};
+
+const parseExposure = (exchange, posResult, orderResult, side = null) => {
   if (!posResult?.ok || !orderResult?.ok) {
     const pickErr = result =>
       result?.error ||
@@ -307,27 +366,41 @@ const parseExposure = (exchange, posResult, orderResult) => {
 
   if (exchange === 'bitget') {
     const positions = Array.isArray(posResult.response?.data) ? posResult.response.data : [];
-    const hasPosition = positions.some(p => Math.abs(parseFloat(p.total ?? p.available ?? 0)) > 0);
+    const hasPosition = side
+      ? hasSidePosition('bitget', positions, side)
+      : positions.some(p => Math.abs(parseFloat(p.total ?? p.available ?? 0)) > 0);
     const orders = orderResult.response?.data?.entrustedList;
-    const hasOrders = Array.isArray(orders) && orders.length > 0;
-    return { exposed: hasPosition || hasOrders, reason: hasPosition ? 'has_position' : hasOrders ? 'has_orders' : null };
+    const list = Array.isArray(orders) ? orders : [];
+    const hasOrders = side ? list.some(o => isOpenSideOrder(o, side)) : list.length > 0;
+    return {
+      exposed: hasPosition || hasOrders,
+      reason: hasPosition ? 'has_position' : hasOrders ? 'has_orders' : null,
+      side: side || 'any',
+    };
   }
 
   if (exchange === 'binance') {
     const positions = Array.isArray(posResult.response) ? posResult.response : [];
-    const hasPosition = positions.some(p => Math.abs(parseFloat(p.positionAmt || 0)) > 0);
+    const hasPosition = side
+      ? hasSidePosition('binance', positions, side)
+      : positions.some(p => Math.abs(parseFloat(p.positionAmt || 0)) > 0);
     const orders = Array.isArray(orderResult.response) ? orderResult.response : [];
-    const hasOrders = orders.length > 0;
-    return { exposed: hasPosition || hasOrders, reason: hasPosition ? 'has_position' : hasOrders ? 'has_orders' : null };
+    const hasOrders = side ? orders.some(o => isOpenSideOrder(o, side)) : orders.length > 0;
+    return {
+      exposed: hasPosition || hasOrders,
+      reason: hasPosition ? 'has_position' : hasOrders ? 'has_orders' : null,
+      side: side || 'any',
+    };
   }
 
   return { exposed: true, reason: 'unsupported_exchange' };
 };
 
 /**
- * 下单前置检查：该币对当前有没有持仓或未成交委托，任意一项命中就不自动下单。
- * 查询请求本身失败（鉴权失败、网络异常等）时保守按「已有仓位」处理，不确定账户
- * 状态就不继续开新仓。
+ * 下单前置检查：该币对在指定方向上有没有持仓或未成交开仓委托。
+ * @param {{ symbol: string, exchange: string, side?: 'long'|'short'|null }} opts
+ *   side 缺省时保持旧行为（任意方向都算敞口）；传 long/short 则只检查该侧。
+ * 查询失败时保守按「已有仓位」处理。
  */
 export const checkFundingRate = async ({ symbol, exchange }) => {
   if (!isLiveOrderEnabled()) return { allowed: false, reason: 'auto_order_disabled' };
@@ -352,7 +425,7 @@ export const checkFundingRate = async ({ symbol, exchange }) => {
   }
 };
 
-export const checkExistingExposure = async ({ symbol, exchange }) => {
+export const checkExistingExposure = async ({ symbol, exchange, side = null }) => {
   if (!isLiveOrderEnabled()) {
     return { exposed: true, reason: 'auto_order_disabled' };
   }
@@ -362,14 +435,14 @@ export const checkExistingExposure = async ({ symbol, exchange }) => {
         getBitgetPosition({ symbol }),
         getBitgetPendingOrders({ symbol }),
       ]);
-      return parseExposure('bitget', posResult, orderResult);
+      return parseExposure('bitget', posResult, orderResult, side);
     }
     if (exchange === 'binance') {
       const [posResult, orderResult] = await Promise.all([
         getBinancePositionRisk({ symbol }),
         getBinanceOpenOrders({ symbol }),
       ]);
-      return parseExposure('binance', posResult, orderResult);
+      return parseExposure('binance', posResult, orderResult, side);
     }
     return { exposed: true, reason: 'unsupported_exchange' };
   } catch (e) {

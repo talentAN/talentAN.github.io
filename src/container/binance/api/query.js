@@ -19,6 +19,18 @@ export const getOpenOrders = async ({ symbol }) =>
   signedRequestVerbose({ method: 'GET', base: FUTURES_BASE, path: '/fapi/v1/openOrders', params: { symbol } });
 
 /**
+ * 查询未完成条件单：GET /fapi/v1/openAlgoOrders
+ */
+export const getOpenAlgoOrders = async ({ symbol }) =>
+  signedRequestVerbose({
+    method: 'GET',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/openAlgoOrders',
+    params: { symbol },
+  });
+
+  
+/**
  * 查询单笔订单：GET /fapi/v1/order
  * 用 orderId 或 origClientOrderId。用于判断限价空单是否已成交，再挂止损。
  */

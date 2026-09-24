@@ -1,13 +1,12 @@
-import React from 'react';
-import QuickCalc from './index';
-import FindPattern from './tabs/FindPattern';
+import React, { useEffect } from 'react';
+import { navigate } from 'gatsby';
 
-const FindPatternPage = ({ location }) => {
-  return (
-    <QuickCalc location={location}>
-      <FindPattern />
-    </QuickCalc>
-  );
+/** 旧路由：找模式 → 酝酿池 */
+const FindPatternRedirect = () => {
+  useEffect(() => {
+    navigate('/quick-calc/brewing-pool', { replace: true });
+  }, []);
+  return null;
 };
 
-export default FindPatternPage;
+export default FindPatternRedirect;

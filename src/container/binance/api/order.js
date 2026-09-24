@@ -103,6 +103,41 @@ export const placeFutureQtyStopAlgo = async ({
 };
 
 /**
+ * 按数量挂 TAKE_PROFIT_MARKET 条件单（空单止盈：BUY + quantity）。
+ * 最新价跌到 triggerPrice 后市价平空（币安 UI 显示为「市价止盈」）。
+ * 双向仓带 positionSide=SHORT；单向仓带 reduceOnly。
+ */
+export const placeFutureQtyTakeProfitAlgo = async ({
+  symbol,
+  side = 'BUY',
+  quantity,
+  triggerPrice,
+  positionSide,
+  clientAlgoId,
+  workingType = 'CONTRACT_PRICE',
+  priceProtect = true,
+}) => {
+  const algoParams = {
+    algoType: 'CONDITIONAL',
+    symbol,
+    side,
+    type: 'TAKE_PROFIT_MARKET',
+    triggerPrice: String(triggerPrice),
+    quantity: String(quantity),
+    workingType,
+    ...(priceProtect ? { priceProtect: 'true' } : {}),
+    ...(positionSide ? { positionSide } : { reduceOnly: 'true' }),
+    ...(clientAlgoId ? { clientAlgoId } : {}),
+  };
+  return signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: algoParams,
+  }).then(r => ({ ...r, via: 'algoOrder' }));
+};
+
+/**
  * 仓位止损 / 止盈条件单（平掉全部仓位）。
  * 2025-12 起条件单应走 /fapi/v1/algoOrder；若返回 -4120 以外的旧环境错误，再回退
  * 到 /fapi/v1/order。
@@ -159,4 +194,37 @@ export const placeFutureClosePositionAlgo = async ({
     params: legacyParams,
   });
   return { ...legacyResult, via: 'order' };
+};
+
+/**
+ * 开仓用 STOP_MARKET 条件单（多：BUY；空：SELL）。
+ * 最新价触及 triggerPrice 后市价开仓；不传 reduceOnly。
+ * 双向持仓传 positionSide=LONG|SHORT。
+ */
+export const placeFutureOpenStopMarketAlgo = async ({
+  symbol,
+  side = 'BUY',
+  quantity,
+  triggerPrice,
+  positionSide,
+  clientAlgoId,
+  workingType = 'CONTRACT_PRICE',
+}) => {
+  const algoParams = {
+    algoType: 'CONDITIONAL',
+    symbol,
+    side,
+    type: 'STOP_MARKET',
+    triggerPrice: String(triggerPrice),
+    quantity: String(quantity),
+    workingType,
+    ...(positionSide ? { positionSide } : {}),
+    ...(clientAlgoId ? { clientAlgoId } : {}),
+  };
+  return signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: algoParams,
+  }).then(r => ({ ...r, via: 'algoOrder' }));
 };

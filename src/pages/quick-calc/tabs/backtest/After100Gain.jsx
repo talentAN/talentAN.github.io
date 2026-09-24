@@ -5,6 +5,7 @@ import moment from 'moment';
 import { getAllFutureDailyKlines, getMergedTradingPairs, getTradeUrl } from '@root/src/container/market';
 import { getBinanceBanRemaining } from '@root/src/container/binance/api';
 import ResultList from './_ResultList';
+import { DEFAULT_LADDER, daysToLadderBreakeven } from './_ladderRules';
 import * as s from './backtest.module.less';
 
 const cx = (...names) => names.filter(Boolean).join(' ');
@@ -49,6 +50,17 @@ const AFTER_BUCKETS = [
   { key: 'lt100', label: '<100%', match: g => g < 100 },
 ];
 
+/** 阶梯回本天数分桶（成交当日不计入，故无 0d） */
+const RECOVER_BUCKETS = [
+  { key: 'd1', label: '1d', match: d => d === 1 },
+  { key: 'd2_3', label: '2–3d', match: d => d >= 2 && d <= 3 },
+  { key: 'd4_7', label: '4–7d', match: d => d >= 4 && d <= 7 },
+  { key: 'd8_14', label: '8–14d', match: d => d >= 8 && d <= 14 },
+  { key: 'd15_30', label: '15–30d', match: d => d >= 15 && d <= 30 },
+  { key: 'd31_60', label: '31–60d', match: d => d >= 31 && d <= 60 },
+  { key: 'd61_90', label: '61–90d', match: d => d >= 61 && d <= 90 },
+];
+
 const emptyAfterCounts = () =>
   AFTER_BUCKETS.reduce((acc, bucket) => {
     acc[bucket.key] = 0;
@@ -63,6 +75,13 @@ const bumpAfterBucket = (counts, afterHighPct) => {
       return;
     }
   }
+};
+
+const medianOf = values => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
 /**
@@ -112,6 +131,9 @@ const ingestPairCandles = (candles, pair, rows, scanFilter, afterCounts) => {
 
     const afterHighPct = ((nextMaxHigh - open) / open) * 100;
 
+    const ladderCandles = sorted.slice(i, i + 1 + DEFAULT_LADDER.windowDays);
+    const breakeven = daysToLadderBreakeven(open, ladderCandles, DEFAULT_LADDER);
+
     bumpAfterBucket(afterCounts, afterHighPct);
     sampled += 1;
 
@@ -130,6 +152,9 @@ const ingestPairCandles = (candles, pair, rows, scanFilter, afterCounts) => {
       date: moment.utc(ts).format('YYYY-MM-DD'),
       listingDays,
       listedAt,
+      ladderFilled: breakeven.filled,
+      ladderRecoverDays: breakeven.days,
+      ladderRecoverStatus: breakeven.status,
     });
   }
 
@@ -315,6 +340,63 @@ const After100Gain = () => {
     };
   }, [afterCounts]);
 
+  /** 阶梯回本天数分布：跟当前表格筛选一致 */
+  const recoverDist = useMemo(() => {
+    const dayCounts = RECOVER_BUCKETS.reduce((acc, bucket) => {
+      acc[bucket.key] = 0;
+      return acc;
+    }, {});
+    let none = 0;
+    let open = 0;
+    const recoveredDays = [];
+
+    displayRows.forEach(row => {
+      if (row.ladderRecoverStatus === 'none' || !row.ladderFilled) {
+        none += 1;
+        return;
+      }
+      if (row.ladderRecoverStatus === 'recovered' && Number.isFinite(row.ladderRecoverDays)) {
+        recoveredDays.push(row.ladderRecoverDays);
+        for (let i = 0; i < RECOVER_BUCKETS.length; i++) {
+          if (RECOVER_BUCKETS[i].match(row.ladderRecoverDays)) {
+            dayCounts[RECOVER_BUCKETS[i].key] += 1;
+            return;
+          }
+        }
+        return;
+      }
+      open += 1;
+    });
+
+    const total = displayRows.length;
+    const filled = total - none;
+    const recovered = recoveredDays.length;
+    const pctOf = count => (total ? (count / total) * 100 : 0);
+    const pctOfFilled = count => (filled ? (count / filled) * 100 : 0);
+return {
+      total,
+      filled,
+      recovered,
+      none,
+      open,
+      recoverRate: filled ? (recovered / filled) * 100 : null,
+      medianDays: medianOf(recoveredDays),
+      buckets: [
+        ...RECOVER_BUCKETS.map(bucket => ({
+          ...bucket,
+          count: dayCounts[bucket.key],
+          pct: pctOf(dayCounts[bucket.key]),
+        })),
+        { key: 'open', label: '未回本', count: open, pct: pctOf(open) },
+        { key: 'none', label: '未成交', count: none, pct: pctOf(none) },
+      ],
+      filledNote:
+        filled > 0
+          ? `成交 ${filled.toLocaleString()} · 已回本 ${recovered.toLocaleString()}（占成交 ${pctOfFilled(recovered).toFixed(1)}%）`
+          : null,
+    };
+  }, [displayRows]);
+
   const percent = progress.total ? (progress.done / progress.total) * 100 : 0;
 
   const columns = [
@@ -408,6 +490,35 @@ const After100Gain = () => {
       sortBy: row => row.followDays,
       render: row => <span className={s.muted}>{row.followDays}</span>,
     },
+    {
+      key: 'ladderRecoverDays',
+      title: `阶梯回本(≤${DEFAULT_LADDER.windowDays}d)`,
+      width: 120,
+      align: 'right',
+      sortBy: row =>
+        row.ladderRecoverStatus === 'recovered'
+          ? row.ladderRecoverDays
+          : row.ladderRecoverStatus === 'open'
+            ? Number.POSITIVE_INFINITY
+            : Number.NEGATIVE_INFINITY,
+      render: row => {
+        if (row.ladderRecoverStatus === 'none' || !row.ladderFilled) {
+          return <span className={s.muted}>未成交</span>;
+        }
+        if (row.ladderRecoverStatus === 'recovered') {
+          return (
+            <span className={cx(s.badge, s.badgeGreen)}>
+              {row.ladderRecoverDays}d · {row.ladderFilled}/{DEFAULT_LADDER.levels.length}
+            </span>
+          );
+        }
+        return (
+          <span className={cx(s.badge, s.badgeGrey)}>
+            未回本 · {row.ladderFilled}/{DEFAULT_LADDER.levels.length}
+          </span>
+        );
+      },
+    },
   ];
 
   return (
@@ -447,7 +558,10 @@ const After100Gain = () => {
         <span className={s.ruleText}>
           扫描口径对齐「data-单日最高涨幅」：仍拉全量日 K 算上线天数；只保留起始日及之后、默认上线≥
           {DEFAULT_MIN_LISTING_DAYS} 天、且单日最高涨幅&gt;100%、其后至少还有 1 根日 K 的样本。后 3
-          日不足时按实际可用天数计。改过滤条件后请重新扫描。
+          日不足时按实际可用天数计。「阶梯回本」按 DEFAULT_LADDER（
+          {DEFAULT_LADDER.levels.map(l => `${l.mult}×`).join('/')}
+          ）日 K 撮合：成交当日不判回本，从次日看 low≤加权均价（再有新成交的当日同样跳过）。窗口{' '}
+          {DEFAULT_LADDER.windowDays} 日。改过滤条件后请重新扫描。
         </span>
         <div className={s.actions}>
           {displayRows.length > 0 && <span className={s.countBadge}>共 {displayRows.length} 条</span>}
@@ -530,6 +644,24 @@ const After100Gain = () => {
           {appliedListing.on ? ` · 上线≥${appliedListing.minDays}天` : ''}
         </span>
         {afterDist.buckets.map(bucket => (
+          <span key={bucket.key} className={cx(s.distItem, s.distItemStatic)}>
+            <span className={s.distLabel}>{bucket.label}</span>
+            <span className={s.distCount}>{bucket.count.toLocaleString()}</span>
+            <span className={s.distPct}>{bucket.pct.toFixed(2)}%</span>
+          </span>
+        ))}
+      </div>
+
+      <div className={s.statBar}>
+        <span className={s.distTitle}>阶梯回本天数分布</span>
+        <span className={s.muted}>
+          样本 {recoverDist.total.toLocaleString()}
+          {recoverDist.filledNote ? ` · ${recoverDist.filledNote}` : ''}
+          {recoverDist.medianDays != null
+            ? ` · 回本中位 ${Number(recoverDist.medianDays).toFixed(recoverDist.medianDays % 1 ? 1 : 0)}d`
+            : ''}
+        </span>
+        {recoverDist.buckets.map(bucket => (
           <span key={bucket.key} className={cx(s.distItem, s.distItemStatic)}>
             <span className={s.distLabel}>{bucket.label}</span>
             <span className={s.distCount}>{bucket.count.toLocaleString()}</span>

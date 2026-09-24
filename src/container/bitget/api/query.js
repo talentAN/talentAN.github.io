@@ -24,3 +24,13 @@ export const getPendingOrders = async ({ symbol }) =>
     symbol,
     productType: PRODUCT_TYPE,
   });
+/**
+ * 查询计划委托（含未触发）：GET /api/v2/mix/order/orders-plan-pending
+ * planType: normal_plan | track_plan | …
+ */
+export const getPendingPlanOrders = async ({ symbol, planType = 'normal_plan' }) =>
+  authenticatedRequestVerbose('GET', '/api/v2/mix/order/orders-plan-pending', {
+    symbol,
+    productType: PRODUCT_TYPE,
+    planType,
+  });
