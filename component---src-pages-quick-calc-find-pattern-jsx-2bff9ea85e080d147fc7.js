@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunktalentan_gatsby_blog=self.webpackChunktalentan_gatsby_blog||[]).push([[1518],{88397:function(a,e,l){l.r(e);var t=l(67294),n=l(14160);e.default=()=>((0,t.useEffect)((()=>{(0,n.navigate)("/quick-calc/brewing-pool",{replace:!0})}),[]),null)}}]);
+//# sourceMappingURL=component---src-pages-quick-calc-find-pattern-jsx-2bff9ea85e080d147fc7.js.map
