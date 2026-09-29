@@ -98,6 +98,40 @@ export const placeFuturePosStopLoss = async ({
 };
 
 /**
+ * 止盈 / 追踪类 TPSL：POST /api/v2/mix/order/place-tpsl-order
+ * - profit_plan：定额止盈（需 size）
+ * - pos_profit：仓位止盈（可平全部）
+ * - moving_plan：移动止盈/追踪（需 callbackRatio，如 "12" 表示 12%）
+ */
+export const placeFutureTpslOrder = async ({
+  symbol,
+  planType,
+  triggerPrice,
+  holdSide = 'long',
+  size,
+  callbackRatio,
+  marginCoin = 'USDT',
+  clientOid,
+  triggerType = 'mark_price',
+  executePrice = '0',
+}) => {
+  const body = {
+    symbol,
+    productType: PRODUCT_TYPE,
+    marginCoin,
+    planType,
+    triggerType,
+    holdSide,
+    executePrice: String(executePrice),
+    ...(triggerPrice != null ? { triggerPrice: String(triggerPrice) } : {}),
+    ...(size != null ? { size: String(size) } : {}),
+    ...(callbackRatio != null ? { callbackRatio: String(callbackRatio) } : {}),
+    ...(clientOid ? { clientOid } : {}),
+  };
+  return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-tpsl-order', {}, body);
+};
+
+/**
  * 普通计划委托：价格触及 triggerPrice 后按 orderType 成交。
  * POST /api/v2/mix/order/place-plan-order
  * planType=normal_plan + orderType=market → 触及后市价开仓（非 track_plan 追踪止损）。
@@ -129,3 +163,37 @@ export const placeFuturePlanMarketOrder = async ({
   };
   return authenticatedRequestVerbose('POST', '/api/v2/mix/order/place-plan-order', {}, body);
 };
+
+/** 撤销普通委托：POST /api/v2/mix/order/cancel-order */
+export const cancelFutureOrder = async ({ symbol, orderId, clientOid }) =>
+  authenticatedRequestVerbose(
+    'POST',
+    '/api/v2/mix/order/cancel-order',
+    {},
+    {
+      symbol,
+      productType: PRODUCT_TYPE,
+      ...(orderId ? { orderId: String(orderId) } : {}),
+      ...(clientOid ? { clientOid } : {}),
+    }
+  );
+
+/** 撤销计划委托：POST /api/v2/mix/order/cancel-plan-order */
+export const cancelFuturePlanOrder = async ({
+  symbol,
+  orderId,
+  clientOid,
+  planType = 'normal_plan',
+}) =>
+  authenticatedRequestVerbose(
+    'POST',
+    '/api/v2/mix/order/cancel-plan-order',
+    {},
+    {
+      symbol,
+      productType: PRODUCT_TYPE,
+      planType,
+      ...(orderId ? { orderId: String(orderId) } : {}),
+      ...(clientOid ? { clientOid } : {}),
+    }
+  );

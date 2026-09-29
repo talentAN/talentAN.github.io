@@ -5,6 +5,7 @@ import * as s from './pairSelector.module.less';
 import { MARKET_CONFIG } from '@root/src/consts/pairSelectorConfig';
 import { MARKET_DATA_CONFIG } from '@root/src/configs/pairSelectorConfig';
 import QuickCalcToolDock from './QuickCalcToolDock';
+import SocketLinkStatus from './SocketLinkStatus';
 
 const SYMBOLS = ['BTC', 'ETH'];
 
@@ -106,6 +107,7 @@ const PriceTickerBanner = () => {
             {renderStats('ETH', marketData.ETH)}
           </>
         )}
+        <SocketLinkStatus />
       </div>
       <QuickCalcToolDock />
     </div>

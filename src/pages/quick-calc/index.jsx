@@ -12,7 +12,7 @@ const PRIMARY_ITEMS = [
   { key: '/quick-calc/trade-record', label: '合约交易记录' },
   { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
   { key: '/quick-calc/system_bullish', label: '系统-横盘抬头' },
-  { key: '/quick-calc/low-vol-range-blast', label: '低波动横盘暴涨' },
+  { key: '/quick-calc/low-vol-range-blast', label: '系统-低波动横盘暴涨' },
   { key: '/quick-calc/brewing-pool', label: '酝酿池' },
   { key: '/quick-calc/backtest', label: '回测' },
 ];

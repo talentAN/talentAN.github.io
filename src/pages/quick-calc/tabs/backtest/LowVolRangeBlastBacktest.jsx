@@ -13,6 +13,13 @@ import {
 } from './_lowVolRangeBlastRules';
 import { loadStockSymbolSet } from './_tradFiSymbols';
 import LowVolRangeBlastConclusion from './_LowVolRangeBlastConclusion';
+import {
+  PNL_MAX_HOLD_DAYS,
+  PNL_NOTIONAL_USDT,
+  isValidPnlPlan,
+  normalizePnlPlan,
+  runBreakoutPnlBacktestMulti,
+} from './_breakoutPnlSim';
 import * as s from './backtest.module.less';
 
 const cx = (...names) => names.filter(Boolean).join(' ');
@@ -20,6 +27,9 @@ const cx = (...names) => names.filter(Boolean).join(' ');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const CACHE_STORAGE_KEY = 'qc-backtest-low-vol-range-blast-v1';
+const CACHE_META_KEY = 'qc-backtest-low-vol-range-blast-meta-v1';
+const IDB_NAME = 'qc-backtest-cache';
+const IDB_STORE = 'kv';
 
 /** 规则指纹：改扫描口径会失效缓存；纯 UI 过滤不进指纹 */
 const rulesFingerprint = (rules = LOW_VOL_RANGE_BLAST_V01) =>
@@ -34,7 +44,56 @@ const rulesFingerprint = (rules = LOW_VOL_RANGE_BLAST_V01) =>
 
 const todayLocal = () => moment().format('YYYY-MM-DD');
 
-const readCache = () => {
+const openCacheDb = () =>
+  new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('no indexedDB'));
+      return;
+    }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('idb open failed'));
+  });
+
+const idbGet = async key => {
+  const db = await openCacheDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+};
+
+const idbSet = async (key, value) => {
+  const db = await openCacheDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+const idbDel = async key => {
+  try {
+    const db = await openCacheDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
+};
+
+const readCacheSync = () => {
   try {
     if (typeof localStorage === 'undefined') return null;
     const raw = localStorage.getItem(CACHE_STORAGE_KEY);
@@ -47,31 +106,102 @@ const readCache = () => {
   }
 };
 
-const writeCache = payload => {
+/** 同步可读 localStorage；大数据可能在 IndexedDB，需 await readCacheAsync */
+const readCacheAsync = async () => {
+  const local = readCacheSync();
+  if (local?.rows?.length) return local;
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const metaRaw = localStorage.getItem(CACHE_META_KEY);
+    if (!metaRaw) return null;
+    const meta = JSON.parse(metaRaw);
+    if (!meta || meta.storage !== 'idb') return null;
+    const payload = await idbGet(CACHE_STORAGE_KEY);
+    if (!payload || !Array.isArray(payload.rows)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+
+const writeCache = async payload => {
   try {
     if (typeof localStorage === 'undefined') return false;
-    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(payload));
-    return true;
+    const raw = JSON.stringify(payload);
+    try {
+      localStorage.setItem(CACHE_STORAGE_KEY, raw);
+      localStorage.removeItem(CACHE_META_KEY);
+      await idbDel(CACHE_STORAGE_KEY);
+      return true;
+    } catch {
+      // localStorage 配额不够 → IndexedDB，meta 仍放 localStorage
+      await idbSet(CACHE_STORAGE_KEY, payload);
+      localStorage.removeItem(CACHE_STORAGE_KEY);
+      localStorage.setItem(
+        CACHE_META_KEY,
+        JSON.stringify({
+          storage: 'idb',
+          day: payload.day,
+          fingerprint: payload.fingerprint,
+          scannedAt: payload.scannedAt,
+          incomplete: payload.incomplete,
+          rowCount: Array.isArray(payload.rows) ? payload.rows.length : 0,
+        })
+      );
+      return true;
+    }
   } catch (error) {
     message.warning(`本地缓存写入失败（可能超配额）：${error?.message || error}`);
     return false;
   }
 };
 
-const clearCache = () => {
+const clearCache = async () => {
   try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.removeItem(CACHE_STORAGE_KEY);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(CACHE_STORAGE_KEY);
+      localStorage.removeItem(CACHE_META_KEY);
+    }
+    await idbDel(CACHE_STORAGE_KEY);
   } catch {
     // ignore
   }
 };
 
-const cacheMatches = cached =>
-  cached
-  && cached.day === todayLocal()
-  && cached.fingerprint === rulesFingerprint()
-  && Array.isArray(cached.rows);
+/** 有 rows 即可用；指纹不符仍加载（提示口径可能已变） */
+const cacheHasRows = cached => cached && Array.isArray(cached.rows) && cached.rows.length > 0;
+
+/**
+ * 10 组默认：#1/#2 = 用户锚；#3–#10 = 对立派系（不是在锚上拧旋钮）。
+ *
+ * 用户锚假说：三档兑现（20/50/100）+ 涨20%挪保本 + 中/晚追踪收尾。
+ * 对立假说要能被数据打脸：若锚显著优于对立派系，才支持「这套结构本身」而非「某个参数碰巧」。
+ */
+const DEFAULT_PNL_PARAM_ROWS = [
+  // #1 用户锚：晚追踪
+  { tp1Gain: 20, tp1Close: 25, tp2Gain: 50, tp2Close: 30, tp3Gain: 100, tp3Close: 25, slArm: 20, slPrice: 0, trailArm: 100, trailCb: 15 },
+  // #2 用户锚：中追踪
+  { tp1Gain: 20, tp1Close: 25, tp2Gain: 50, tp2Close: 30, tp3Gain: 100, tp3Close: 25, slArm: 20, slPrice: 0, trailArm: 50, trailCb: 15 },
+  // #3 奔跑派：少兑现，大半仓交给追踪（检验「分档兑现是否必要」）
+  { tp1Gain: 20, tp1Close: 10, tp2Gain: 50, tp2Close: 10, tp3Gain: 100, tp3Close: 10, slArm: 20, slPrice: 0, trailArm: 40, trailCb: 12 },
+  // #4 落袋派：早期大量兑现，关闭追踪（检验「要不要让利润奔跑」）
+  { tp1Gain: 15, tp1Close: 40, tp2Gain: 35, tp2Close: 40, tp3Gain: 60, tp3Close: 20, slArm: 15, slPrice: 0, trailArm: 0, trailCb: 15 },
+  // #5 单目标派：前面点缀，主仓压在一档大目标（检验「多档阶梯是否多余」）
+  { tp1Gain: 25, tp1Close: 10, tp2Gain: 50, tp2Close: 10, tp3Gain: 80, tp3Close: 60, slArm: 25, slPrice: 0, trailArm: 80, trailCb: 15 },
+  // #6 早追踪派：第一档附近就武装追踪（检验「等 50%/100% 再追踪是否太晚」）
+  { tp1Gain: 20, tp1Close: 15, tp2Gain: 50, tp2Close: 15, tp3Gain: 100, tp3Close: 10, slArm: 20, slPrice: 0, trailArm: 20, trailCb: 12 },
+  // #7 硬锁利、不追踪：只靠止损上移锁利润（检验「追踪是否比固定锁利更值钱」）
+  { tp1Gain: 20, tp1Close: 25, tp2Gain: 50, tp2Close: 30, tp3Gain: 100, tp3Close: 25, slArm: 30, slPrice: 15, trailArm: 0, trailCb: 15 },
+  // #8 宽阶梯：忽略小波动，目标整体外推（检验「20% 第一档是否过密/过噪」）
+  { tp1Gain: 40, tp1Close: 25, tp2Gain: 80, tp2Close: 30, tp3Gain: 150, tp3Close: 25, slArm: 40, slPrice: 0, trailArm: 80, trailCb: 15 },
+  // #9 密阶梯：更密的三档等权兑现（检验「你的 20/50/100 + 不等权」是否优于均匀梯」）
+  { tp1Gain: 20, tp1Close: 25, tp2Gain: 40, tp2Close: 25, tp3Gain: 60, tp3Close: 25, slArm: 20, slPrice: 0, trailArm: 40, trailCb: 15 },
+  // #10 中追踪+极紧回撤：结构近 #2，但回撤 8%（检验「15% 回撤是否偏松」——此条是锚的尖锐对照，不是微调全家桶）
+  { tp1Gain: 20, tp1Close: 25, tp2Gain: 50, tp2Close: 30, tp3Gain: 100, tp3Close: 25, slArm: 20, slPrice: 0, trailArm: 50, trailCb: 8 },
+];
+
+/** 当前回测样本下综合表现最好的参数组（奔跑派 #3） */
+const BEST_PNL_PARAM_ID = 3;
 
 const EX_FILTERS = [
   { key: 'all', label: '全部' },
@@ -132,23 +262,31 @@ const LowVolRangeBlastBacktest = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [keyword, setKeyword] = useState('');
   // 2026-09-24 探索结论：区间最高价 / 横盘天数过滤性价比差或无效 → 已禁用
-  const [dropDownBreakOn, setDropDownBreakOn] = useState(false);
+  const [dropDownBreakOn, setDropDownBreakOn] = useState(true);
   /** 高低比上限：勾选后 rangeMult > 阈值的过滤掉 */
-  const [rangeMultOn, setRangeMultOn] = useState(false);
+  const [rangeMultOn, setRangeMultOn] = useState(true);
   const [rangeMultMax, setRangeMultMax] = useState(1.5);
   /** 收盘确认：勾选后要求标记日收盘站稳突破侧（上破收盘>上沿）——信号在收盘才可知 */
-  const [closeConfirmOn, setCloseConfirmOn] = useState(false);
+  const [closeConfirmOn, setCloseConfirmOn] = useState(true);
   /** 突破前位置：勾选后要求区间末日收盘相对位置 ≥ 阈值（靠近上沿） */
   const [prePosOn, setPrePosOn] = useState(false);
   const [prePosMin, setPrePosMin] = useState(0.7);
   /** 时间外样本：标记日 ≥ 该日期 */
-  const [markerStartOn, setMarkerStartOn] = useState(false);
+  const [markerStartOn, setMarkerStartOn] = useState(true);
   const [markerStartDate, setMarkerStartDate] = useState('2024-01-01');
   /** 默认剔除股票 / ETF（个股、非美上市、杠杆与指数/板块 ETF；不含商品外汇 Pre-IPO） */
   const [excludeStocksOn, setExcludeStocksOn] = useState(true);
   const [stockSymbols, setStockSymbols] = useState(() => new Set());
   const [fromCache, setFromCache] = useState(false);
+  /** 10 组收益回测参数，一次开跑全部对比 */
+  const [pnlParamRows, setPnlParamRows] = useState(() =>
+    DEFAULT_PNL_PARAM_ROWS.map((row, index) => ({ id: index + 1, ...row }))
+  );
+  const [pnlRunning, setPnlRunning] = useState(false);
+  const [pnlProgress, setPnlProgress] = useState({ done: 0, total: 0, symbol: '' });
+  const [pnlResults, setPnlResults] = useState(null);
   const abortRef = useRef(null);
+  const pnlAbortRef = useRef(null);
   const cacheBootstrapped = useRef(false);
 
   useEffect(() => {
@@ -166,32 +304,46 @@ const LowVolRangeBlastBacktest = () => {
   }, []);
 
   useEffect(() => {
-    const cached = readCache();
-    if (cacheMatches(cached)) {
+    let cancelled = false;
+    (async () => {
+      const cached = await readCacheAsync();
+      if (cancelled) return;
+      if (!cacheHasRows(cached)) {
+        cacheBootstrapped.current = true;
+        return;
+      }
       setRows(cached.rows);
       setErrors(Array.isArray(cached.errors) ? cached.errors : []);
       setScannedAt(cached.scannedAt || null);
       setFromCache(true);
       if (!cacheBootstrapped.current) {
+        const when = cached.scannedAt
+          ? moment(cached.scannedAt).format('MM-DD HH:mm:ss')
+          : cached.day || '';
+        const fpMismatch = cached.fingerprint && cached.fingerprint !== rulesFingerprint();
         message.info(
-          `已加载今日缓存 ${cached.rows.length} 条${
+          `已加载本地缓存 ${cached.rows.length} 条${
             cached.incomplete ? '（未扫完）' : ''
-          }（${moment(cached.scannedAt).format('HH:mm:ss')}）`,
-          3
+          }${fpMismatch ? '（规则指纹已变，仍展示）' : ''}${when ? ` · ${when}` : ''}`,
+          4
         );
       }
-    }
-    cacheBootstrapped.current = true;
+      cacheBootstrapped.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(
     () => () => {
       abortRef.current?.abort();
+      pnlAbortRef.current?.abort();
     },
     []
   );
 
-  const persistRows = (nextRows, meta = {}) => {
+  const persistRows = async (nextRows, meta = {}) => {
     const scanned = meta.scannedAt || Date.now();
     return writeCache({
       day: todayLocal(),
@@ -203,13 +355,26 @@ const LowVolRangeBlastBacktest = () => {
     });
   };
 
-  const discardCache = () => {
-    clearCache();
+  const discardCache = async () => {
+    await clearCache();
     setRows([]);
     setErrors([]);
     setScannedAt(null);
     setFromCache(false);
     message.success('已清除本地缓存');
+  };
+
+  const reloadCache = async () => {
+    const cached = await readCacheAsync();
+    if (!cacheHasRows(cached)) {
+      message.warning('没有可加载的本地缓存');
+      return;
+    }
+    setRows(cached.rows);
+    setErrors(Array.isArray(cached.errors) ? cached.errors : []);
+    setScannedAt(cached.scannedAt || null);
+    setFromCache(true);
+    message.success(`已重新加载缓存 ${cached.rows.length} 条`);
   };
 
   const run = async () => {
@@ -278,8 +443,7 @@ const LowVolRangeBlastBacktest = () => {
       }
       await sleep(120);
     }
-
-    const aborted = Boolean(controller.signal.aborted);
+const aborted = Boolean(controller.signal.aborted);
     const nextRows = [...found];
     const nextErrors = [...failed];
     const scanned = Date.now();
@@ -289,18 +453,18 @@ const LowVolRangeBlastBacktest = () => {
     setRunning(false);
     abortRef.current = null;
 
-    const saved = persistRows(nextRows, {
+    const saved = await persistRows(nextRows, {
       scannedAt: scanned,
       incomplete: aborted,
       errors: nextErrors,
     });
 
     if (aborted) {
-      message.info(`已停止，保留当前 ${nextRows.length} 条${saved ? '并写入今日缓存' : ''}`);
+      message.info(`已停止，保留当前 ${nextRows.length} 条${saved ? '并写入本地缓存' : ''}`);
     } else {
       message.success(
         `扫描完成：${pairs.length - failed.length}/${pairs.length} 币对，命中 ${found.length} 条${
-          saved ? '（已缓存今日）' : ''
+          saved ? '（已写入本地缓存）' : ''
         }`
       );
     }
@@ -349,6 +513,179 @@ const LowVolRangeBlastBacktest = () => {
   const stats = useMemo(() => summarizeLowVolRangeBlast(displayRows), [displayRows]);
   const gainDist = useMemo(() => bucketFwdGainVsRangeHigh(displayRows), [displayRows]);
   const percent = progress.total ? (progress.done / progress.total) * 100 : 0;
+
+  const updatePnlParam = (id, key, value) => {
+    setPnlParamRows(prev =>
+      prev.map(row => (row.id === id ? { ...row, [key]: value == null ? row[key] : Number(value) } : row))
+    );
+  };
+
+  const runPnlBacktest = async () => {
+    const upCount = displayRows.filter(r => r.breakDir === 'up').length;
+    if (!upCount) {
+      message.warning('当前过滤结果中没有上破样本，无法做多收益回测');
+      return;
+    }
+    const invalid = pnlParamRows.find(row => !isValidPnlPlan(normalizePnlPlan(row)));
+    if (invalid) {
+      message.warning(
+        `第 ${invalid.id} 行参数无效：三档涨幅须递增、止盈%＞0；若填止损/追踪武装涨幅，须同时给出止损价% / 回撤%`
+      );
+      return;
+    }
+
+    pnlAbortRef.current?.abort();
+    const controller = new AbortController();
+    pnlAbortRef.current = controller;
+    setPnlRunning(true);
+    setPnlResults(null);
+    setPnlProgress({ done: 0, total: upCount, symbol: '' });
+
+    try {
+      const multi = await runBreakoutPnlBacktestMulti(displayRows, pnlParamRows, {
+        signal: controller.signal,
+        onProgress: p => setPnlProgress(p),
+      });
+      if (controller.signal.aborted) {
+        message.info('收益回测已停止');
+        return;
+      }
+      setPnlResults(multi);
+      const best = [...(multi.results || [])].sort((a, b) => b.totalPnl - a.totalPnl)[0];
+      message.success(
+        `10 组回测完成：上破 ${multi.sampleUp} · 最佳组#${best?.params?.id ?? '—'} 累计 ${(
+          best?.totalPnl ?? 0
+        ).toFixed(2)}U`
+      );
+    } catch (e) {
+      message.error(`收益回测失败：${e?.message || e}`);
+    } finally {
+      setPnlRunning(false);
+      pnlAbortRef.current = null;
+    }
+  };
+
+  const copyPnlParams = async () => {
+    if (!pnlParamRows.length) {
+      message.warning('暂无回测条件可复制');
+      return;
+    }
+    const header = [
+      '组',
+      '涨幅达到%止盈%仓位(1)',
+      '涨幅达到%止盈%仓位(2)',
+      '涨幅达到%止盈%仓位(3)',
+      '涨幅达到%设置全仓止损价%',
+      '涨幅达到%设置回撤%追踪止盈',
+    ].join('\t');
+    const tsvBody = pnlParamRows.map(row =>
+      [
+        row.id,
+        `${row.tp1Gain}/${row.tp1Close}`,
+        `${row.tp2Gain}/${row.tp2Close}`,
+        `${row.tp3Gain}/${row.tp3Close}`,
+        Number(row.slArm) > 0 ? `${row.slArm}/${row.slPrice}` : '关',
+        Number(row.trailArm) > 0 ? `${row.trailArm}/${row.trailCb}` : '关',
+      ].join('\t')
+    );
+    const readable = pnlParamRows.map(row => {
+      const sl =
+        Number(row.slArm) > 0
+          ? `涨幅达到${row.slArm}%时，设置全仓止损价${row.slPrice}%`
+          : '全仓止损：关';
+      const trail =
+        Number(row.trailArm) > 0
+          ? `涨幅达到${row.trailArm}%时，设置回撤${row.trailCb}%追踪止盈`
+          : '追踪止盈：关';
+      return [
+        `#${row.id}`,
+        `涨幅达到${row.tp1Gain}%时，止盈${row.tp1Close}%仓位`,
+        `涨幅达到${row.tp2Gain}%时，止盈${row.tp2Close}%仓位`,
+        `涨幅达到${row.tp3Gain}%时，止盈${row.tp3Close}%仓位`,
+        sl,
+        trail,
+      ].join('；');
+    });
+    const lines = [
+      `${LOW_VOL_RANGE_BLAST_V01.label} 收益回测条件`,
+      `时间\t${moment().format('YYYY-MM-DD HH:mm:ss')}`,
+      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪武装后按小时K · 止盈%占开仓总量（非剩余）`,
+      '',
+      '—— 语义化 ——',
+      ...readable,
+      '',
+      '—— TSV（便于粘贴表格）——',
+      header,
+      ...tsvBody,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      message.success(`已复制 ${pnlParamRows.length} 组回测条件`);
+    } catch {
+      message.error('复制失败，请检查剪贴板权限');
+    }
+  };
+
+  const copyPnlResult = async () => {
+    if (!pnlResults?.results?.length) {
+      message.warning('暂无收益回测结果可复制');
+      return;
+    }
+    const header = [
+      '组',
+      '止盈1(涨幅%/平仓占开仓%)',
+      '止盈2',
+      '止盈3',
+      '止损(武装涨幅%/止损价%)',
+      '追踪(武装涨幅%/回撤%)',
+      '上破',
+      '成交',
+      '失败',
+      '开仓次',
+      '平仓次',
+      '开平合计',
+      '累计收益U',
+      '平均每笔U',
+    ].join('\t');
+    const body = pnlResults.results.map(r => {
+      const p = r.params;
+      const avg =
+        r.avgPnlPerTrade == null
+          ? ''
+          : `${r.avgPnlPerTrade >= 0 ? '+' : ''}${r.avgPnlPerTrade.toFixed(4)}`;
+      return [
+        p.id,
+        `${p.tp1Gain}/${p.tp1Close}`,
+        `${p.tp2Gain}/${p.tp2Close}`,
+        `${p.tp3Gain}/${p.tp3Close}`,
+        p.slArm != null && p.slArm > 0 ? `${p.slArm}/${p.slPrice}` : '关',
+        p.trailArm != null && p.trailArm > 0 ? `${p.trailArm}/${p.trailCb}` : '关',
+        r.sampleUp,
+        r.traded,
+        r.failed,
+        r.openCount,
+        r.closeCount,
+        r.openCloseCount,
+        `${r.totalPnl >= 0 ? '+' : ''}${r.totalPnl.toFixed(4)}`,
+        avg,
+      ].join('\t');
+    });
+    const lines = [
+      `${LOW_VOL_RANGE_BLAST_V01.label} 收益回测（多参数对比）`,
+      `时间\t${moment().format('YYYY-MM-DD HH:mm:ss')}`,
+      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪武装后按小时K · 止盈%占开仓总量`,
+      `样本过滤\t当前 UI 过滤后上破 ${pnlResults.sampleUp}`,
+      '',
+      header,
+      ...body,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      message.success(`已复制 ${pnlResults.results.length} 组回测结果`);
+    } catch {
+      message.error('复制失败，请检查剪贴板权限');
+    }
+  };
 
   const copyStats = async () => {
     if (!stats.total) {
@@ -529,7 +866,6 @@ const LowVolRangeBlastBacktest = () => {
       ),
     },
   ];
-
   return (
     <div>
       <div className={s.statBar}>
@@ -590,10 +926,13 @@ const LowVolRangeBlastBacktest = () => {
             </span>
           )}
           {rows.length > 0 && (
-            <span className={s.filterChip} onClick={discardCache} title="清除今日本地缓存">
+            <span className={s.filterChip} onClick={discardCache} title="清除本地缓存并清空列表">
               清除缓存
             </span>
           )}
+          <span className={s.filterChip} onClick={reloadCache} title="从 localStorage / IndexedDB 重新加载">
+            加载缓存
+          </span>
           <Button
             size="small"
             type="primary"
@@ -745,6 +1084,231 @@ const LowVolRangeBlastBacktest = () => {
             ? `（${stockSymbols.size} 标的${stockHitCount ? ` · 本表命中 ${stockHitCount}` : ''}）`
             : '（加载中…）'}
         </Checkbox>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <div className={s.filterRow} style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+          <span
+            className={s.muted}
+            title="仅上破；入场=上沿。止盈/止损按日K；追踪武装后按小时K判定回撤平仓；满30个交易日未平完则第30日收盘强平。"
+          >
+            收益回测（10 组参数并行对比）
+          </span>
+          <span className={s.muted}>
+            {PNL_NOTIONAL_USDT}U·1x · 第{PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪用小时K · 止盈%占开仓总量
+          </span>
+          <Button
+            size="small"
+            type="primary"
+            loading={pnlRunning}
+            disabled={running || !displayRows.length}
+            onClick={runPnlBacktest}
+          >
+            {pnlRunning ? '回测中…' : '开始回测'}
+          </Button>
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            disabled={!pnlParamRows.length}
+            onClick={copyPnlParams}
+            title="一键复制当前 10 组回测条件参数"
+          >
+            复制回测条件
+          </Button>
+          {pnlRunning && (
+            <Button
+              size="small"
+              onClick={() => {
+                pnlAbortRef.current?.abort();
+              }}
+            >
+              停止
+            </Button>
+          )}
+          {pnlRunning && (
+            <span className={s.muted}>
+              {pnlProgress.done}/{pnlProgress.total}
+              {pnlProgress.symbol ? ` · ${pnlProgress.symbol}` : ''}
+            </span>
+          )}
+          {pnlResults?.results?.length > 0 && !pnlRunning && (
+            <Button size="small" icon={<CopyOutlined />} onClick={copyPnlResult} title="复制全部 10 组结果（TSV）">
+              复制全部结果
+            </Button>
+          )}
+        </div>
+        {pnlParamRows.map(row => {
+          const result = pnlResults?.results?.find(r => r.params.id === row.id);
+          const isBest = row.id === BEST_PNL_PARAM_ID;
+          const numProps = { size: 'small', disabled: pnlRunning };
+          const tpGain = (key, title) => (
+            <InputNumber
+              {...numProps}
+              min={1}
+              max={500}
+              step={5}
+              value={row[key]}
+              onChange={v => updatePnlParam(row.id, key, v)}
+              style={{ width: 56 }}
+              title={title}
+            />
+          );
+          const tpClose = (key, title) => (
+            <InputNumber
+              {...numProps}
+              min={1}
+              max={100}
+              step={5}
+              value={row[key]}
+              onChange={v => updatePnlParam(row.id, key, v)}
+              style={{ width: 52 }}
+              title={title}
+            />
+          );
+          return (
+            <div
+              key={row.id}
+              title={isBest ? '当前回测数据下综合表现最好的参数组合（奔跑派）' : undefined}
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '4px 6px',
+                alignItems: 'center',
+                marginBottom: 8,
+                fontSize: 12,
+                lineHeight: '24px',
+                ...(isBest
+                  ? {
+                      padding: '6px 8px',
+                      marginLeft: -8,
+                      marginRight: -8,
+                      borderRadius: 6,
+                      background: '#f6ffed',
+                      border: '1px solid #b7eb8f',
+                      boxShadow: 'inset 3px 0 0 #52c41a',
+                    }
+                  : null),
+              }}
+            >
+              <span
+                className={s.muted}
+                style={{
+                  width: isBest ? 'auto' : 28,
+                  minWidth: 28,
+                  flexShrink: 0,
+                  fontWeight: 600,
+                  color: isBest ? '#389e0d' : undefined,
+                }}
+              >
+                #{row.id}
+                {isBest ? (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      padding: '0 6px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#389e0d',
+                      background: '#d9f7be',
+                      borderRadius: 4,
+                      lineHeight: '18px',
+                      display: 'inline-block',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    当前最优
+                  </span>
+                ) : null}
+              </span>
+              <span className={s.muted}>涨幅达到</span>
+              {tpGain('tp1Gain', '第1档：价格相对入场涨幅达到该%时触发')}
+              <span className={s.muted}>%时，止盈</span>
+              {tpClose('tp1Close', '平掉开仓总量的该%（不是剩余仓）')}
+              <span className={s.muted}>%仓位</span>
+              <span className={s.muted}>；</span>
+              <span className={s.muted}>涨幅达到</span>
+              {tpGain('tp2Gain', '第2档：价格相对入场涨幅达到该%时触发')}
+              <span className={s.muted}>%时，止盈</span>
+              {tpClose('tp2Close', '平掉开仓总量的该%')}
+              <span className={s.muted}>%仓位</span>
+              <span className={s.muted}>；</span>
+              <span className={s.muted}>涨幅达到</span>
+              {tpGain('tp3Gain', '第3档：价格相对入场涨幅达到该%时触发')}
+              <span className={s.muted}>%时，止盈</span>
+              {tpClose('tp3Close', '平掉开仓总量的该%')}
+              <span className={s.muted}>%仓位</span>
+              <span className={s.muted}>｜</span>
+              <span className={s.muted}>涨幅达到</span>
+              <InputNumber
+                {...numProps}
+                min={0}
+                max={500}
+                step={5}
+                value={row.slArm}
+                onChange={v => updatePnlParam(row.id, 'slArm', v == null ? 0 : v)}
+                style={{ width: 56 }}
+                title="填 0 表示关闭全仓止损"
+              />
+              <span className={s.muted}>%时，设置全仓止损价</span>
+              <InputNumber
+                {...numProps}
+                min={-50}
+                max={500}
+                step={5}
+                value={row.slPrice}
+                onChange={v => updatePnlParam(row.id, 'slPrice', v == null ? 0 : v)}
+                style={{ width: 56 }}
+                title="止损价=入场×(1+该%)；0=保本"
+              />
+              <span className={s.muted}>%</span>
+              <span className={s.muted}>｜</span>
+              <span className={s.muted}>涨幅达到</span>
+              <InputNumber
+                {...numProps}
+                min={0}
+                max={500}
+                step={5}
+                value={row.trailArm}
+                onChange={v => updatePnlParam(row.id, 'trailArm', v == null ? 0 : v)}
+                style={{ width: 56 }}
+                title="填 0 表示关闭追踪止盈"
+              />
+              <span className={s.muted}>%时，设置回撤</span>
+              <InputNumber
+                {...numProps}
+                min={0}
+                max={80}
+                step={1}
+                value={row.trailCb}
+                onChange={v => updatePnlParam(row.id, 'trailCb', v == null ? 0 : v)}
+                style={{ width: 52 }}
+                title="自峰值回撤该%则平掉剩余仓位"
+              />
+              <span className={s.muted}>%追踪止盈</span>
+              {result && !pnlRunning && (
+                <span style={{ marginLeft: 4 }}>
+                  开平{result.openCloseCount}
+                  <span className={s.muted}> · </span>
+                  累计{' '}
+                  <span style={{ color: result.totalPnl >= 0 ? '#389e0d' : '#cf1322', fontWeight: 600 }}>
+                    {result.totalPnl >= 0 ? '+' : ''}
+                    {result.totalPnl.toFixed(2)}U
+                  </span>
+                  <span className={s.muted}> · </span>
+                  均笔{' '}
+                  {result.avgPnlPerTrade == null
+                    ? '—'
+                    : `${result.avgPnlPerTrade >= 0 ? '+' : ''}${result.avgPnlPerTrade.toFixed(2)}U`}
+                  <span className={s.muted}>
+                    {' '}
+                    · 成交{result.traded}
+                    {result.failed ? `/失败${result.failed}` : ''}
+                  </span>
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {errors.length > 0 && (

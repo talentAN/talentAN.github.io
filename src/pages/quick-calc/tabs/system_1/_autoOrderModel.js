@@ -7,10 +7,12 @@ import {
   placeFutureBatchLimitOrders as placeBinanceBatchLimit,
 } from '@root/src/container/binance/api/order';
 import { getSinglePosition as getBitgetPosition, getPendingOrders as getBitgetPendingOrders } from '@root/src/container/bitget/api/query';
-import { getPositionRisk as getBinancePositionRisk, getOpenOrders as getBinanceOpenOrders, getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
+import { getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
 import { getContracts as getBinanceContracts, getFutureFundingRate as getBinanceFundingRate } from '@root/src/container/binance/api';
+import { getBinanceAccountSnapshot } from '@root/src/container/binance/accountMirror';
 import { getFutureFundingRate as getBitgetFundingRate } from '@root/src/container/bitget/api';
 import { getTradeSession } from '@root/src/utils/tradeSession';
+import { isBlacklistedSymbol } from '../_symbolBlacklist';
 
 /**
  * 自动下单模型（现在会真的往交易所发签名请求，但用的是 mock/占位 API Key）
@@ -52,7 +54,7 @@ import { getTradeSession } from '@root/src/utils/tradeSession';
  *      tradeSide、Binance 需要 positionSide，目前都没处理）
  *   4. 风控：单币种最大仓位、总敞口上限、下单失败重试策略
  *
-* 下单前置检查：
+ * 下单前置检查：
  *   0. high100 资格（与回测一致）：拉全量日 K；上市未满 30 天、或 max(当日最高, 开盘×4) 为历史新高 → skipped
  *   1. checkExistingExposure 查该币对「同方向」是否已有持仓或未成交开仓委托
  * （Bitget: single-position + orders-pending；Binance: positionRisk + openOrders），
@@ -116,6 +118,7 @@ export const SKIP_REASON_LABEL = {
   listing_too_new: `上市未满 ${MIN_LISTING_DAYS} 天`,
   ath_breakout: 'max(当日最高,开盘×4) 为历史新高',
   history_unavailable: '历史K线不足，无法校验上市天数',
+  blacklisted: '黑名单币对（稳定币等）',
 };
 
 const LISTING_MS = MIN_LISTING_DAYS * 24 * 60 * 60 * 1000;
@@ -402,6 +405,7 @@ const parseExposure = (exchange, posResult, orderResult, side = null) => {
  *   side 缺省时保持旧行为（任意方向都算敞口）；传 long/short 则只检查该侧。
  * 查询失败时保守按「已有仓位」处理。
  */
+
 export const checkFundingRate = async ({ symbol, exchange }) => {
   if (!isLiveOrderEnabled()) return { allowed: false, reason: 'auto_order_disabled' };
   try {
@@ -438,11 +442,29 @@ export const checkExistingExposure = async ({ symbol, exchange, side = null }) =
       return parseExposure('bitget', posResult, orderResult, side);
     }
     if (exchange === 'binance') {
-      const [posResult, orderResult] = await Promise.all([
-        getBinancePositionRisk({ symbol }),
-        getBinanceOpenOrders({ symbol }),
-      ]);
-      return parseExposure('binance', posResult, orderResult, side);
+      // 复用账户镜像（WS），避免暴涨扫描里按币对打 openOrders
+      const snap = await getBinanceAccountSnapshot();
+      if (!snap?.ok) {
+        return {
+          exposed: true,
+          reason: 'query_failed',
+          detail: snap?.error || 'account mirror not ready',
+        };
+      }
+      const sym = String(symbol || '').toUpperCase();
+      const positions = (snap.positions || []).filter(
+        p => String(p?.symbol || '').toUpperCase() === sym
+      );
+      const orders = [
+        ...(snap.openOrders || []).filter(o => String(o?.symbol || '').toUpperCase() === sym),
+        ...(snap.algoOrders || []).filter(o => String(o?.symbol || '').toUpperCase() === sym),
+      ];
+      return parseExposure(
+        'binance',
+        { ok: true, response: positions },
+        { ok: true, response: orders },
+        side
+      );
     }
     return { exposed: true, reason: 'unsupported_exchange' };
   } catch (e) {
@@ -662,6 +684,16 @@ export const placeExchangeStopLoss = async plan => {
  */
 export const submitLadderPlan = async plan => {
   const legsWithOid = plan.legs.map((leg, idx) => ({ ...leg, clientOid: `surge${plan.createdAt}${idx}` }));
+
+  if (isBlacklistedSymbol(plan?.symbol)) {
+    return {
+      ...plan,
+      legs: legsWithOid.map(l => ({ ...l, ok: false, status: 'skipped', error: 'blacklisted' })),
+      status: 'skipped',
+      skipReason: 'blacklisted',
+      skipDetail: SKIP_REASON_LABEL.blacklisted,
+    };
+  }
 
   if (!isLiveOrderEnabled()) {
     return {

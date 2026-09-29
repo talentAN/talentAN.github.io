@@ -20,11 +20,27 @@ import {
   checkExistingExposure,
   checkFundingRate,
   checkHigh100Eligibility,
+  isLiveOrderEnabled,
 } from './_autoOrderModel';
+import { runSurgeShortExitRound } from './_surgeShortExit';
 import TradeUnlockPrompt from './TradeUnlockPrompt';
+import { withMarketFetchGate, waitBinanceBanIfNeeded } from '../_marketFetchGate';
+import { getBinanceBanRemaining } from '@root/src/container/binance/api';
+import {
+  acquireBinanceAccountMirror,
+  releaseBinanceAccountMirror,
+} from '@root/src/container/binance/accountMirror';
+import { filterBlacklistedPairs } from '../_symbolBlacklist';
+import { scheduleMonitorAutoRecover, forceEnableBothMonitors } from '../_monitorAutoRecover';
 
-const BATCH_SIZE = 8;
-const BATCH_MS = 1000;
+/** 一轮扫完币对后的空闲休息 */
+const ROUND_IDLE_MS = 5000;
+/** 空头止盈 tip 最多保留条数 */
+const EXIT_TIPS_MAX = 12;
+
+/** 与横盘监控共享门闩后略降并发，避免两边一起打出 429 */
+const BATCH_SIZE = 4;
+const BATCH_MS = 1200;
 const DEFAULT_PCT = 90;
 const STORAGE_KEY = 'surge-alert-threshold-pct';
 const POS_KEY = 'surge-alert-pos';
@@ -177,9 +193,9 @@ const bringTabToFront = (label) => {
 /** 拉取币对当日 K 线，返回涨幅原始数据；无数据返回 null */
 const getPairSurgeInfo = async pair => {
   const { symbol, exchange } = pair;
-  const res = await getFutureKlineData(
-    { symbol, granularity: GRANULARITY, limit: 1 },
-    exchange
+  if (exchange === 'binance') await waitBinanceBanIfNeeded(getBinanceBanRemaining);
+  const res = await withMarketFetchGate(() =>
+    getFutureKlineData({ symbol, granularity: GRANULARITY, limit: 1 }, exchange)
   );
   const candles = Array.isArray(res?.data) ? res.data : [];
   if (!candles.length) return null;
@@ -208,6 +224,8 @@ const SurgeAlert = ({ docked = false }) => {
   const [alerts, setAlerts] = useState([]);
   const [status, setStatus] = useState(() => (loadMonitorRunning() ? '启动中…' : '已停止'));
   const [lastPoll, setLastPoll] = useState(null);
+  /** 完整扫完一轮币对的次数 */
+  const [scanRounds, setScanRounds] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [pos, setPos] = useState({ x: 16, y: 120 });
   /** 暴涨监控开关由 localStorage 记忆；无记录时默认开 */
@@ -216,6 +234,8 @@ const SurgeAlert = ({ docked = false }) => {
   const [autoOrderPctInput, setAutoOrderPctInput] = useState(String(DEFAULT_AUTO_ORDER_PCT));
   const [autoOrderEnabled, setAutoOrderEnabled] = useState(true);
   const [autoBatches, setAutoBatches] = useState([]);
+  /** 空头止盈动作 tip（新的在前） */
+  const [exitTips, setExitTips] = useState([]);
   const notifiedRef = useRef(new Set());
   const alertsMapRef = useRef(new Map());
   const pctRef = useRef(DEFAULT_PCT);
@@ -335,6 +355,9 @@ const SurgeAlert = ({ docked = false }) => {
     if (!running) return undefined;
 
     abortRef.current = false;
+    acquireBinanceAccountMirror().catch(e => {
+      console.warn('[SurgeAlert] account mirror start', e);
+    });
 
     const syncAlerts = () => {
       const list = Array.from(alertsMapRef.current.values()).sort(
@@ -386,7 +409,8 @@ const SurgeAlert = ({ docked = false }) => {
       return isRepeat ? null : { type: 'skipped', batch: next };
     };
 
-    // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单；平仓由用户自行处理，系统不再自动发平仓单。
+    // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单。
+    // 空头止盈由 runLoop 开头的 runSurgeShortExitRound 按 zz 区间自动挂。
     // skipped/failed 允许重试（否则会锁死整天且 Network 里看不到后续查询）
     const handleAutoOrder = async (info) => {
       const batchKey = `${todayKey()}:${info.exchange}:${info.symbol}`;
@@ -440,7 +464,8 @@ const SurgeAlert = ({ docked = false }) => {
       };
       autoBatchesRef.current.set(batchKey, submittingBatch);
       syncAutoBatches();
-// high100 口径：上市未满 30 天 / max(当日最高,开盘×4) 历史新高 → 跳过（与回测标记日一致）
+
+      // high100 口径：上市未满 30 天 / max(当日最高,开盘×4) 历史新高 → 跳过（与回测标记日一致）
       const eligibility = await checkHigh100Eligibility({
         symbol: info.symbol,
         exchange: info.exchange,
@@ -468,10 +493,10 @@ const SurgeAlert = ({ docked = false }) => {
 
       // 下单前查持仓 / 未成交委托；查询失败也跳过（保守）
       const exposure = await checkExistingExposure({
-              symbol: info.symbol,
-              exchange: info.exchange,
-              side: 'short',
-            });
+        symbol: info.symbol,
+        exchange: info.exchange,
+        side: 'short',
+      });
       if (exposure.exposed) {
         return commitSkip(batchKey, existing, {
           id: batchKey,
@@ -537,11 +562,56 @@ const SurgeAlert = ({ docked = false }) => {
     };
 
     const runLoop = async () => {
+      try {
       while (!abortRef.current) {
+        // ① 先处理空头止盈（未解锁交易则跳过挂单）
+        try {
+          const exitResult = await runSurgeShortExitRound({
+            aborted: () => abortRef.current,
+            onStatus: setStatus,
+          });
+          // 仅挂单成功/失败写入 tip，避免「已有止盈跳过」每轮刷屏
+          if (exitResult && (exitResult.placed > 0 || exitResult.failed > 0) && exitResult.tips?.length) {
+            const stamped = exitResult.tips.map(text => ({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              at: Date.now(),
+              text,
+            }));
+            setExitTips(prev => [...stamped, ...prev].slice(0, EXIT_TIPS_MAX));
+            if (exitResult.placed > 0) {
+              setExpanded(true);
+              playAlertSound();
+              bringTabToFront(
+                exitResult.tips
+                  .filter(t => t.includes('已挂') || t.includes('挂 TP') || t.includes('挂追踪'))
+                  .slice(0, 2)
+                  .join(' ') || '空头止盈已挂单'
+              );
+            }
+          }
+        } catch (e) {
+          if (abortRef.current) break;
+          console.error('[SurgeAlert][ShortExit]', e);
+          abortRef.current = true;
+          setRunning(false);
+          setStatus(`异常恢复中：${e?.message || e}`);
+          forceEnableBothMonitors();
+          scheduleMonitorAutoRecover({
+            title: e?.message || String(e),
+            detail: e?.stack || String(e),
+            source: '暴涨监控·空头止盈',
+          });
+          return;
+        }
+
+        if (abortRef.current) break;
+
+        // ② 再扫描全部币对
         let pairs = [];
         try {
           setStatus('拉取币对列表…');
           pairs = await getMergedTradingPairs();
+          pairs = filterBlacklistedPairs(pairs);
         } catch (e) {
           console.error('[SurgeAlert] pairs', e);
           setStatus('币对列表拉取失败，重试中…');
@@ -627,6 +697,26 @@ const SurgeAlert = ({ docked = false }) => {
           const elapsed = Date.now() - batchStart;
           if (elapsed < BATCH_MS) await sleep(BATCH_MS - elapsed);
         }
+
+        // 整表币对扫完且未被中止/重开 → 记一轮，然后休息 5s
+        if (!abortRef.current && !restartRef.current) {
+          setScanRounds(n => n + 1);
+          setStatus(`一轮结束，休息 ${ROUND_IDLE_MS / 1000}s…`);
+          await sleep(ROUND_IDLE_MS);
+        }
+      }
+      } catch (e) {
+        if (abortRef.current) return;
+        console.error('[SurgeAlert] fatal loop', e);
+        abortRef.current = true;
+        setRunning(false);
+        setStatus(`异常恢复中：${e?.message || e}`);
+        forceEnableBothMonitors();
+        scheduleMonitorAutoRecover({
+          title: e?.message || String(e),
+          detail: e?.stack || String(e),
+          source: '暴涨监控',
+        });
       }
     };
 
@@ -634,6 +724,7 @@ const SurgeAlert = ({ docked = false }) => {
 
     return () => {
       abortRef.current = true;
+      releaseBinanceAccountMirror();
     };
   }, [running]);
 
@@ -741,7 +832,6 @@ const SurgeAlert = ({ docked = false }) => {
       )}
     </div>
   );
-
   // 收起态：小角标；docked 时嵌入工具坞
   if (!expanded) {
     return (
@@ -792,7 +882,26 @@ const SurgeAlert = ({ docked = false }) => {
         title="按住拖拽"
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨监控</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨监控</div>
+            <span
+              title="已完整扫描币对的轮次"
+              style={{
+                minWidth: 22,
+                height: 20,
+                padding: '0 7px',
+                borderRadius: 10,
+                background: '#ff4d4f',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 700,
+                lineHeight: '20px',
+                textAlign: 'center',
+              }}
+            >
+              {scanRounds}
+            </span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {running ? (
               <button
@@ -892,7 +1001,6 @@ const SurgeAlert = ({ docked = false }) => {
                 e.target.blur();
               }
             }}
-
             style={{
               width: 40,
               height: 22,
@@ -932,6 +1040,11 @@ const SurgeAlert = ({ docked = false }) => {
             {lastPoll.toLocaleTimeString()}
           </div>
         )}
+        {!isLiveOrderEnabled() && (
+          <div style={{ color: '#d48806', fontSize: 10, marginTop: 2 }}>
+            未解锁交易：空头止盈不下单
+          </div>
+        )}
       </div>
 
       <div
@@ -946,6 +1059,50 @@ const SurgeAlert = ({ docked = false }) => {
           touchAction: 'auto',
         }}
       >
+        {exitTips.length > 0 && (
+          <div
+            style={{
+              background: '#fff7e6',
+              border: '1px solid #ffd591',
+              borderRadius: 6,
+              padding: '6px 8px',
+              fontSize: 10,
+              color: '#ad6800',
+              lineHeight: 1.45,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 4,
+                fontWeight: 600,
+              }}
+            >
+              <span>空头止盈</span>
+              <button
+                type="button"
+                onClick={() => setExitTips([])}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#8c8c8c',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  padding: 0,
+                }}
+              >
+                清空
+              </button>
+            </div>
+            {exitTips.slice(0, 6).map(tip => (
+              <div key={tip.id} style={{ marginBottom: 2 }}>
+                {tip.text}
+              </div>
+            ))}
+          </div>
+        )}
         {alerts.length === 0 ? (
           <div
             style={{

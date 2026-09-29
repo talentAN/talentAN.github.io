@@ -30,6 +30,11 @@ export const BREWING_PATTERN_ENUM = [
     label: '低波动横盘暴涨',
     path: '/quick-calc/backtest/low-vol-range-blast',
   },
+  {
+    key: 'surgeThenHighRange',
+    label: '暴涨后持续高位横盘',
+    path: '/quick-calc/backtest/after-100-gain',
+  }, 
 ];
 
 export const BREWING_PATTERN_MAP = Object.fromEntries(

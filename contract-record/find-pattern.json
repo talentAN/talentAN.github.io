@@ -53,6 +53,15 @@
       "addDate": "",
       "note": "下沿/上沿/最高 0.007/0.13/0.03 · 周期 32天",
       "followUp": ""
+    },
+    {
+      "exchange": "binance",
+      "symbol": "ALPINEUSDT",
+      "name": "surgeThenHighRange",
+      "keyDate": "2025-08-16-2025-09-25",
+      "addDate": "",
+      "note": "",
+      "followUp": ""
     }
   ]
 }

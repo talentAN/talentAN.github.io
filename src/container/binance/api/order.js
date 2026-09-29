@@ -228,3 +228,63 @@ export const placeFutureOpenStopMarketAlgo = async ({
     params: algoParams,
   }).then(r => ({ ...r, via: 'algoOrder' }));
 };
+
+/**
+ * 多单追踪止盈：SELL + TRAILING_STOP_MARKET。
+ * activatePrice 须高于最新价；callbackRate 为百分比，API 上限通常 10。
+ */
+export const placeFutureTrailingStopAlgo = async ({
+  symbol,
+  side = 'SELL',
+  quantity,
+  activatePrice,
+  callbackRate,
+  positionSide,
+  clientAlgoId,
+  workingType = 'CONTRACT_PRICE',
+}) => {
+  const algoParams = {
+    algoType: 'CONDITIONAL',
+    symbol,
+    side,
+    type: 'TRAILING_STOP_MARKET',
+    quantity: String(quantity),
+    activatePrice: String(activatePrice),
+    callbackRate: String(callbackRate),
+    workingType,
+    ...(positionSide ? { positionSide } : { reduceOnly: 'true' }),
+    ...(clientAlgoId ? { clientAlgoId } : {}),
+  };
+  return signedRequestVerbose({
+    method: 'POST',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: algoParams,
+  }).then(r => ({ ...r, via: 'algoOrder' }));
+};
+
+/** 撤销单笔普通挂单：DELETE /fapi/v1/order */
+export const cancelFutureOrder = async ({ symbol, orderId, origClientOrderId }) =>
+  signedRequestVerbose({
+    method: 'DELETE',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/order',
+    params: {
+      symbol,
+      ...(orderId != null ? { orderId } : {}),
+      ...(origClientOrderId ? { origClientOrderId } : {}),
+    },
+  });
+
+/** 撤销单笔条件单：DELETE /fapi/v1/algoOrder */
+export const cancelFutureAlgoOrder = async ({ symbol, algoId, clientAlgoId }) =>
+  signedRequestVerbose({
+    method: 'DELETE',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/algoOrder',
+    params: {
+      ...(symbol ? { symbol } : {}),
+      ...(algoId != null ? { algoId } : {}),
+      ...(clientAlgoId ? { clientAlgoId } : {}),
+    },
+  });

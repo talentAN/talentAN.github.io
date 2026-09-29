@@ -178,9 +178,30 @@
   background: #e6f4ff;
 }
 
+/* 横盘监控：绿色系 */
+.qc-tool-chip--range {
+  color: #389e0d;
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.qc-tool-chip--range:hover {
+  border-color: #95de64;
+  background: #d9f7be;
+}
+
+.qc-tool-chip--range.is-stopped {
+  opacity: 0.85;
+}
+
 .qc-tool-chip--surge.is-open {
   border-color: #ff4d4f;
   box-shadow: inset 0 0 0 1px rgba(255, 77, 79, 0.18);
+}
+
+.qc-tool-chip--range.is-open {
+  border-color: #52c41a;
+  box-shadow: inset 0 0 0 1px rgba(82, 196, 26, 0.2);
 }
 
 .qc-tool-chip--tp.is-open {
@@ -203,14 +224,21 @@
   touch-action: none;
 }
 
-.qc-tool-panel--surge {
+/* 面板视觉左→右：暴涨 · 横盘（止盈暂隐藏；复开时把 tp 放最右并右移 surge/range） */
+.qc-tool-panel--range {
   right: 10px;
+  width: 220px;
+  border: 1px solid #b7eb8f;
+}
+
+.qc-tool-panel--surge {
+  right: 236px; /* 10 + 220 + 6 */
   width: 220px;
   border: 1px solid #ffa39e;
 }
 
 .qc-tool-panel--tp {
-  right: 236px;
+  right: 462px; /* 预留给复开止盈：10+220+6+220+6 */
   width: 220px;
   border: 1px solid #91caff;
 }
