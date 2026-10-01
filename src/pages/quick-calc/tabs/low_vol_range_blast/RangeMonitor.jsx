@@ -229,9 +229,10 @@ const RangeMonitor = ({ docked = false }) => {
     setListCounts(c => ({ ...c, placed: uniqStatsRef.current.placed.size }));
     setPlacedList(prev => [{ ...entry, at: Date.now() }, ...prev].slice(0, LIST_LIMIT));
   };
-  const pushSl = entry => {
-    rememberUniq('slArmed', entry);
-    setListCounts(c => ({ ...c, sl: uniqStatsRef.current.slArmed.size }));
+  const pushExit = entry => {
+    // 顶部「止损」只计真正的成本止损；止盈/追踪进列表但不计入止损数
+    if (entry?.type === 'sl_armed') rememberUniq('slArmed', entry);
+    setListCounts(c => ({ ...c, sl: c.sl + 1 }));
     setSlList(prev => [{ ...entry, at: Date.now() }, ...prev].slice(0, LIST_LIMIT));
   };
   const pushTip = entry => {
@@ -288,21 +289,21 @@ const RangeMonitor = ({ docked = false }) => {
       entry?.type === 'tp_placed' ||
       entry?.type === 'trail_placed'
     ) {
-      pushSl(entry);
+      pushExit(entry);
     }
     if (entry?.type === 'sl_failed') {
       rememberUniq('failed', entry);
-      pushSl(entry);
+      pushExit(entry);
       message.error(`成本止损失败：BN ${entry.symbol} ${entry.detail || ''}`);
     }
     if (entry?.type === 'tp_failed') {
       rememberUniq('failed', entry);
-      pushSl(entry);
+      pushExit(entry);
       message.error(`止盈失败：BN ${entry.symbol} ${entry.detail || ''}`);
     }
     if (entry?.type === 'trail_failed') {
       rememberUniq('failed', entry);
-      pushSl(entry);
+      pushExit(entry);
       message.error(`追踪失败：BN ${entry.symbol} ${entry.detail || ''}`);
     }
     if (entry?.type === 'skipped') {
@@ -316,6 +317,12 @@ const RangeMonitor = ({ docked = false }) => {
         ...entry,
         detail: `REST 小时 K 暂无，本轮跳过出场 · ${entry.detail || ''}`,
       });
+    }
+    if (entry?.type === 'xx_kline_rate_limited') {
+      pushTip(entry);
+    }
+    if (entry?.type === 'tp_tier_mismatch') {
+      pushTip(entry);
     }
     if (entry?.type === 'broke_out') {
       pushTip(entry);
@@ -347,8 +354,7 @@ const RangeMonitor = ({ docked = false }) => {
         );
       }
     }
-  };
-
+  }; 
   useEffect(() => {
     if (!running) {
       if (abortRef.current) abortRef.current.abort();
@@ -406,7 +412,8 @@ const RangeMonitor = ({ docked = false }) => {
         }
         controller.signal.addEventListener('abort', onAbort, { once: true });
       });
-const loop = async () => {
+
+    const loop = async () => {
       while (!controller.signal.aborted && runningRef.current && alive) {
         if (!isLiveOrderEnabled()) {
           setStatusSafe('未解锁交易，等待中…');
@@ -694,7 +701,7 @@ const loop = async () => {
                 >
                   开始
                 </button>
-              )}
+              )} 
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
@@ -817,7 +824,7 @@ const loop = async () => {
           })()}
           <div
             style={{ marginTop: 4, color: '#8c8c8c' }}
-            title="挂/撤/止损/破/败均为会话内币对去重后的数量（非每轮累加）。败=开仓或出场提交失败（非跳过）"
+            title="挂/撤/止损/破/败均为会话内币对去重后的数量（非每轮累加）。止损=成本止损成功挂上（不含止盈/追踪）。败=开仓或出场提交失败（非跳过）"
           >
             {lastRound ? `上次 ${fmtTime(lastRound)}` : '尚未完成一轮'}
             {` · 挂${stats.placed}/撤${stats.cancelled}/止损${stats.slArmed}/破${stats.brokeOut}/败${stats.failed}`}
@@ -834,6 +841,7 @@ const loop = async () => {
             </div>
           ) : null}
         </div>
+
         <div
           style={{
             padding: '4px 10px 8px',
@@ -1027,7 +1035,7 @@ const loop = async () => {
                       borderBottom: '1px solid #fff7e6',
                     }}
                   >
-                    <span style={{ color: '#bfbfbf', marginRight: 6 }}>{fmtTime(item.at)}</span>
+<span style={{ color: '#bfbfbf', marginRight: 6 }}>{fmtTime(item.at)}</span>
                     {exTag(item.exchange)}{' '}
                     <SymbolLink
                       symbol={item.symbol}

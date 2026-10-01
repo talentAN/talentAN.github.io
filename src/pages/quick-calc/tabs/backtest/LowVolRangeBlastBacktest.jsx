@@ -16,6 +16,8 @@ import LowVolRangeBlastConclusion from './_LowVolRangeBlastConclusion';
 import {
   PNL_MAX_HOLD_DAYS,
   PNL_NOTIONAL_USDT,
+  PNL_DEFAULT_INTERVAL,
+  PNL_DEFAULT_EXECUTION_MODE,
   isValidPnlPlan,
   normalizePnlPlan,
   runBreakoutPnlBacktestMulti,
@@ -285,6 +287,8 @@ const LowVolRangeBlastBacktest = () => {
   const [pnlRunning, setPnlRunning] = useState(false);
   const [pnlProgress, setPnlProgress] = useState({ done: 0, total: 0, symbol: '' });
   const [pnlResults, setPnlResults] = useState(null);
+  const [pnlInterval, setPnlInterval] = useState(PNL_DEFAULT_INTERVAL);
+  const [pnlExecutionMode, setPnlExecutionMode] = useState(PNL_DEFAULT_EXECUTION_MODE);
   const abortRef = useRef(null);
   const pnlAbortRef = useRef(null);
   const cacheBootstrapped = useRef(false);
@@ -353,8 +357,7 @@ const LowVolRangeBlastBacktest = () => {
       errors: meta.errors || [],
       rows: nextRows,
     });
-  };
-
+  }; 
   const discardCache = async () => {
     await clearCache();
     setRows([]);
@@ -443,7 +446,8 @@ const LowVolRangeBlastBacktest = () => {
       }
       await sleep(120);
     }
-const aborted = Boolean(controller.signal.aborted);
+
+    const aborted = Boolean(controller.signal.aborted);
     const nextRows = [...found];
     const nextErrors = [...failed];
     const scanned = Date.now();
@@ -544,6 +548,8 @@ const aborted = Boolean(controller.signal.aborted);
     try {
       const multi = await runBreakoutPnlBacktestMulti(displayRows, pnlParamRows, {
         signal: controller.signal,
+        dataInterval: pnlInterval,
+        executionMode: pnlExecutionMode,
         onProgress: p => setPnlProgress(p),
       });
       if (controller.signal.aborted) {
@@ -609,7 +615,9 @@ const aborted = Boolean(controller.signal.aborted);
     const lines = [
       `${LOW_VOL_RANGE_BLAST_V01.label} 收益回测条件`,
       `时间\t${moment().format('YYYY-MM-DD HH:mm:ss')}`,
-      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪武装后按小时K · 止盈%占开仓总量（非剩余）`,
+      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 出场用${pnlInterval}K · ${
+        pnlExecutionMode === 'conservative' ? '保守顺序' : '乐观顺序'
+      } · 止盈%占开仓总量（非剩余）`,
       '',
       '—— 语义化 ——',
       ...readable,
@@ -638,6 +646,9 @@ const aborted = Boolean(controller.signal.aborted);
       '止盈3',
       '止损(武装涨幅%/止损价%)',
       '追踪(武装涨幅%/回撤%)',
+      '数据粒度',
+      '触发模式',
+      '歧义K线数',
       '上破',
       '成交',
       '失败',
@@ -660,6 +671,9 @@ const aborted = Boolean(controller.signal.aborted);
         `${p.tp3Gain}/${p.tp3Close}`,
         p.slArm != null && p.slArm > 0 ? `${p.slArm}/${p.slPrice}` : '关',
         p.trailArm != null && p.trailArm > 0 ? `${p.trailArm}/${p.trailCb}` : '关',
+        r.dataInterval,
+        r.executionMode,
+        r.ambiguousBars,
         r.sampleUp,
         r.traded,
         r.failed,
@@ -673,7 +687,9 @@ const aborted = Boolean(controller.signal.aborted);
     const lines = [
       `${LOW_VOL_RANGE_BLAST_V01.label} 收益回测（多参数对比）`,
       `时间\t${moment().format('YYYY-MM-DD HH:mm:ss')}`,
-      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪武装后按小时K · 止盈%占开仓总量`,
+      `固定规则\t入场=上沿 · ${PNL_NOTIONAL_USDT}U·1x · 第${PNL_MAX_HOLD_DAYS}日收盘强平 · 出场用${pnlResults.results[0]?.dataInterval || pnlInterval}K · ${
+        (pnlResults.results[0]?.executionMode || pnlExecutionMode) === 'conservative' ? '保守顺序' : '乐观顺序'
+      } · 止盈%占开仓总量`,
       `样本过滤\t当前 UI 过滤后上破 ${pnlResults.sampleUp}`,
       '',
       header,
@@ -685,8 +701,7 @@ const aborted = Boolean(controller.signal.aborted);
     } catch {
       message.error('复制失败，请检查剪贴板权限');
     }
-  };
-
+  }; 
   const copyStats = async () => {
     if (!stats.total) {
       message.warning('暂无统计可复制，请先扫描');
@@ -866,6 +881,7 @@ const aborted = Boolean(controller.signal.aborted);
       ),
     },
   ];
+
   return (
     <div>
       <div className={s.statBar}>
@@ -1007,7 +1023,6 @@ const aborted = Boolean(controller.signal.aborted);
           onChange={e => setKeyword(e.target.value)}
         />
       </div>
-
       <div className={s.filterRow}>
         {/*
           已禁用（2026-09-24）：区间最高价性价比差；横盘天数无明显改善。
@@ -1090,13 +1105,22 @@ const aborted = Boolean(controller.signal.aborted);
         <div className={s.filterRow} style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 6 }}>
           <span
             className={s.muted}
-            title="仅上破；入场=上沿。止盈/止损按日K；追踪武装后按小时K判定回撤平仓；满30个交易日未平完则第30日收盘强平。"
+            title="仅上破；入场=上沿。常规出场按细粒度K；日K仅用于持仓周期和第30日收盘强平。"
           >
             收益回测（10 组参数并行对比）
           </span>
           <span className={s.muted}>
-            {PNL_NOTIONAL_USDT}U·1x · 第{PNL_MAX_HOLD_DAYS}日收盘强平 · 追踪用小时K · 止盈%占开仓总量
+            {PNL_NOTIONAL_USDT}U·1x · 第{PNL_MAX_HOLD_DAYS}日收盘强平 · 出场用{pnlInterval} K ·
+            {pnlExecutionMode === 'conservative' ? '保守顺序' : '乐观顺序'} · 止盈%占开仓总量
           </span>
+          <select value={pnlInterval} onChange={e => setPnlInterval(e.target.value)} disabled={pnlRunning}>
+            <option value="5m">5m 主回测</option>
+            <option value="1m">1m 精度验证</option>
+          </select>
+          <select value={pnlExecutionMode} onChange={e => setPnlExecutionMode(e.target.value)} disabled={pnlRunning}>
+            <option value="conservative">保守模式</option>
+            <option value="optimistic">乐观模式</option>
+          </select>
           <Button
             size="small"
             type="primary"
@@ -1299,9 +1323,8 @@ const aborted = Boolean(controller.signal.aborted);
                   {result.avgPnlPerTrade == null
                     ? '—'
                     : `${result.avgPnlPerTrade >= 0 ? '+' : ''}${result.avgPnlPerTrade.toFixed(2)}U`}
-                  <span className={s.muted}>
-                    {' '}
-                    · 成交{result.traded}
+                  {result.dataInterval} · {result.executionMode === 'conservative' ? '保守' : '乐观'} · 歧义{result.ambiguousBars || 0}K
+                  <span className={s.muted}> · 成交{result.traded}
                     {result.failed ? `/失败${result.failed}` : ''}
                   </span>
                 </span>

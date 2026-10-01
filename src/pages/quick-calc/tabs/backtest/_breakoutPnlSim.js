@@ -8,14 +8,16 @@ export const PNL_LEVERAGE = 1;
 export const PNL_MAX_HOLD_DAYS = 30;
 /** 兼容旧默认：追踪回撤 */
 export const PNL_TRAIL_CALLBACK = 0.15;
+export const PNL_DEFAULT_INTERVAL = '5m';
+export const PNL_DEFAULT_EXECUTION_MODE = 'conservative';
 /** 兼容旧默认：单档平仓占开仓量比例 */
 export const PNL_PARTIAL_FRAC = 0.25;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 const BITGET_MAX_SPAN_MS = 90 * DAY_MS;
-/** Bitget / 通用：单次小时 K 拉取条数 */
-const HOURLY_PAGE_LIMIT = 200;
+const INTRADAY_PAGE_LIMIT = 200;
+const SUPPORTED_INTRADAY_INTERVALS = new Set(['5m', '1m']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const finite = v => {
@@ -97,66 +99,38 @@ export const fetchForwardDailyBars = async (row, maxDays = PNL_MAX_HOLD_DAYS) =>
   return normalizeBars([...byTs.values()]);
 };
 
-/**
- * 拉取标记日起 maxDays 日内的小时 K（追踪止盈用）。
- * Binance: 1H；Bitget: 1H，按时段分页。
- */
-export const fetchForwardHourlyBars = async (row, maxDays = PNL_MAX_HOLD_DAYS) => {
+/** 拉取标记日起 maxDays 日内的细粒度 K 线，支持 5m 批量回测和 1m 复核。 */
+export const fetchForwardIntradayBars = async (
+  row,
+  interval = PNL_DEFAULT_INTERVAL,
+  maxDays = PNL_MAX_HOLD_DAYS
+) => {
+  if (!SUPPORTED_INTRADAY_INTERVALS.has(interval)) throw new Error(`不支持的回测粒度：${interval}`);
   const startTime = markerStartMs(row);
   const endTime = startTime + maxDays * DAY_MS + DAY_MS;
-  const exchange = row.exchange;
+  const stepMs = Number(interval.slice(0, -1)) * MINUTE_MS;
   const byTs = new Map();
+  const ingest = raw => (Array.isArray(raw) ? raw : []).forEach(c => byTs.set(Number(c[0]), c));
+  const chunkMs = Math.min(BITGET_MAX_SPAN_MS, (INTRADAY_PAGE_LIMIT - 1) * stepMs);
 
-  const ingest = raw => {
-    (Array.isArray(raw) ? raw : []).forEach(c => byTs.set(Number(c[0]), c));
-  };
-
-  if (exchange !== 'bitget') {
-    // Binance 单次可较大；仍按时段切，避免漏数
-    const chunkMs = (HOURLY_PAGE_LIMIT - 1) * HOUR_MS;
-    let t0 = startTime;
-    while (t0 < endTime) {
-      const t1 = Math.min(endTime, t0 + chunkMs);
-      const res = await getFutureKlineData(
-        {
-          symbol: row.symbol,
-          granularity: '1H',
-          limit: HOURLY_PAGE_LIMIT,
-          startTime: t0,
-          endTime: t1,
-        },
-        exchange
-      );
-      ingest(res?.data);
-      if (t1 >= endTime) break;
-      t0 = t1 + 1;
-      await sleep(40);
-    }
-    return normalizeBars([...byTs.values()]);
-  }
-
-  // Bitget：跨度 ≤90 天，且 limit 有限 → 按小时窗分页
-  const chunkMs = Math.min(BITGET_MAX_SPAN_MS, (HOURLY_PAGE_LIMIT - 1) * HOUR_MS);
   let t0 = startTime;
   while (t0 < endTime) {
     const t1 = Math.min(endTime, t0 + chunkMs);
     const res = await getFutureKlineData(
-      {
-        symbol: row.symbol,
-        granularity: '1H',
-        limit: HOURLY_PAGE_LIMIT,
-        startTime: t0,
-        endTime: t1,
-      },
-      'bitget'
+      { symbol: row.symbol, granularity: interval, limit: INTRADAY_PAGE_LIMIT, startTime: t0, endTime: t1 },
+      row.exchange
     );
     ingest(res?.data);
     if (t1 >= endTime) break;
     t0 = t1 + 1;
-    await sleep(40);
+    await sleep(interval === '1m' ? 80 : 40);
   }
   return normalizeBars([...byTs.values()]);
 };
+
+/** 兼容外部调用方，旧名称仍使用默认 5m 粒度。 */
+export const fetchForwardHourlyBars = (row, maxDays = PNL_MAX_HOLD_DAYS) =>
+  fetchForwardIntradayBars(row, PNL_DEFAULT_INTERVAL, maxDays);
 
 /**
  * 归一化一组回测参数（UI 百分比 → 内部小数）。
@@ -234,7 +208,8 @@ export const simulateBreakoutLongTrade = (
   row,
   planOrGains,
   forwardDailyBars,
-  forwardHourlyBars = []
+  forwardIntradayBars = [],
+  options = {}
 ) => {
   let plan;
   if (Array.isArray(planOrGains)) {
@@ -263,16 +238,18 @@ export const simulateBreakoutLongTrade = (
   const bars = (forwardDailyBars || []).filter(b => !row.markerDate || b.date >= row.markerDate);
   if (!bars.length) return { ok: false, reason: 'no_bars' };
 
-  const hours = (forwardHourlyBars || [])
+  const executionMode = options.executionMode || PNL_DEFAULT_EXECUTION_MODE;
+  const intraday = (forwardIntradayBars || [])
     .filter(h => {
       if (!Number.isFinite(h.openTime)) return false;
-      if (row.markerTs != null && Number.isFinite(Number(row.markerTs))) {
-        return h.openTime >= Number(row.markerTs);
-      }
+      if (row.markerTs != null && Number.isFinite(Number(row.markerTs))) return h.openTime >= Number(row.markerTs);
       if (row.markerDate) return h.date >= row.markerDate;
       return true;
     })
     .sort((a, b) => a.openTime - b.openTime);
+  const ambiguousBars = [];
+  const useIntradayBars = intraday.length > 0;
+  if (options.requireIntraday && !useIntradayBars) return { ok: false, reason: 'no_intraday_bars' };
 
   const qty0 = (PNL_NOTIONAL_USDT * PNL_LEVERAGE) / entry;
   let remaining = qty0;
@@ -280,7 +257,7 @@ export const simulateBreakoutLongTrade = (
   let trailOn = false;
   let slOn = false;
   let tpIdx = 0;
-  let hourCursor = 0;
+  let intradayCursor = 0;
   const closes = [];
   let openCount = 1;
   let closeCount = 0;
@@ -305,134 +282,73 @@ export const simulateBreakoutLongTrade = (
     remaining = 0;
   };
 
-  /** 从 hourCursor 起，处理 openTime < untilOpenTime 的小时 K 上的追踪 */
-  const runTrailOnHoursUntil = untilOpenTime => {
-    if (!trailOn || !(plan.trailCallback > 0) || remaining <= 0) return;
-    while (hourCursor < hours.length && hours[hourCursor].openTime < untilOpenTime) {
-      const h = hours[hourCursor];
-      hourCursor += 1;
-      peakAfterTrail = Math.max(peakAfterTrail, h.high);
-      const stop = peakAfterTrail * (1 - plan.trailCallback);
-      if (h.low <= stop) {
-        takeRest(stop, 'trail', hourLabel(h));
+  const processIntradayBar = bar => {
+    if (remaining <= 0) return;
+    const targets = plan.tps.filter((_, index) => index >= tpIdx).map(leg => entry * (1 + leg.gain));
+    const hitTp = targets.findIndex(target => bar.high >= target);
+    const slPrice = slOn && plan.slPriceGain != null ? entry * (1 + plan.slPriceGain) : null;
+    const trailPrice = trailOn && plan.trailCallback > 0 ? peakAfterTrail * (1 - plan.trailCallback) : null;
+    const hitSl = slPrice != null && bar.low <= slPrice;
+    const hitTrail = trailPrice != null && bar.low <= trailPrice;
+    const hasAmbiguity = (hitSl || hitTrail) && hitTp >= 0;
+    if (hasAmbiguity) ambiguousBars.push({ date: hourLabel(bar), sl: hitSl, trail: hitTrail, tp: hitTp + 1 });
+
+    // 多头保守口径：同一根 K 线同时命中时，先按低点方向的出场处理。
+    if (executionMode === 'conservative' && (hitSl || hitTrail)) {
+      if (hitSl) takeRest(slPrice, 'sl', hourLabel(bar));
+      else takeRest(trailPrice, 'trail', hourLabel(bar));
+      return;
+    }
+    if (executionMode === 'optimistic' && hitTp >= 0) {
+      const leg = plan.tps[tpIdx + hitTp];
+      takePartial(targets[hitTp], leg.close, `tp${tpIdx + hitTp + 1}`, hourLabel(bar));
+      tpIdx += hitTp + 1;
+      if (remaining <= 1e-12) {
+        remaining = 0;
         return;
       }
     }
-  };
+    if (hitSl || hitTrail) {
+      if (hitSl) takeRest(slPrice, 'sl', hourLabel(bar));
+      else takeRest(trailPrice, 'trail', hourLabel(bar));
+      return;
+    } 
+    if (hitTp >= 0 && remaining > 0) {
+      const leg = plan.tps[tpIdx];
+      takePartial(targets[0], leg.close, `tp${tpIdx + 1}`, hourLabel(bar));
+      tpIdx += 1;
+    }
 
-  /** 无小时 K 时：用当日日 K 兜底判定追踪 */
-  const runTrailOnDailyFallback = bar => {
-    if (!trailOn || !(plan.trailCallback > 0) || remaining <= 0) return;
-    peakAfterTrail = Math.max(peakAfterTrail, bar.high);
-    const stop = peakAfterTrail * (1 - plan.trailCallback);
-    if (bar.low <= stop) {
-      takeRest(stop, 'trail', bar.date);
+    if (remaining > 0 && plan.slArmGain != null && plan.slPriceGain != null && bar.high >= entry * (1 + plan.slArmGain)) {
+      slOn = true;
+    }
+    if (remaining > 0 && !trailOn && plan.trailArmGain != null && plan.trailCallback != null && bar.high >= entry * (1 + plan.trailArmGain)) {
+      trailOn = true;
+      peakAfterTrail = Math.max(peakAfterTrail, bar.high);
+    } else if (remaining > 0 && trailOn) {
+      peakAfterTrail = Math.max(peakAfterTrail, bar.high);
     }
   };
 
   const holdBars = bars.slice(0, PNL_MAX_HOLD_DAYS);
-  const useHourlyTrail = hours.length > 0;
-
-  for (let i = 0; i < holdBars.length; i++) {
+  for (let i = 0; i < holdBars.length && remaining > 0; i++) {
     const bar = holdBars[i];
-    const dayIndex = i + 1;
     const nextDayOpen = holdBars[i + 1]?.openTime ?? bar.openTime + DAY_MS;
-
-    // 1) 分档止盈（日 K）
-    while (tpIdx < plan.tps.length && remaining > 0) {
-      const leg = plan.tps[tpIdx];
-      const target = entry * (1 + leg.gain);
-      if (bar.high < target) break;
-      takePartial(target, leg.close, `tp${tpIdx + 1}`, bar.date);
-      tpIdx += 1;
-    }
-    if (remaining <= 1e-12) {
-      remaining = 0;
-      break;
-    }
-
-    // 2) 武装止损（日 K）
-    if (plan.slArmGain != null && plan.slPriceGain != null && bar.high >= entry * (1 + plan.slArmGain)) {
-      slOn = true;
-    }
-
-    // 3) 武装追踪（日 K 达涨幅；真正平仓看小时 K）
-    if (
-      !trailOn &&
-      plan.trailArmGain != null &&
-      plan.trailCallback != null &&
-      bar.high >= entry * (1 + plan.trailArmGain)
-    ) {
-      trailOn = true;
-      const armLevel = entry * (1 + plan.trailArmGain);
-      if (useHourlyTrail) {
-        // 推进到当日，找到首根触及武装涨幅的小时 K，再从此根起跑追踪
-        while (hourCursor < hours.length && hours[hourCursor].openTime < bar.openTime) {
-          hourCursor += 1;
-        }
-        let armedHour = null;
-        while (hourCursor < hours.length && hours[hourCursor].openTime < nextDayOpen) {
-          const h = hours[hourCursor];
-          if (h.high >= armLevel) {
-            armedHour = h;
-            peakAfterTrail = Math.max(peakAfterTrail, h.high);
-            break;
-          }
-          hourCursor += 1;
-        }
-        if (armedHour) {
-          // 从武装当根继续（含当根低点可能已打到追踪止损）
-          const stop = peakAfterTrail * (1 - plan.trailCallback);
-          if (armedHour.low <= stop) {
-            takeRest(stop, 'trail', hourLabel(armedHour));
-          } else {
-            hourCursor += 1;
-            runTrailOnHoursUntil(nextDayOpen);
-          }
-        } else {
-          // 日 K 显示触及但小时未对齐：当日高点武装，用日 K 兜底
-          peakAfterTrail = Math.max(peakAfterTrail, bar.high);
-          runTrailOnDailyFallback(bar);
-        }
-      } else {
-        peakAfterTrail = Math.max(peakAfterTrail, bar.high);
-        runTrailOnDailyFallback(bar);
+    if (useIntradayBars) {
+      while (intradayCursor < intraday.length && intraday[intradayCursor].openTime < nextDayOpen) {
+        processIntradayBar(intraday[intradayCursor]);
+        intradayCursor += 1;
+        if (remaining <= 0) break;
       }
-    } else if (trailOn && remaining > 0) {
-      if (useHourlyTrail) runTrailOnHoursUntil(nextDayOpen);
-      else runTrailOnDailyFallback(bar);
+    } else {
+      processIntradayBar(bar);
     }
-
-    if (remaining <= 1e-12) {
-      remaining = 0;
-      break;
-    }
-
-    // 4) 全仓止损（日 K）
-    if (remaining > 0 && slOn && plan.slPriceGain != null) {
-      const slPrice = entry * (1 + plan.slPriceGain);
-      if (bar.low <= slPrice) {
-        takeRest(slPrice, 'sl', bar.date);
-        break;
-      }
-    }
-
-    // 5) 满 30 日：第 30 根日 K 收盘价强平
-    if (dayIndex >= PNL_MAX_HOLD_DAYS && remaining > 0) {
-      takeRest(bar.close, 'timeout', bar.date);
-      break;
-    }
+    if (remaining > 0 && i + 1 >= PNL_MAX_HOLD_DAYS) takeRest(bar.close, 'timeout', bar.date);
   }
 
-  // 行情不足 30 日：最后一根收盘了结（样本未走完）
   if (remaining > 0 && holdBars.length) {
-    if (holdBars.length >= PNL_MAX_HOLD_DAYS) {
-      const day30 = holdBars[PNL_MAX_HOLD_DAYS - 1];
-      takeRest(day30.close, 'timeout', day30.date);
-    } else {
-      const last = holdBars[holdBars.length - 1];
-      takeRest(last.close, 'incomplete', last.date);
-    }
+    const last = holdBars[Math.min(holdBars.length, PNL_MAX_HOLD_DAYS) - 1];
+    takeRest(last.close, holdBars.length >= PNL_MAX_HOLD_DAYS ? 'timeout' : 'incomplete', last.date);
   }
 
   return {
@@ -447,7 +363,10 @@ export const simulateBreakoutLongTrade = (
     pnl,
     closes,
     holdDays: Math.min(holdBars.length, PNL_MAX_HOLD_DAYS),
-    trailUsedHourly: useHourlyTrail,
+    dataInterval: options.dataInterval || (useIntradayBars ? PNL_DEFAULT_INTERVAL : 'daily'),
+    executionMode,
+    ambiguousBars: ambiguousBars.length,
+    trailUsedHourly: false,
   };
 };
 
@@ -487,10 +406,10 @@ const emptyPnlAgg = () => ({
 });
 
 /**
- * 多组参数一次拉日 K + 小时 K、分别结算。
+ * 多组参数一次拉日 K + 细粒度 K、分别结算。
  */
 export const runBreakoutPnlBacktestMulti = async (rows, paramSets, opts = {}) => {
-  const { onProgress, signal } = opts;
+  const { onProgress, signal, dataInterval = PNL_DEFAULT_INTERVAL, executionMode = PNL_DEFAULT_EXECUTION_MODE } = opts;
   const sets = (paramSets || [])
     .map((p, index) => normalizePnlPlan({ ...p, id: p.id ?? index + 1 }))
     .filter(isValidPnlPlan);
@@ -513,15 +432,11 @@ export const runBreakoutPnlBacktestMulti = async (rows, paramSets, opts = {}) =>
     const row = upRows[i];
     onProgress?.({ done: i, total: upRows.length, symbol: row.symbol });
     let dailyBars = null;
-    let hourlyBars = [];
+    let intradayBars = [];
     try {
       dailyBars = await fetchForwardDailyBars(row, PNL_MAX_HOLD_DAYS);
       if (anyTrail) {
-        try {
-          hourlyBars = await fetchForwardHourlyBars(row, PNL_MAX_HOLD_DAYS);
-        } catch {
-          hourlyBars = [];
-        }
+        intradayBars = await fetchForwardIntradayBars(row, dataInterval, PNL_MAX_HOLD_DAYS);
       }
     } catch (e) {
       aggs.forEach(a => {
@@ -531,7 +446,10 @@ export const runBreakoutPnlBacktestMulti = async (rows, paramSets, opts = {}) =>
     }
 
     sets.forEach((p, si) => {
-      const sim = simulateBreakoutLongTrade(row, p, dailyBars, hourlyBars);
+      const sim = simulateBreakoutLongTrade(row, p, dailyBars, intradayBars, {
+        dataInterval,
+        executionMode,
+      });
       const agg = aggs[si];
       if (!sim.ok) {
         agg.failed += 1;
@@ -560,6 +478,9 @@ export const runBreakoutPnlBacktestMulti = async (rows, paramSets, opts = {}) =>
       closeCount: a.closeCount,
       openCloseCount: a.openCount + a.closeCount,
       totalPnl: a.totalPnl,
+      dataInterval,
+      executionMode,
+      ambiguousBars: a.details.reduce((sum, detail) => sum + (detail.ambiguousBars || 0), 0),
       avgPnlPerTrade: a.traded > 0 ? a.totalPnl / a.traded : null,
       details: a.details,
     })),

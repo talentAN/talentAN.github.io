@@ -37,7 +37,7 @@ export const STRATEGY3_EXIT = {
   slArmPct: 20,
   slPricePct: 0,
   /** 横盘监控定稿：xx>开仓×1.2 即挂追踪（原回测为 40） */
-  trailArmPct: 20,
+  trailArmPct: 40,
   trailCbPct: 12,
 };
 

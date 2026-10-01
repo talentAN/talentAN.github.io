@@ -11,7 +11,6 @@ import {
   placeFutureQtyStopAlgo,
   placeFutureQtyTakeProfitAlgo,
   placeFutureTrailingStopAlgo,
-  cancelFutureAlgoOrder,
 } from '@root/src/container/binance/api/order';
 import { loadStockSymbolSet } from '../backtest/_tradFiSymbols';
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
@@ -62,6 +61,8 @@ export const RANGE_MONITOR_SCAN_ENABLED = true;
 
 /** 当日最高价达到开仓价 × 该倍数 → 挂成本价止损 / 可挂追踪 */
 export const RANGE_MONITOR_SL_ARM_MULT = 1.2;
+/** 开仓后最高价达到开仓价 ×1.4 后，才允许挂追踪止盈。 */
+export const RANGE_MONITOR_TRAIL_ARM_MULT = 1.4;
 
 const TP_MULTS = [
   { key: 'tp120', mult: 1.2, gainPct: 20 },
@@ -85,7 +86,7 @@ const SCAN_GAP_MS = 280;
 /** 日 K 已缓存时内存扫描无需限频 sleep */
 const CACHED_SCAN_YIELD_EVERY = 40;
 const PLACE_GAP_MS = 400;
-export const RANGE_MONITOR_ROUND_IDLE_MS = 5 * 1000;
+export const RANGE_MONITOR_ROUND_IDLE_MS = 2 * 1000;
 
 /** 已破上沿提示：同币同 UTC 日只推一次，避免每轮刷屏 */
 const brokeTipSeen = new Set();
@@ -254,8 +255,11 @@ const pricesMatchTier = (trigger, target, tickSize) => {
 /** 持仓算 xx 拉小时 K：空数组/网络抖常见，有限重试 */
 const XX_KLINE_RETRY = 3;
 const XX_HOUR_MS = 3600 * 1000;
+const XX_KLINE_CACHE_TTL_MS = 60 * 1000;
 /** 单次小时 K 上限；更长持仓向前翻页 */
 const XX_HOUR_LIMIT = 1500;
+/** 按币对+持仓生命周期缓存开仓后的小时 K，避免 2s 轮询重复拉历史数据。 */
+const xxKlineCache = new Map();
 
 const maxHighFromCandles = candles => {
   let high = null;
@@ -302,15 +306,42 @@ const fetchHourlyCandlesSinceOpen = async (symbol, exchange, openTimeMs, endTime
 /**
  * 开仓以来最高价 xx = max(开仓后→现在的小时 K 最高 a, 最新价 b)
  * - 当日开仓：同样拉「开仓后→现在」小时 K，不再用全日 Socket 高（会掺开仓前）
- * - 开仓时间：positionRisk.updateTime（缺则 Fatal）
+ * - openTime 使用账户镜像本地固定的首次持仓时间，不使用 Binance positionRisk.updateTime
  */
 const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast }) => {
-  requirePositive(openTimeMs, `${symbol} 开仓时间 updateTime`);
+  requirePositive(openTimeMs, `${symbol} 持仓首次获取时间 updateTime`);
   const live = Number(liveLast);
+  const cacheKey = `${exchange}:${String(symbol).toUpperCase()}:${openTimeMs}`;
+  const cached = xxKlineCache.get(cacheKey);
   const now = Date.now();
+  if (cached && now - cached.fetchedAt < XX_KLINE_CACHE_TTL_MS) {
+    const xx = Math.max(cached.high || 0, live > 0 ? live : 0);
+    return { xx, a: cached.high || null, b: live > 0 ? live : null, bars: cached.bars, cached: true };
+  }
+  if (getBinanceBanRemaining() > 0) {
+    if (cached?.high > 0) {
+      return {
+        xx: Math.max(cached.high, live > 0 ? live : 0),
+        a: cached.high,
+        b: live > 0 ? live : null,
+        bars: cached.bars,
+        cached: true,
+        rateLimited: true,
+      };
+    }
+    return {
+      xx: null,
+      a: null,
+      b: live > 0 ? live : null,
+      skipped: true,
+      rateLimited: true,
+      detail: `Binance 限频冷却中，剩余 ${Math.ceil(getBinanceBanRemaining() / 1000)}s`,
+    };
+  }
+
   if (!(now >= openTimeMs)) {
     if (live > 0) return { xx: live, a: null, b: live };
-    return { xx: null, a: null, b: null, skipped: true, detail: '开仓时间晚于当前' };
+    return { xx: null, a: null, b: null, skipped: true, detail: '持仓首次获取时间晚于当前' };
   }
 
   let lastDetail = '';
@@ -326,41 +357,23 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast }) 
     const a = maxHighFromCandles(candles);
     const xx = Math.max(a > 0 ? a : 0, live > 0 ? live : 0);
     if (xx > 0) {
-      return {
-        xx,
-        a: a > 0 ? a : null,
-        b: live > 0 ? live : null,
-        bars: candles.length,
-      };
+      xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), high: a > 0 ? a : live, bars: candles.length });
+      return { xx, a: a > 0 ? a : null, b: live > 0 ? live : null, bars: candles.length };
     }
 
     lastDetail = candles.length
       ? `有小时 K 但最高无效 attempt=${attempt}/${XX_KLINE_RETRY}`
       : `空小时 K attempt=${attempt}/${XX_KLINE_RETRY}`;
 
-    if (attempt < XX_KLINE_RETRY) {
-      await sleep(500 * attempt);
-    }
+    if (attempt < XX_KLINE_RETRY) await sleep(500 * attempt);
   }
 
-  // 刚开仓尚未跨过下一根小时、或 REST 抖动：有最新价则先用最新价，避免误跳过出场
   if (live > 0) {
-    return {
-      xx: live,
-      a: null,
-      b: live,
-      bars: 0,
-      note: `小时K暂空，xx=最新价 · ${lastDetail}`,
-    };
+    xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), high: live, bars: 0 });
+    return { xx: live, a: null, b: live, bars: 0, note: `小时K暂空，xx=最新价 · ${lastDetail}` };
   }
 
-  return {
-    xx: null,
-    a: null,
-    b: null,
-    skipped: true,
-    detail: `open=${openTimeMs} end=${now} · ${lastDetail}`,
-  };
+  return { xx: null, a: null, b: null, skipped: true, detail: `open=${openTimeMs} end=${now} · ${lastDetail}` };
 };
 
 const listAllLongPositions = async () => {
@@ -391,6 +404,7 @@ const listAllLongPositions = async () => {
   });
   return positions;
 };
+
 const listOpenAlgoOrders = async () => {
   const snap = await getBinanceAccountSnapshot();
   if (!snap?.ok) {
@@ -412,29 +426,6 @@ const groupAlgosBySymbol = algos => {
     map.get(sym).push(o);
   });
   return map;
-};
-
-const cancelFixedTakeProfits = async (symbol, tpOrders) => {
-  for (let i = 0; i < tpOrders.length; i += 1) {
-    const o = tpOrders[i];
-    const algoId = o.algoId ?? o.orderId;
-    const clientAlgoId = o.clientAlgoId || o.clientOrderId;
-    if (algoId == null && !clientAlgoId) {
-      throw new RangeMonitorFatal(`${symbol} 止盈单无法撤销：缺少 algoId`, JSON.stringify(o).slice(0, 200));
-    }
-    const result = await cancelFutureAlgoOrder({
-      symbol,
-      ...(algoId != null ? { algoId } : {}),
-      ...(clientAlgoId ? { clientAlgoId } : {}),
-    });
-    if (!result?.ok) {
-      throw new RangeMonitorFatal(
-        `${symbol} 撤销旧止盈失败`,
-        pickErr(result) || 'cancelFutureAlgoOrder'
-      );
-    }
-    await sleep(80);
-  }
 };
 
 const placeBreakevenStop = async pos => {
@@ -544,7 +535,7 @@ const placeTrail = async (pos, lastPrice) => {
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
   const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
 
-  let activatePrice = ceilToTick(entry * RANGE_MONITOR_SL_ARM_MULT, rules);
+  let activatePrice = ceilToTick(entry * RANGE_MONITOR_TRAIL_ARM_MULT, rules);
   if (activatePrice <= last) {
     activatePrice = ceilToTick(last * 1.001, rules);
   }
@@ -668,8 +659,7 @@ export const runRangeMonitorCleanup = async ({
     }
 
     kept += 1;
-  }
-
+  } 
   if (aborted()) return { cancelled: 0, kept, failed: 0, aborted: true, checked };
   if (!toCancel.length) {
     onStatus?.(`清理完成：保留 ${kept} 个币对委托`);
@@ -756,6 +746,12 @@ export const runRangeMonitorPositionStops = async ({
   const algos = await listOpenAlgoOrders();
   if (aborted()) return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, aborted: true };
   const bySym = groupAlgosBySymbol(algos);
+  const activeXxCacheKeys = new Set(
+    positions.map(pos => `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${pos.updateTime}`)
+  );
+  [...xxKlineCache.keys()].forEach(key => {
+    if (!activeXxCacheKeys.has(key)) xxKlineCache.delete(key);
+  });
 
   let armed = 0;
   let tpPlaced = 0;
@@ -774,8 +770,8 @@ export const runRangeMonitorPositionStops = async ({
     const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
     if (!(pos.updateTime > 0)) {
       throw new RangeMonitorFatal(
-        `${pos.symbol} 缺少开仓时间 updateTime`,
-        '无法计算自开仓后最高价 xx'
+        `${pos.symbol} 缺少持仓首次获取时间 updateTime`,
+        '无法计算自持仓首次获取以来最高价 xx'
       );
     }
 
@@ -786,6 +782,14 @@ export const runRangeMonitorPositionStops = async ({
       openTimeMs: pos.updateTime,
       liveLast: quote.last,
     });
+    if (xxPack?.rateLimited) {
+      log({
+        type: 'xx_kline_rate_limited',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+        detail: xxPack.detail || 'Binance 限频冷却中，使用已有最高价缓存',
+      });
+    }
     if (xxPack?.skipped || !(xxPack?.xx > 0)) {
       skipped += 1;
       log({
@@ -851,53 +855,8 @@ export const runRangeMonitorPositionStops = async ({
         pricesMatchTier(algoTriggerPrice(o), targetTrigger, rules.tickSize)
       );
 
-      if (xx < entry * 1.2) {
-        // 2.2 第一笔：无任何止盈才挂
-        if (!tpOrders.length) {
-          onStatus?.(`持仓：${pos.symbol} 挂第一笔止盈 @×${wantTier.mult}…`);
-          const tpResult = await placeOneTakeProfit(pos, wantTier.mult);
-          if (tpResult.ok) {
-            tpPlaced += 1;
-            const tpLabel = tpResult.usedFull
-              ? `止盈 ×${wantTier.mult} 全量（10%过小）`
-              : `止盈 ×${wantTier.mult} 平${Math.round((tpResult.closePct || TP_CLOSE_PCT) * 100)}%`;
-            log({
-              type: 'tp_placed',
-              exchange: pos.exchange,
-              symbol: pos.symbol,
-              entryPrice: entry,
-              xx,
-              submitted: [{ key: wantTier.key, triggerPrice: tpResult.triggerPrice }],
-              detail: tpLabel,
-              usedFull: tpResult.usedFull,
-            });
-            if (tpResult.usedFull) {
-              onStatus?.(`持仓：${pos.symbol} ${tpLabel}`);
-            }
-          } else {
-            failed += 1;
-            log({
-              type: 'tp_failed',
-              exchange: pos.exchange,
-              symbol: pos.symbol,
-              detail: tpResult.detail,
-            });
-            onStatus?.(`持仓止盈失败：${pos.symbol} ${tpResult.detail || ''}`);
-          }
-          await sleep(PLACE_GAP_MS);
-        } else {
-          skipped += 1;
-        }
-      } else if (!hasExact) {
-        // 2.3 / 2.4：换档 — 撤旧固定止盈再挂目标档
-        if (tpOrders.length) {
-          onStatus?.(`持仓：${pos.symbol} 撤旧止盈 ${tpOrders.length} 笔，换 ×${wantTier.mult}…`);
-          await cancelFixedTakeProfits(pos.symbol, tpOrders);
-          bySym.set(
-            sym,
-            (bySym.get(sym) || []).filter(o => !isBinanceLongTakeProfitAlgo(o))
-          );
-        }
+      if (!tpOrders.length) {
+        // 没有固定止盈单：首次按当前目标档位挂单。
         onStatus?.(`持仓：${pos.symbol} 挂止盈 @×${wantTier.mult}…`);
         const tpResult = await placeOneTakeProfit(pos, wantTier.mult);
         if (tpResult.ok) {
@@ -915,9 +874,7 @@ export const runRangeMonitorPositionStops = async ({
             detail: tpLabel,
             usedFull: tpResult.usedFull,
           });
-          if (tpResult.usedFull) {
-            onStatus?.(`持仓：${pos.symbol} ${tpLabel}`);
-          }
+          if (tpResult.usedFull) onStatus?.(`持仓：${pos.symbol} ${tpLabel}`);
         } else {
           failed += 1;
           log({
@@ -929,14 +886,36 @@ export const runRangeMonitorPositionStops = async ({
           onStatus?.(`持仓止盈失败：${pos.symbol} ${tpResult.detail || ''}`);
         }
         await sleep(PLACE_GAP_MS);
+      } else if (!hasExact) {
+        // 已有止盈但档位不一致：保留旧单，不自动撤单或换档，仅提示人工处理。
+        skipped += 1;
+        const existingTriggers = tpOrders
+          .map(o => algoTriggerPrice(o))
+          .filter(price => price != null)
+          .map(price => Number(price).toPrecision(8));
+        const detail = `${pos.symbol} 当前应为 ×${wantTier.mult}（触发价 ${targetTrigger}），已有止盈 ${
+          existingTriggers.length ? existingTriggers.join('、') : '未知'
+        }，未自动撤换`;
+        log({
+          type: 'tp_tier_mismatch',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          entryPrice: entry,
+          xx,
+          targetMult: wantTier.mult,
+          targetTrigger,
+          existingTriggers,
+          detail,
+        });
+        onStatus?.(`持仓提示：${detail}`);
       } else {
         skipped += 1;
       }
     }
 
     // 2.5 追踪：xx > 开仓×1.2
-    if (xx > entry * RANGE_MONITOR_SL_ARM_MULT && !trailOrders.length) {
-      onStatus?.(`持仓：${pos.symbol} xx>${RANGE_MONITOR_SL_ARM_MULT}E，挂追踪回调 ${TRAIL_CB_PCT}%…`);
+    if (xx > entry * RANGE_MONITOR_TRAIL_ARM_MULT && !trailOrders.length) {
+      onStatus?.(`持仓：${pos.symbol} xx>${RANGE_MONITOR_TRAIL_ARM_MULT}E，挂追踪回调 ${TRAIL_CB_PCT}%…`);
       const trailResult = await placeTrail(pos, quote.last);
       if (trailResult.ok) {
         trailPlaced += 1;
@@ -1039,8 +1018,7 @@ export const runRangeMonitorScanAndPlace = async ({
   if (!(slotLeft > 0)) {
     onStatus?.(`扫描：坑位不足 200−${n}×${SLOT_PER_POSITION}=${slotLeft}，跳过开仓`);
     return { placed: 0, skipped: 0, failed: 0, scanned: 0, hits: 0, slotLeft, n };
-  }
-
+  } 
   let placed = 0;
   let skipped = 0;
   let failed = 0;

@@ -29,6 +29,30 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const DEBUG_ACCOUNT_MIRROR = false;
 /** 每个 WS 事件类型各打印前几条原文，避免刷屏 */
 const WS_EVENT_LOG_LIMIT = 3;
+const POSITION_UPDATE_TIME_CACHE_KEY = 'binance-position-update-times';
+
+const readPositionUpdateTimeCache = () => {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(POSITION_UPDATE_TIME_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+};
+
+const writePositionUpdateTimeCache = cache => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(POSITION_UPDATE_TIME_CACHE_KEY, JSON.stringify(cache));
+  } catch (_) {
+    /* ignore storage quota/private mode errors */
+  }
+};
+
+const positionCacheKey = (symbol, positionSide) =>
+  `${String(symbol || '').toUpperCase()}:${String(positionSide || 'BOTH').toUpperCase()}`;
 
 const pickErr = result =>
   result?.error ||
@@ -141,6 +165,7 @@ class BinanceAccountMirror {
     this.wsReady = false;
     /** @type {Map<string, number>} */
     this.wsEventLogCount = new Map();
+    this.positionUpdateTimeCache = readPositionUpdateTimeCache();
   }
 
   /** 控制台打印当前镜像：持仓 + 普通挂单 + 条件单 */
@@ -321,8 +346,7 @@ class BinanceAccountMirror {
         this.activeUrl = url;
         const ws = new WebSocket(url);
         this.ws = ws;
-
-        ws.onopen = () => {
+ws.onopen = () => {
           if (gen !== this.connectGen) return;
           this.wsReady = true;
           this.lastError = null;
@@ -335,7 +359,8 @@ class BinanceAccountMirror {
           // 连接成功时先打印 REST 打底的仓位/委托，便于对照
           this.logDump('WS已连接 · 当前镜像（来自 REST 打底，等待推送）');
         };
-ws.onmessage = ev => {
+
+        ws.onmessage = ev => {
           if (gen !== this.connectGen) return;
           this.lastWsMsgAt = Date.now();
           try {
@@ -452,7 +477,20 @@ ws.onmessage = ev => {
       const key = posKey(symbol, positionSide);
       if (!Number.isFinite(amt) || amt === 0) {
         this.positions.delete(key);
+        const cacheKey = positionCacheKey(symbol, positionSide);
+        if (this.positionUpdateTimeCache[cacheKey] != null) {
+          delete this.positionUpdateTimeCache[cacheKey];
+          writePositionUpdateTimeCache(this.positionUpdateTimeCache);
+        }
         return;
+      }
+      const cacheKey = positionCacheKey(symbol, positionSide);
+      const cachedUpdateTime = Number(this.positionUpdateTimeCache[cacheKey]);
+      const firstUpdateTime =
+        Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0 ? cachedUpdateTime : eventTime;
+      if (!(Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0)) {
+        this.positionUpdateTimeCache[cacheKey] = firstUpdateTime;
+        writePositionUpdateTimeCache(this.positionUpdateTimeCache);
       }
       const prev = this.positions.get(key) || {};
       this.positions.set(key, {
@@ -462,7 +500,7 @@ ws.onmessage = ev => {
         positionAmt: String(amt),
         entryPrice: p.ep != null ? String(p.ep) : prev.entryPrice,
         markPrice: p.mp != null ? String(p.mp) : prev.markPrice,
-        updateTime: prev.updateTime || eventTime,
+        updateTime: firstUpdateTime,
         unrealizedProfit: p.up != null ? String(p.up) : prev.unrealizedProfit,
       });
     });
@@ -538,15 +576,45 @@ ws.onmessage = ev => {
   }
 
   applyRestBootstrap({ positions, orders, algos, hedgeMode }) {
-    this.positions.clear();
+    const previousPositions = this.positions;
+    const nextCache = { ...this.positionUpdateTimeCache };
+    const activeCacheKeys = new Set();
+    this.positions = new Map();
     (positions || []).forEach(p => {
       const symbol = String(p?.symbol || '').toUpperCase();
       if (!symbol) return;
       const amt = Number(p.positionAmt || 0);
-      if (!(amt !== 0 && Number.isFinite(amt))) return;
       const positionSide = String(p.positionSide || 'BOTH').toUpperCase();
-      this.positions.set(posKey(symbol, positionSide), { ...p, symbol, positionSide });
+      const cacheKey = positionCacheKey(symbol, positionSide);
+      if (!(amt !== 0 && Number.isFinite(amt))) {
+        delete nextCache[cacheKey];
+        return;
+      }
+      const key = posKey(symbol, positionSide);
+      const previous = previousPositions.get(key);
+      activeCacheKeys.add(cacheKey);
+      const cachedUpdateTime = Number(nextCache[cacheKey]);
+      const firstUpdateTime =
+        Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0
+          ? cachedUpdateTime
+          : Number.isFinite(Number(p.updateTime)) && Number(p.updateTime) > 0
+            ? Number(p.updateTime)
+            : Date.now();
+      nextCache[cacheKey] = firstUpdateTime;
+      this.positions.set(key, {
+        ...previous,
+        ...p,
+        symbol,
+        positionSide,
+        // 只使用本地首次获取仓位的时间；positionRisk.updateTime 仅作首次无缓存时的回退。
+        updateTime: firstUpdateTime,
+      });
     });
+    Object.keys(nextCache).forEach(cacheKey => {
+      if (!activeCacheKeys.has(cacheKey)) delete nextCache[cacheKey];
+    });
+    this.positionUpdateTimeCache = nextCache;
+    writePositionUpdateTimeCache(nextCache);
 
     this.openOrders.clear();
     (orders || []).forEach(o => {
@@ -679,4 +747,4 @@ export const refreshBinanceAccountMirror = async () =>
 export const getBinanceAccountMirrorStatus = () => ({
   ...getSharedBinanceAccountMirror().getStatus(),
   acquireCount,
-});
+}); 

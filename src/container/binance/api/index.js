@@ -59,6 +59,7 @@ function normalizeInterval(granularity) {
   if (g.includes('1d')) return '1d';
   if (g.includes('1h')) return '1h';
   if (g.includes('1m')) return '1m';
+  if (/^\d+m$/.test(g)) return g;   
   // fallback: try to extract number + unit
   if (/^\d+d$/.test(g)) return g;
   if (/^\d+h$/.test(g)) return g;
