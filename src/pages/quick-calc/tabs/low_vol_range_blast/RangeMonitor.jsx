@@ -20,6 +20,7 @@ import {
   releaseBinanceAccountMirror,
 } from '@root/src/container/binance/accountMirror';
 import { scheduleMonitorAutoRecover, forceEnableBothMonitors } from '../_monitorAutoRecover';
+import { RANGE_MONITOR_STORAGE_KEYS } from './_rangeMonitorParams';
 
 const SymbolLink = ({ symbol, exchange, color }) => {
   if (!symbol) return null;
@@ -42,45 +43,42 @@ const SymbolLink = ({ symbol, exchange, color }) => {
   );
 };
 
-const RUNNING_KEY = 'range-monitor-running';
-const MULT_KEY = 'range-monitor-max-mult';
-const NEAR_BAND_KEY = 'range-monitor-near-band-pct';
 /** 列表展示条数上限；标题数量用独立计数，不受此截断 */
 const LIST_LIMIT = 200;
 
 /** 默认关闭，避免与暴涨监控同时猛扫 */
 const loadMonitorRunning = () => {
   if (typeof window === 'undefined') return false;
-  const raw = localStorage.getItem(RUNNING_KEY);
+  const raw = localStorage.getItem(RANGE_MONITOR_STORAGE_KEYS.running);
   return raw === '1' || raw === 'true';
 };
 
 const saveMonitorRunning = enabled => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(RUNNING_KEY, enabled ? '1' : '0');
+  localStorage.setItem(RANGE_MONITOR_STORAGE_KEYS.running, enabled ? '1' : '0');
 };
 
 const loadMaxMult = () => {
   if (typeof window === 'undefined') return RANGE_MONITOR_MAX_MULT;
-  const n = parseFloat(localStorage.getItem(MULT_KEY));
+  const n = parseFloat(localStorage.getItem(RANGE_MONITOR_STORAGE_KEYS.maxMult));
   return Number.isFinite(n) && n >= 1 ? n : RANGE_MONITOR_MAX_MULT;
 };
 
 const saveMaxMult = value => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(MULT_KEY, String(value));
+  localStorage.setItem(RANGE_MONITOR_STORAGE_KEYS.maxMult, String(value));
 };
 
 const loadNearBandPct = () => {
   if (typeof window === 'undefined') return RANGE_MONITOR_NEAR_BAND_PCT;
-  const raw = localStorage.getItem(NEAR_BAND_KEY);
+  const raw = localStorage.getItem(RANGE_MONITOR_STORAGE_KEYS.nearBandPct);
   if (raw == null || raw === '') return RANGE_MONITOR_NEAR_BAND_PCT;
   return normalizeNearBandPct(raw);
 };
 
 const saveNearBandPct = value => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(NEAR_BAND_KEY, String(value));
+  localStorage.setItem(RANGE_MONITOR_STORAGE_KEYS.nearBandPct, String(value));
 };
 
 const fmtTime = d => {
@@ -144,6 +142,13 @@ const RangeMonitor = ({ docked = false }) => {
   const [lastRound, setLastRound] = useState(null);
   /** 上一轮完整循环耗时（ms） */
   const [lastRoundMs, setLastRoundMs] = useState(null);
+  const [exitStats, setExitStats] = useState({
+    tp1: 0,
+    tp2: 0,
+    tp3Trail: 0,
+    positionCount: 0,
+    updatedAt: null,
+  });
   const [stats, setStats] = useState({
     round: 0,
     placed: 0,
@@ -152,6 +157,7 @@ const RangeMonitor = ({ docked = false }) => {
     failed: 0,
     brokeOut: 0,
   });
+  const exitUniqRef = useRef({ tp1: new Set(), tp2: new Set(), tp3Trail: new Set() });
   /** 会话内按币对去重的累计（挂/撤/止损/破/败），避免每轮简单相加 */
   const uniqStatsRef = useRef({
     placed: new Set(),
@@ -216,6 +222,30 @@ const RangeMonitor = ({ docked = false }) => {
     failed: uniqStatsRef.current.failed.size,
     brokeOut: uniqStatsRef.current.brokeOut.size,
   });
+
+  const snapshotExitStats = () => ({
+    tp1: exitUniqRef.current.tp1.size,
+    tp2: exitUniqRef.current.tp2.size,
+    tp3Trail: exitUniqRef.current.tp3Trail.size,
+    positionCount: exitUniqRef.current.positionCount || 0,
+    updatedAt: Date.now(),
+  });
+
+  const updateExitStatsFromPositions = positions => {
+    (positions || []).forEach(pos => {
+      const key = pairKeyOf(pos);
+      const xx = Number(pos.xx);
+      const entry = Number(pos.entryPrice);
+      const trigger = (mult, bucket) => {
+        if (!(xx > 0) || !(entry > 0) || xx < entry * mult) return;
+        exitUniqRef.current[bucket].add(key);
+      };
+      trigger(1.2, 'tp1');
+      trigger(1.5, 'tp2');
+      if (xx >= entry * 2 || xx >= entry * 1.4) exitUniqRef.current.tp3Trail.add(key);
+    });
+    setExitStats(snapshotExitStats());
+  };
 
   const pushCancelled = entry => {
     rememberUniq('cancelled', entry);
@@ -354,7 +384,8 @@ const RangeMonitor = ({ docked = false }) => {
         );
       }
     }
-  }; 
+  };
+
   useEffect(() => {
     if (!running) {
       if (abortRef.current) abortRef.current.abort();
@@ -480,6 +511,8 @@ const RangeMonitor = ({ docked = false }) => {
           });
         }
         setStats(prev => snapshotUniqStats(prev.round + 1));
+        const positionEntries = result.positions?.positions || [];
+        updateExitStatsFromPositions(positionEntries);
 
         if (result.aborted) break;
 
@@ -665,8 +698,11 @@ const RangeMonitor = ({ docked = false }) => {
                   {fmtDurationMs(lastRoundMs)}
                 </span>
               ) : null}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {null && exitStats.updatedAt ? (
+                <span style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 11 }} title="表格持仓出场状态统计的最近更新时间">
+                  数据更新时间：{fmtTime(exitStats.updatedAt)} · 一档成功 {exitStats.tp1}/{exitStats.positionCount || '—'} · 二档成功 {exitStats.tp2}/{exitStats.positionCount || '—'} · 三档/追踪成功 {exitStats.tp3Trail}/{exitStats.positionCount || '—'}
+                </span>
+              ) : null}   
               {running ? (
                 <button
                   type="button"
@@ -701,7 +737,7 @@ const RangeMonitor = ({ docked = false }) => {
                 >
                   开始
                 </button>
-              )} 
+              )}
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
@@ -1035,7 +1071,7 @@ const RangeMonitor = ({ docked = false }) => {
                       borderBottom: '1px solid #fff7e6',
                     }}
                   >
-<span style={{ color: '#bfbfbf', marginRight: 6 }}>{fmtTime(item.at)}</span>
+                    <span style={{ color: '#bfbfbf', marginRight: 6 }}>{fmtTime(item.at)}</span>
                     {exTag(item.exchange)}{' '}
                     <SymbolLink
                       symbol={item.symbol}

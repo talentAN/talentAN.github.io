@@ -31,14 +31,13 @@ import {
   RANGE_RECENT_DAYS,
   fetchLookbackCandles,
 } from './_rangeScan';
+import { RANGE_MONITOR_SCAN_MAX_RANGE_MULT } from './_rangeMonitorParams';
 
-const LOOKBACK_DAYS = RANGE_LOOKBACK_DAYS;
-const RECENT_DAYS = RANGE_RECENT_DAYS;
-/** 扫描收候选用最宽口径；UI「高低比」在此上限内按当前值重算盒子，禁止事后用旧 mult 硬砍 */
-const SCAN_MAX_RANGE_MULT = 2;
+// 等待指定毫秒，控制批量扫描和下单请求节奏。
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// 返回交易所与币对组成的唯一标识，用于去重和状态映射。
 const pairIdOf = row => `${row.exchange}:${row.symbol}`;
-
+// 按价格数量级格式化价格，异常值显示占位符。
 const fmtPrice = value => {
   if (value == null || !Number.isFinite(Number(value))) return '—';
   const number = Number(value);
@@ -53,7 +52,7 @@ const fmtPrice = value => {
  * 高低比：改 UI 值时用缓存日 K 按新上限重算盒子（不是拿宽口径结果的 rangeMult 事后过滤）。
  */
 const LiveScanner = () => {
-  /** 扫描命中（≤ SCAN_MAX_RANGE_MULT）的 { pair, candles }，供高低比重算 */
+  /** 扫描命中（≤ RANGE_MONITOR_SCAN_MAX_RANGE_MULT）的 { pair, candles }，供高低比重算 */
   const [candlePacks, setCandlePacks] = useState([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ checked: 0, total: 0 });
@@ -147,14 +146,14 @@ const LiveScanner = () => {
     setProgress({ checked: 0, total: pairs.length });
 
     const packs = [];
-    const scanRules = { ...LOW_VOL_RANGE_BLAST_V01, maxRangeMult: SCAN_MAX_RANGE_MULT };
+    const scanRules = { ...LOW_VOL_RANGE_BLAST_V01, maxRangeMult: RANGE_MONITOR_SCAN_MAX_RANGE_MULT };
 
     for (let i = 0; i < pairs.length; i++) {
       if (abortRef.current) break;
       const pair = pairs[i];
       try {
-        const candles = await fetchLookbackCandles(pair, LOOKBACK_DAYS);
-        const hits = findActiveLowVolRanges(candles, pair, scanRules, { recentDays: RECENT_DAYS });
+        const candles = await fetchLookbackCandles(pair, RANGE_LOOKBACK_DAYS);
+        const hits = findActiveLowVolRanges(candles, pair, scanRules, { recentDays: RANGE_RECENT_DAYS });
         if (hits.length) {
           packs.push({
             pair: { exchange: pair.exchange, symbol: pair.symbol },
@@ -178,11 +177,11 @@ const LiveScanner = () => {
     setCandlePacks([...packs]);
     setRunning(false);
     if (abortRef.current) message.info(`已停止，当前候选 ${packs.length} 个币对`);
-    else message.success(`扫描完成：候选 ${packs.length} 个（≤${SCAN_MAX_RANGE_MULT}x；列表按当前高低比重算）`);
+    else message.success(`扫描完成：候选 ${packs.length} 个（≤${RANGE_MONITOR_SCAN_MAX_RANGE_MULT}x；列表按当前高低比重算）`);
     if (packs.length) {
       // 委托状态按币对查；先用宽口径命中行占位
       const probeRows = packs.flatMap(({ pair, candles }) =>
-        findActiveLowVolRanges(candles, pair, scanRules, { recentDays: RECENT_DAYS })
+        findActiveLowVolRanges(candles, pair, scanRules, { recentDays: RANGE_RECENT_DAYS })
       );
       refreshOrderStatus(probeRows);
     }
@@ -227,10 +226,10 @@ const LiveScanner = () => {
   const activeRows = useMemo(() => {
     const mult = Number(rangeMultMax);
     const maxRangeMult =
-      Number.isFinite(mult) && mult >= 1 ? Math.min(mult, SCAN_MAX_RANGE_MULT) : SCAN_MAX_RANGE_MULT;
+      Number.isFinite(mult) && mult >= 1 ? Math.min(mult, RANGE_MONITOR_SCAN_MAX_RANGE_MULT) : RANGE_MONITOR_SCAN_MAX_RANGE_MULT;
     const rules = { ...LOW_VOL_RANGE_BLAST_V01, maxRangeMult };
     return candlePacks.flatMap(({ pair, candles }) =>
-      findActiveLowVolRanges(candles, pair, rules, { recentDays: RECENT_DAYS })
+      findActiveLowVolRanges(candles, pair, rules, { recentDays: RANGE_RECENT_DAYS })
     );
   }, [candlePacks, rangeMultMax]);
 
@@ -423,7 +422,7 @@ const LiveScanner = () => {
       },
     });
   };
-  const explainExitResult = (row, result) => {
+const explainExitResult = (row, result) => {
     const tag = `${row.exchange === 'binance' ? 'BN' : 'BG'} ${row.symbol}`;
     if (result.ok) {
       const n = result.submitted?.length || 0;
@@ -599,7 +598,7 @@ const LiveScanner = () => {
     },
     {
       key: 'inBoxDays',
-      title: `近${RECENT_DAYS}日在盒`,
+      title: `近${RANGE_RECENT_DAYS}日在盒`,
       width: 90,
       align: 'center',
       sortBy: row => row.inBoxDays,
@@ -680,7 +679,7 @@ const LiveScanner = () => {
       <div className={s.metaRow}>
         <span className={s.ruleText}>
           {LOW_VOL_RANGE_BLAST_V01.label}：BN+BG 去重；横盘 &gt;{LOW_VOL_RANGE_BLAST_V01.minDaysExclusive}{' '}
-          天；扫描按最高≤最低×{SCAN_MAX_RANGE_MULT} 收候选，列表「高低比」按当前值重算盒子（近 {RECENT_DAYS}{' '}
+          天；扫描按最高≤最低×{RANGE_MONITOR_SCAN_MAX_RANGE_MULT} 收候选，列表「高低比」按当前值重算盒子（近 {RANGE_RECENT_DAYS}{' '}
           天终点仍属该横盘）。一键下单：入场参考价=上沿；名义=币对最小开仓×{OPEN_NOTIONAL_MULT}（列表「预估开仓金额」）；触发价=上沿+1tick（严格
           high&gt;上沿）后市价开多。
         </span>
@@ -741,12 +740,12 @@ const LiveScanner = () => {
         <InputNumber
           size="small"
           min={1}
-          max={SCAN_MAX_RANGE_MULT}
+          max={RANGE_MONITOR_SCAN_MAX_RANGE_MULT}
           step={0.05}
           value={rangeMultMax}
-          onChange={value => setRangeMultMax(value == null ? SCAN_MAX_RANGE_MULT : Number(value))}
+          onChange={value => setRangeMultMax(value == null ? RANGE_MONITOR_SCAN_MAX_RANGE_MULT : Number(value))}
           style={{ width: 80 }}
-          title={`按最高≤最低×该值重算横盘盒子（扫描候选上限 ${SCAN_MAX_RANGE_MULT}）`}
+          title={`按最高≤最低×该值重算横盘盒子（扫描候选上限 ${RANGE_MONITOR_SCAN_MAX_RANGE_MULT}）`}
         />
         <span className={s.muted} title={`按列表「预估开仓金额」（最小开仓×${OPEN_NOTIONAL_MULT}）过滤；金额未加载的行会被隐藏`}>
           开仓金额 &lt;
@@ -767,7 +766,7 @@ const LiveScanner = () => {
           value={inBoxDaysFilter}
           onChange={setInBoxDaysFilter}
           style={{ width: 110 }}
-          title={`近 ${RECENT_DAYS} 日里完全落在横盘盒内的天数`}
+          title={`近 ${RANGE_RECENT_DAYS} 日里完全落在横盘盒内的天数`}
           options={[
             { value: 'all', label: '全部' },
             { value: 1, label: '1日在盒' },

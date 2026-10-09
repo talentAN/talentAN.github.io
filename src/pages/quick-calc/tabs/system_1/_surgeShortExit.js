@@ -15,7 +15,8 @@
  */
 
 import { getFutureKlineData } from '@root/src/container/market';
-import { getContracts, getFutureTicker } from '@root/src/container/binance/api';
+import { getContracts } from '@root/src/container/binance/api';
+import { getPositionMode } from '@root/src/container/binance/api/query';
 import {
   placeFutureQtyTakeProfitAlgo,
   placeFutureTrailingStopAlgo,
@@ -26,19 +27,26 @@ import {
   refreshBinanceAccountMirror,
 } from '@root/src/container/binance/accountMirror';
 import { withMarketFetchGate, waitBinanceBanIfNeeded } from '../_marketFetchGate';
+import { getSharedMiniTickerFeed } from '../low_vol_range_blast/_rangeMonitorPriceFeed';
 import { isLiveOrderEnabled, quantizeQuantity } from './_autoOrderModel';
-
-const HOUR_MS = 3600 * 1000;
-const TRAIL_CB_WANTED = 15;
-const TRAIL_CB_BN_MAX = 10;
-
-const BANDS = {
-  shallow: { mult: 0.8, ratio: 0.25, key: 'tp80' },
-  mid: { mult: 0.7, ratio: 0.25, key: 'tp70' },
-  deep: { mult: 0.5, ratio: 0.3, key: 'tp50' },
-};
+import {
+  SURGE_SHORT_EXIT_HOUR_MS as HOUR_MS,
+  SURGE_SHORT_EXIT_TRAIL_CALLBACK_WANTED as TRAIL_CB_WANTED,
+  SURGE_SHORT_EXIT_TRAIL_CALLBACK_BINANCE_MAX as TRAIL_CB_BN_MAX,
+  SURGE_SHORT_EXIT_BANDS as BANDS,
+  SURGE_SHORT_EXIT_PLACE_GAP_MS as PLACE_GAP_MS,
+} from './_surgeShortExitParams';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const ZZ_KLINE_CACHE_TTL_MS = 60 * 1000;
+const zzKlineCache = new Map();
+let zzKlineRequestQueue = Promise.resolve();
+
+const enqueueZzKline = task => {
+  const run = zzKlineRequestQueue.then(task, task);
+  zzKlineRequestQueue = run.catch(() => undefined);
+  return run;
+};
 
 const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
 
@@ -55,21 +63,32 @@ const pickErr = result =>
   (result?.httpStatus != null ? `HTTP ${result.httpStatus}` : null);
 
 let contractsPromise = null;
+let rulesCache = new Map();
+let positionModePromise = null;
+const getCachedPositionMode = () => {
+  if (!positionModePromise) positionModePromise = getPositionMode();
+  return positionModePromise;
+};
 const getRules = async symbol => {
-  if (!contractsPromise) contractsPromise = getContracts();
-  const contracts = await contractsPromise;
+  if (rulesCache.has(symbol)) return rulesCache.get(symbol);
+  const rulesPromise = (async () => {
+    if (!contractsPromise) contractsPromise = getContracts();
+    const contracts = await contractsPromise;
   const contract = (contracts || []).find(c => c.symbol === symbol);
   const filters = Array.isArray(contract?.filters) ? contract.filters : [];
   const find = type => filters.find(f => f.filterType === type);
   const price = find('PRICE_FILTER');
   const lot = find('LOT_SIZE');
-  return {
-    tickSize: Number(price?.tickSize) || null,
-    stepSize: Number(lot?.stepSize) || null,
-    minQty: Number(lot?.minQty) || null,
-    pricePrecision: contract?.pricePrecision ?? 8,
-    quantityPrecision: contract?.quantityPrecision ?? 8,
-  };
+    return {
+      tickSize: Number(price?.tickSize) || null,
+      stepSize: Number(lot?.stepSize) || null,
+      minQty: Number(lot?.minQty) || null,
+      pricePrecision: contract?.pricePrecision ?? 8,
+      quantityPrecision: contract?.quantityPrecision ?? 8,
+    };
+  })();
+  rulesCache.set(symbol, rulesPromise);
+  return rulesPromise;
 };
 
 const typeBlob = o =>
@@ -113,7 +132,8 @@ const listShortPositions = rows =>
         symbol: String(item.symbol || '').toUpperCase(),
         qty,
         entryPrice,
-        openTimeMs: Number(item.updateTime) || 0,
+        // openTime 是账户镜像按持仓生命周期固定的首次获取时间；updateTime 仅兼容旧快照。
+        openTimeMs: Number(item.openTime ?? item.updateTime) || 0,
         positionSide: String(item.positionSide || '').toUpperCase() || 'SHORT',
         markPrice: Number(item.markPrice) || null,
       };
@@ -125,10 +145,12 @@ const listShortPositions = rows =>
  */
 export const fetchZzSinceOpen = async ({ symbol, openTimeMs, exchange = 'binance' }) => {
   await waitBinanceBanIfNeeded(getBinanceBanRemaining);
-  const ticker = await getFutureTicker(symbol);
-  const b = Number(ticker?.lastPrice);
+  const feed = getSharedMiniTickerFeed();
+  feed.start();
+  const liveQuote = feed.get(symbol);
+  const b = Number(liveQuote?.last);
   if (!(b > 0)) {
-    return { zz: null, a: null, b: null, error: '无最新价' };
+    return { zz: null, a: null, b: null, error: '行情 Socket 暂无最新价' };
   }
 
   if (!(openTimeMs > 0)) {
@@ -142,8 +164,15 @@ export const fetchZzSinceOpen = async ({ symbol, openTimeMs, exchange = 'binance
   }
 
   let candles = [];
+  const klineKey = `${symbol}:${openTimeMs}`;
+  const cachedKline = zzKlineCache.get(klineKey);
+  if (cachedKline && Date.now() - cachedKline.fetchedAt < ZZ_KLINE_CACHE_TTL_MS) {
+    const a = cachedKline.low;
+    return { zz: Math.min(a, b), a, b, cached: true };
+  }
   try {
-    const res = await withMarketFetchGate(() =>
+    await waitBinanceBanIfNeeded(getBinanceBanRemaining);
+    const res = await enqueueZzKline(() => withMarketFetchGate(() =>
       getFutureKlineData(
         {
           symbol,
@@ -154,7 +183,7 @@ export const fetchZzSinceOpen = async ({ symbol, openTimeMs, exchange = 'binance
         },
         exchange
       )
-    );
+    ));
     candles = Array.isArray(res?.data) ? res.data : [];
   } catch (e) {
     return { zz: b, a: null, b, note: `小时K失败：${e?.message || e}，zz=最新价` };
@@ -169,8 +198,9 @@ export const fetchZzSinceOpen = async ({ symbol, openTimeMs, exchange = 'binance
   if (a == null) {
     return { zz: b, a: null, b, note: '小时K无低点，zz=最新价' };
   }
+  zzKlineCache.set(klineKey, { fetchedAt: Date.now(), low: a });
   return { zz: Math.min(a, b), a, b };
-};
+}; 
 
 const pickBand = (zz, entry) => {
   const e08 = entry * 0.8;
@@ -342,7 +372,7 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
       failed += 1;
       tips.push(`${symbol}：TP@×${band.mult} 失败：${tp.detail}（${zzLabel}）`);
     }
-    await sleep(80);
+    await sleep(PLACE_GAP_MS);
   }
 
   if (band.kind === 'tp_trail') {
@@ -374,6 +404,7 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
 
   return { tips, placed, skipped, failed };
 };
+
 /**
  * 一轮：拉全部空头 → 逐个处理止盈。
  * @param {{ aborted?: () => boolean, onStatus?: (s: string) => void }} opts
@@ -424,7 +455,8 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
     return { ok: true, tips: [], placed: 0, failed: 0, skipped: 0, shortCount: 0 };
   }
 
-  const hedgeMode = Boolean(snap.hedgeMode);
+  const positionMode = await getCachedPositionMode();
+  const hedgeMode = Boolean(positionMode?.response?.dualSidePosition);
   const algos = Array.isArray(snap.algoOrders) ? snap.algoOrders : [];
   const orders = Array.isArray(snap.openOrders) ? snap.openOrders : [];
 
@@ -467,4 +499,4 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
     skipped,
     shortCount: shorts.length,
   };
-};
+}; 

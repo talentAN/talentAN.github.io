@@ -2,16 +2,22 @@ import { DEFAULT_LADDER } from '../backtest/_ladderRules';
 import { MIN_LISTING_DAYS } from '../backtest/_rise100Rules';
 import { isBreakoutHistoricalHigh } from '@root/src/utils/kline-pattern';
 import { getAllFutureDailyKlines } from '@root/src/container/market';
-import { placeFutureBatchLimitOrders as placeBitgetBatchLimit } from '@root/src/container/bitget/api/order';
+import { placeFutureBatchLimitOrders as placeBitgetBatchLimit, placeFutureMarketOrder as placeBitgetMarket } from '@root/src/container/bitget/api/order';
 import {
   placeFutureBatchLimitOrders as placeBinanceBatchLimit,
+  placeFutureMarketOrder as placeBinanceMarket,
 } from '@root/src/container/binance/api/order';
 import { getSinglePosition as getBitgetPosition, getPendingOrders as getBitgetPendingOrders } from '@root/src/container/bitget/api/query';
 import { getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
-import { getContracts as getBinanceContracts, getFutureFundingRate as getBinanceFundingRate } from '@root/src/container/binance/api';
+import {
+  getContracts as getBinanceContracts,
+  getFutureFundingRate as getBinanceFundingRate,
+} from '@root/src/container/binance/api';
 import { getBinanceAccountSnapshot } from '@root/src/container/binance/accountMirror';
 import { getFutureFundingRate as getBitgetFundingRate } from '@root/src/container/bitget/api';
+import { getFutureTicker } from '@root/src/container/market';
 import { getTradeSession } from '@root/src/utils/tradeSession';
+import { withMarketFetchGate } from '../_marketFetchGate';
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
 
 /**
@@ -19,13 +25,11 @@ import { isBlacklistedSymbol } from '../_symbolBlacklist';
  * -----------------------------------------------------------------
  * 触发条件：某币对当日涨幅（当日最高价 / 开盘价 - 1）达到设定阈值（默认 80%）。
  * 下单模型直接复用 tabs/backtest/_ladderRules.js 里回测验证过的阶梯空单参数：
- *   - 以当日开盘价为基准，按 DEFAULT_LADDER.levels 的倍数一次性批量挂限价空单
- *     （Bitget: POST /api/v2/mix/order/batch-place-order；
- *      Binance: POST /fapi/v1/batchOrders），全部是 orderType=限价 + 只做 maker
- *      （Bitget force=post_only，Binance timeInForce=GTX），价格已经能立即成交
- *      的档会被交易所直接拒绝，不会意外变成吃单的 taker
- *   - 自动侧只挂开仓限价空单（DEFAULT_LADDER 四档）；不附带交易所止损，
- *     也不做本地止损/止盈/结构失效市价平仓——平仓委托由用户自行处理
+ *   - 以当日开盘价为基准，按 DEFAULT_LADDER.levels 的倍数挂空（默认四档）
+ *   - 下单前拉最新价：凡档位价 ≤ 最新价（post-only/GTX 必被拒）的档，合并名义金额
+ *     打一笔市价开空；其余档仍批量挂限价（Bitget post_only / Binance GTX）
+ *   - 自动侧只负责开仓；不附带交易所止损，也不做本地止损/止盈/结构失效市价平仓
+ *     ——平仓委托由用户自行处理
  *
  * ⚠️ 当前状态：submitLadderPlan 会调用
  * container/bitget/api/order.js、container/binance/api/order.js 里真实的签名下单
@@ -366,8 +370,7 @@ const parseExposure = (exchange, posResult, orderResult, side = null) => {
       orderHttpStatus: orderResult?.httpStatus ?? null,
     };
   }
-
-  if (exchange === 'bitget') {
+if (exchange === 'bitget') {
     const positions = Array.isArray(posResult.response?.data) ? posResult.response.data : [];
     const hasPosition = side
       ? hasSidePosition('bitget', positions, side)
@@ -405,7 +408,6 @@ const parseExposure = (exchange, posResult, orderResult, side = null) => {
  *   side 缺省时保持旧行为（任意方向都算敞口）；传 long/short 则只检查该侧。
  * 查询失败时保守按「已有仓位」处理。
  */
-
 export const checkFundingRate = async ({ symbol, exchange }) => {
   if (!isLiveOrderEnabled()) return { allowed: false, reason: 'auto_order_disabled' };
   try {
@@ -578,6 +580,114 @@ const EXCHANGE_BATCH_LIMIT_API = {
 };
 
 /**
+ * 公开行情最新价（下单前拆分「已越过档 / 仍可挂限价档」）。
+ * 走 container/market 统一入口 + 行情门闩；Binance ticker 内部用 fetchWithBackoff 处理 418/429。
+ */
+const fetchLatestPrice = async (exchange, symbol) => {
+  try {
+    const ticker = await withMarketFetchGate(() => getFutureTicker(symbol, exchange));
+    const price = Number(
+      ticker?.lastPrice ?? ticker?.lastPr ?? ticker?.last ?? ticker?.close ?? ticker?.price
+    );
+    return price > 0 ? price : null;
+  } catch (e) {
+    console.warn(`[SurgeAlert] fetchLatestPrice ${exchange} ${symbol}`, e);
+  }
+  return null;
+};
+
+/**
+ * 空单：档位价 ≤ 最新价 → post-only/GTX 会被拒，并入市价；其余仍挂限价。
+ * @returns {{ crossed: object[], resting: object[], lastPrice: number|null }}
+ */
+export const splitLegsByLastPrice = (legs, lastPrice) => {
+  if (!(lastPrice > 0) || !Array.isArray(legs)) {
+    return { crossed: [], resting: [...(legs || [])], lastPrice: lastPrice > 0 ? lastPrice : null };
+  }
+  const crossed = [];
+  const resting = [];
+  legs.forEach(leg => {
+    if (Number.isFinite(leg.price) && leg.price <= lastPrice) crossed.push(leg);
+    else resting.push(leg);
+  });
+  return { crossed, resting, lastPrice };
+};
+
+const isExchangeOrderRejected = (exchange, result) => {
+  if (!result?.ok) return true;
+  const body = result.response;
+  if (exchange === 'binance') {
+    if (body && typeof body === 'object' && !Array.isArray(body) && body.code != null && !body.orderId) {
+      return true;
+    }
+    return false;
+  }
+  if (exchange === 'bitget') {
+    return body?.code != null && String(body.code) !== '00000';
+  }
+  return false;
+};
+
+/** 市价开空（非 reduceOnly）；数量按交易所精度量化 */
+const placeMarketOpenShort = async ({ exchange, symbol, qty, clientOid, lastPrice }) => {
+  if (exchange === 'bitget') {
+    const size = roundNum(qty);
+    if (!(size > 0)) {
+      return { ok: false, skipped: true, error: '市价数量无效', request: null, response: null, qty: 0 };
+    }
+    const result = await placeBitgetMarket({
+      symbol,
+      side: 'sell',
+      size,
+      clientOid,
+    });
+    return { ...result, qty: size };
+  }
+
+  if (exchange === 'binance') {
+    const [rules, hedgeMode] = await Promise.all([
+      getBinanceSymbolRules(symbol),
+      isBinanceHedgeMode(),
+    ]);
+    const roundedQty = quantizeQuantity(
+      qty,
+      rules.marketStepSize || rules.stepSize,
+      rules.quantityPrecision
+    );
+    if (!(roundedQty > 0) || (rules.marketMinQty && roundedQty < rules.marketMinQty)) {
+      return {
+        ok: false,
+        skipped: true,
+        error: '市价数量量化后无效或低于最小值',
+        request: null,
+        response: null,
+        qty: 0,
+      };
+    }
+    if (rules.minNotional && lastPrice > 0 && roundedQty * lastPrice < rules.minNotional) {
+      return {
+        ok: false,
+        skipped: true,
+        error: `市价名义金额低于最小值 ${rules.minNotional}`,
+        request: null,
+        response: null,
+        qty: roundedQty,
+      };
+    }
+    const result = await placeBinanceMarket({
+      symbol,
+      side: 'SELL',
+      quantity: roundedQty,
+      newClientOrderId: clientOid,
+      ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
+    });
+    return { ...result, qty: roundedQty };
+  }
+
+  return { ok: false, error: 'unsupported_exchange', request: null, response: null, qty: 0 };
+};
+
+/**
  * 把批量下单的响应按 clientOid 对回每一档。批量请求整体失败时（比如鉴权失败，交易所
  * 只返回一个顶层错误、没有逐笔结果），把同一个错误套用到每一档；四舍五入后数量为 0
  * 被跳过、没有实际发出去的档，单独标记，不跟交易所返回的结果混在一起对位。
@@ -587,7 +697,7 @@ const applyBatchResult = (exchange, legs, result) => {
   const skippedResults = legs
     .filter(leg => skippedOids.has(leg.clientOid))
     .map(leg => ({ ...leg, ok: false, status: 'skipped', error: '数量四舍五入到合约精度后为 0，已跳过' }));
-  const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid));
+  const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid)); 
 
   let sentResults;
   if (exchange === 'binance' && Array.isArray(result.response)) {
@@ -652,7 +762,7 @@ const applyBatchResult = (exchange, legs, result) => {
 
 const getBatchStatus = legs => {
   const submitted = legs.filter(leg => leg.status === 'submitted').length;
-  const rejected = legs.filter(leg => leg.status === 'rejected').length;
+  const rejected = legs.filter(leg => leg.status === 'rejected' || leg.status === 'error').length;
   const unknown = legs.filter(leg => leg.status === 'unknown').length;
   const skipped = legs.filter(leg => leg.status === 'skipped').length;
   if (submitted > 0 && (rejected > 0 || unknown > 0 || skipped > 0)) return 'partial';
@@ -679,8 +789,10 @@ export const placeExchangeStopLoss = async plan => {
 };
 
 /**
- * 一次批量请求把阶梯限价空单全部挂出。
- * 仅开仓限价；不附带 presetStopLoss / 条件止损（平仓由用户自行下）。
+ * 提交阶梯开空：
+ * 1) 拉最新价，把档位价 ≤ 最新价的档合并成一笔市价开空；
+ * 2) 其余档批量挂 post-only / GTX 限价。
+ * 不附带 presetStopLoss / 条件止损（平仓由用户自行下）。
  */
 export const submitLadderPlan = async plan => {
   const legsWithOid = plan.legs.map((leg, idx) => ({ ...leg, clientOid: `surge${plan.createdAt}${idx}` }));
@@ -703,37 +815,142 @@ export const submitLadderPlan = async plan => {
     };
   }
 
-  const api = EXCHANGE_BATCH_LIMIT_API[plan.exchange];
+  const limitApi = EXCHANGE_BATCH_LIMIT_API[plan.exchange];
 
-  if (!api) {
+  if (!limitApi) {
     return { ...plan, legs: legsWithOid.map(l => ({ ...l, ok: false, status: 'unsupported_exchange' })), status: 'failed' };
   }
 
   try {
-    const result = await api({
-      symbol: plan.symbol,
-      // 明确不传止损价，避免 Bitget 挂出附带平仓条件单
-      stopLossPrice: undefined,
-      orders: legsWithOid.map(l => ({ side: 'sell', price: l.price, qty: l.qty, clientOid: l.clientOid })),
-    });
+    const lastPrice = await fetchLatestPrice(plan.exchange, plan.symbol);
+    const { crossed, resting } = splitLegsByLastPrice(legsWithOid, lastPrice);
 
     console.warn(
-      `[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} legs=${legsWithOid.length} ok=${result.ok} httpStatus=${result.httpStatus}`,
-      result
+      `[SurgeAlert][LADDER SPLIT] ${plan.exchange} ${plan.symbol} lastPrice=${lastPrice} crossed=${crossed.length} resting=${resting.length}`,
+      crossed.map(l => l.mult),
+      resting.map(l => l.mult)
     );
 
-    const legs = applyBatchResult(plan.exchange, legsWithOid, result);
+    const resultByOid = new Map();
+    let marketRequest = null;
+    let batchRequest = null;
+    let marketMeta = null;
+
+    if (crossed.length) {
+      const marketNotional = crossed.reduce((sum, leg) => sum + (Number(leg.notional) || 0), 0);
+      const marketQtyRaw = lastPrice > 0 ? marketNotional / lastPrice : 0;
+      const marketClientOid = `surgemkt${plan.createdAt}`;
+      try {
+        const mktResult = await placeMarketOpenShort({
+          exchange: plan.exchange,
+          symbol: plan.symbol,
+          qty: marketQtyRaw,
+          clientOid: marketClientOid,
+          lastPrice,
+        });
+        marketRequest = mktResult.request || null;
+        const rejected = mktResult.skipped || isExchangeOrderRejected(plan.exchange, mktResult);
+        const orderId =
+          mktResult.response?.orderId ??
+          mktResult.response?.data?.orderId ??
+          null;
+        marketMeta = {
+          lastPrice,
+          notional: marketNotional,
+          qty: mktResult.qty ?? marketQtyRaw,
+          clientOid: marketClientOid,
+          ok: !rejected,
+          orderId,
+          error: rejected
+            ? mktResult.error ||
+              mktResult.response?.msg ||
+              mktResult.response?.message ||
+              '市价开空失败'
+            : undefined,
+        };
+        console.warn(
+          `[SurgeAlert][MARKET OPEN SHORT] ${plan.exchange} ${plan.symbol} notional=${marketNotional} qty=${marketMeta.qty} ok=${marketMeta.ok}`,
+          mktResult
+        );
+        crossed.forEach(leg => {
+          resultByOid.set(leg.clientOid, {
+            ...leg,
+            orderType: 'market',
+            marketMerged: true,
+            marketClientOid,
+            fillPriceHint: lastPrice,
+            ok: !rejected,
+            status: rejected ? (mktResult.skipped ? 'skipped' : 'rejected') : 'submitted',
+            orderId,
+            response: mktResult.response,
+            httpStatus: mktResult.httpStatus,
+            error: marketMeta.error,
+          });
+        });
+      } catch (e) {
+        console.error(`[SurgeAlert][MARKET OPEN SHORT] ${plan.exchange} ${plan.symbol} 失败`, e);
+        marketMeta = {
+          lastPrice,
+          notional: marketNotional,
+          qty: marketQtyRaw,
+          clientOid: marketClientOid,
+          ok: false,
+          error: e.message,
+        };
+        crossed.forEach(leg => {
+          resultByOid.set(leg.clientOid, {
+            ...leg,
+            orderType: 'market',
+            marketMerged: true,
+            marketClientOid,
+            fillPriceHint: lastPrice,
+            ok: false,
+            status: 'error',
+            error: e.message,
+          });
+        });
+      }
+    }
+
+    if (resting.length) {
+      const result = await limitApi({
+        symbol: plan.symbol,
+        stopLossPrice: undefined,
+        orders: resting.map(l => ({ side: 'sell', price: l.price, qty: l.qty, clientOid: l.clientOid })),
+      });
+      batchRequest = result.request;
+      console.warn(
+        `[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} legs=${resting.length} ok=${result.ok} httpStatus=${result.httpStatus}`,
+        result
+      );
+      applyBatchResult(plan.exchange, resting, result).forEach(leg => {
+        resultByOid.set(leg.clientOid, { ...leg, orderType: leg.orderType || 'limit' });
+      });
+    }
+
+    const legs = legsWithOid.map(
+      leg =>
+        resultByOid.get(leg.clientOid) || {
+          ...leg,
+          ok: null,
+          status: 'unknown',
+          error: '未收到该档位的交易所响应',
+        }
+    );
     const status = getBatchStatus(legs);
 
     return {
       ...plan,
       legs,
-      batchRequest: result.request,
+      lastPriceAtSubmit: lastPrice,
+      marketOpen: marketMeta,
+      marketRequest,
+      batchRequest,
       status,
       peakPrice: plan.triggerHigh || plan.structureHigh || undefined,
     };
   } catch (e) {
-    console.error(`[SurgeAlert][BATCH ORDER] ${plan.exchange} ${plan.symbol} 批量下单请求失败`, e);
+    console.error(`[SurgeAlert][LADDER ORDER] ${plan.exchange} ${plan.symbol} 下单失败`, e);
     return {
       ...plan,
       legs: legsWithOid.map(l => ({ ...l, ok: false, status: 'error', error: e.message })),
@@ -811,4 +1028,4 @@ export const isPastMarkerDay = (batch, candleTs) => {
     return false;
   }
   return true;
-};
+}; 

@@ -407,8 +407,7 @@ const SurgeAlert = ({ docked = false }) => {
       autoBatchesRef.current.set(batchKey, next);
       syncAutoBatches();
       return isRepeat ? null : { type: 'skipped', batch: next };
-    };
-
+    }; 
     // 涨幅达到自动下单阈值：只挂 4 档开仓限价空单。
     // 空头止盈由 runLoop 开头的 runSurgeShortExitRound 按 zz 区间自动挂。
     // skipped/failed 允许重试（否则会锁死整天且 Network 里看不到后续查询）
@@ -832,6 +831,7 @@ const SurgeAlert = ({ docked = false }) => {
       )}
     </div>
   );
+
   // 收起态：小角标；docked 时嵌入工具坞
   if (!expanded) {
     return (
@@ -840,7 +840,7 @@ const SurgeAlert = ({ docked = false }) => {
         {chip}
       </>
     );
-  }
+  } 
 
   return (
     <>
@@ -1168,9 +1168,18 @@ const SurgeAlert = ({ docked = false }) => {
               .filter(leg => leg.status === 'rejected' || leg.status === 'unknown' || leg.status === 'skipped')
               .map(leg => leg.error || leg.response?.msg || leg.response?.message)
               .filter(Boolean);
+            const marketLegs = (batch?.legs || []).filter(leg => leg.marketMerged);
             const statusDetail = [
               batch?.legs &&
                 `${batch.legs.filter(leg => leg.status === 'submitted').length}/${batch.legs.length} 档已提交`,
+              marketLegs.length
+                ? `市价合并 ${marketLegs.length} 档` +
+                  (batch?.marketOpen?.ok === false
+                    ? `失败：${batch.marketOpen.error || ''}`
+                    : batch?.lastPriceAtSubmit
+                      ? ` @ ${Number(batch.lastPriceAtSubmit).toPrecision(6)}`
+                      : '')
+                : '',
               batch?.status === 'closed' && batch?.exitReason && EXIT_REASON_LABEL[batch.exitReason],
               skipDetail,
               ...legErrors,
