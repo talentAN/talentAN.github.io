@@ -702,7 +702,7 @@ const RangeMonitor = ({ docked = false }) => {
                 <span style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 11 }} title="表格持仓出场状态统计的最近更新时间">
                   数据更新时间：{fmtTime(exitStats.updatedAt)} · 一档成功 {exitStats.tp1}/{exitStats.positionCount || '—'} · 二档成功 {exitStats.tp2}/{exitStats.positionCount || '—'} · 三档/追踪成功 {exitStats.tp3Trail}/{exitStats.positionCount || '—'}
                 </span>
-              ) : null}   
+              ) : null}
               {running ? (
                 <button
                   type="button"
@@ -824,7 +824,7 @@ const RangeMonitor = ({ docked = false }) => {
             title={status}
           >
             {status}
-          </div>
+          </div> 
           {(() => {
             const m = String(status || '').match(/日 K REST\s+(\d+)\s*\/\s*(\d+)/);
             const preparing = /日 K (首次|强制|建缓存)/.test(String(status || ''));
@@ -1097,4 +1097,4 @@ const RangeMonitor = ({ docked = false }) => {
   );
 };
 
-export default RangeMonitor;
+export default RangeMonitor; 

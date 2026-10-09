@@ -11,6 +11,8 @@ import {
   placeFutureQtyStopAlgo,
   placeFutureQtyTakeProfitAlgo,
   placeFutureTrailingStopAlgo,
+  cancelFutureAlgoOrder,
+  cancelFutureOrder,
 } from '@root/src/container/binance/api/order';
 import { loadStockSymbolSet } from '../backtest/_tradFiSymbols';
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
@@ -41,10 +43,30 @@ import {
   fetchLiveOrderStatusMaps,
   listLiveLongOpenOrders,
   placeBreakoutTriggerOrder,
+  getRecentBreakoutOrder,
   resolveMinOpenNotionalUsdt,
 } from './_breakoutOrder';
 import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
+import { getPositionOpenTime } from '@root/src/container/binance/positionOpenTime';
 import { RangeMonitorFatal, getSharedMiniTickerFeed } from './_rangeMonitorPriceFeed';
+import {
+  RANGE_MONITOR_SCAN_ENABLED,
+  RANGE_MONITOR_SL_ARM_MULT,
+  RANGE_MONITOR_TRAIL_ARM_MULT,
+  RANGE_MONITOR_TP_MULTS,
+  RANGE_MONITOR_TP_CLOSE_PCT,
+  RANGE_MONITOR_TRAIL_CALLBACK_PCT,
+  RANGE_MONITOR_MAX_ORDERS,
+  RANGE_MONITOR_ROUND_IDLE_MS,
+  RANGE_MONITOR_SCAN_GAP_MS,
+  RANGE_MONITOR_CACHED_SCAN_YIELD_EVERY,
+  RANGE_MONITOR_PLACE_GAP_MS,
+  RANGE_MONITOR_XX_KLINE_RETRY,
+  RANGE_MONITOR_XX_HOUR_MS,
+  RANGE_MONITOR_XX_KLINE_CACHE_TTL_MS,
+  RANGE_MONITOR_XX_HOUR_LIMIT,
+  RANGE_MONITOR_STORAGE_KEYS,
+} from './_rangeMonitorParams';
 
 export {
   RangeMonitorFatal,
@@ -56,24 +78,6 @@ export {
 /** 横盘监控只做 Binance */
 const MONITOR_EXCHANGES = ['binance'];
 
-/** 开仓扫描开启（新流程） */
-export const RANGE_MONITOR_SCAN_ENABLED = true;
-
-/** 当日最高价达到开仓价 × 该倍数 → 挂成本价止损 / 可挂追踪 */
-export const RANGE_MONITOR_SL_ARM_MULT = 1.2;
-/** 开仓后最高价达到开仓价 ×1.4 后，才允许挂追踪止盈。 */
-export const RANGE_MONITOR_TRAIL_ARM_MULT = 1.4;
-
-const TP_MULTS = [
-  { key: 'tp120', mult: 1.2, gainPct: 20 },
-  { key: 'tp150', mult: 1.5, gainPct: 50 },
-  { key: 'tp200', mult: 2.0, gainPct: 100 },
-];
-const TP_CLOSE_PCT = 0.1;
-const TRAIL_CB_PCT = 12;
-const SLOT_PER_POSITION = 2;
-const MAX_ORDERS = 200;
-
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const pairIdOf = ({ exchange, symbol }) => `${exchange}:${symbol}`;
 const roundNum = (n, digits = 8) => Number(Number(n).toFixed(digits));
@@ -82,11 +86,8 @@ const finite = v => {
   return Number.isFinite(n) ? n : null;
 };
 
-const SCAN_GAP_MS = 280;
-/** 日 K 已缓存时内存扫描无需限频 sleep */
-const CACHED_SCAN_YIELD_EVERY = 40;
-const PLACE_GAP_MS = 400;
-export const RANGE_MONITOR_ROUND_IDLE_MS = 2 * 1000;
+/** 已缓存日 K 扫描时直接让出事件循环，不再复制参数名。 */
+export { RANGE_MONITOR_ROUND_IDLE_MS };
 
 /** 已破上沿提示：同币同 UTC 日只推一次，避免每轮刷屏 */
 const brokeTipSeen = new Set();
@@ -169,50 +170,68 @@ const isStillInMonitorRange = async (pair, maxRangeMult, priceFeed) => {
   return { inRange: hits.length > 0, hits, candles };
 };
 
-const isBinanceLongStopAlgo = o => {
+/** 判断 Binance 条件单是否为多仓 SELL 止损单（排除止盈、追踪和空仓方向）。 */
+const isBinanceStopAlgo = (o, positionSide = 'LONG') => {
   const side = String(o?.side || '').toUpperCase();
-  if (side !== 'SELL') return false;
+  if (side !== (positionSide === 'SHORT' ? 'BUY' : 'SELL')) return false;
   const type = String(o?.type || o?.orderType || '').toUpperCase();
-  if (!type.includes('STOP') || type.includes('TAKE_PROFIT') || type.includes('TRAILING')) {
-    return false;
+  if (!type.includes('STOP') || type.includes('TAKE_PROFIT') || type.includes('TRAILING')) return false;
+  return String(o?.positionSide || '').toUpperCase() !== (positionSide === 'SHORT' ? 'LONG' : 'SHORT');
+};
+
+/** 判断止损单触发价是否等于开仓价，用于识别成本价全仓止损。 */
+const isBreakevenStopAlgo = (o, entry, tickSize, positionSide = 'LONG') =>
+  isBinanceStopAlgo(o, positionSide) && pricesMatchTier(algoTriggerPrice(o), entry, tickSize);
+
+/** 逐笔撤销指定币对的成本价止损条件单，缺少订单 ID 的记录直接跳过。 */
+const cancelBreakevenStops = async (symbol, orders) => {
+  for (const order of orders) {
+    const algoId = order.algoId ?? order.orderId;
+    const clientAlgoId = order.clientAlgoId || order.clientOrderId;
+    if (algoId == null && !clientAlgoId) continue;
+    await cancelFutureAlgoOrder({
+      symbol,
+      ...(algoId != null ? { algoId } : {}),
+      ...(clientAlgoId ? { clientAlgoId } : {}),
+    });
+    await sleep(80);
   }
-  const ps = String(o?.positionSide || '').toUpperCase();
-  if (ps === 'SHORT') return false;
-  return true;
 };
 
-const isBinanceLongTakeProfitAlgo = o => {
+const isBinanceTakeProfitAlgo = (o, positionSide = 'LONG') => {
   const side = String(o?.side || '').toUpperCase();
-  if (side !== 'SELL') return false;
+  if (side !== (positionSide === 'SHORT' ? 'BUY' : 'SELL')) return false;
   const blob = `${o?.type || ''} ${o?.orderType || ''} ${o?.origType || ''} ${o?.algoType || ''}`.toUpperCase();
-  if (!blob.includes('TAKE_PROFIT')) return false;
-  if (blob.includes('TRAILING')) return false;
-  const ps = String(o?.positionSide || '').toUpperCase();
-  if (ps === 'SHORT') return false;
-  return true;
+  return blob.includes('TAKE_PROFIT') && !blob.includes('TRAILING');
 };
 
-const isBinanceLongTrailingAlgo = o => {
+const isBinanceTrailingAlgo = (o, positionSide = 'LONG') => {
   const side = String(o?.side || '').toUpperCase();
-  if (side !== 'SELL') return false;
-  const blob = `${o?.type || ''} ${o?.orderType || ''} ${o?.origType || ''}`.toUpperCase();
-  if (!blob.includes('TRAILING')) return false;
-  const ps = String(o?.positionSide || '').toUpperCase();
-  if (ps === 'SHORT') return false;
-  return true;
+  if (side !== (positionSide === 'SHORT' ? 'BUY' : 'SELL')) return false;
+  const blob = `${o?.type || ''} ${o?.orderType || ''} ${o?.origType || ''} ${o?.algoType || ''}`.toUpperCase();
+  return blob.includes('TRAILING');
 };
 
+/** 从条件单记录中提取触发价、止损价或追踪激活价。 */
 const algoTriggerPrice = o =>
   finite(o?.triggerPrice) ?? finite(o?.stopPrice) ?? finite(o?.activatePrice) ?? null;
 
 let binanceContractsPromise = null;
+let binanceRulesCache = new Map();
+let binancePositionModePromise = null;
+const getBinancePositionModeCached = () => {
+  if (!binancePositionModePromise) binancePositionModePromise = getBinancePositionMode();
+  return binancePositionModePromise;
+};
 const getBinanceRules = async symbol => {
-  if (!binanceContractsPromise) binanceContractsPromise = getBinanceContracts();
-  const contracts = await binanceContractsPromise;
-  if (!Array.isArray(contracts) || !contracts.length) {
-    throw new RangeMonitorFatal('币安合约配置列表为空', 'getContracts');
-  }
-  const contract = contracts.find(c => c.symbol === symbol);
+  if (binanceRulesCache.has(symbol)) return binanceRulesCache.get(symbol);
+  const rulesPromise = (async () => {
+    if (!binanceContractsPromise) binanceContractsPromise = getBinanceContracts();
+    const contracts = await binanceContractsPromise;
+    if (!Array.isArray(contracts) || !contracts.length) {
+      throw new RangeMonitorFatal('币安合约配置列表为空', 'getContracts');
+    }
+    const contract = contracts.find(c => c.symbol === symbol);
   if (!contract) {
     throw new RangeMonitorFatal(`${symbol} 不在合约配置中`, '无法取 tick/step');
   }
@@ -229,13 +248,16 @@ const getBinanceRules = async symbol => {
   if (!(stepSize > 0)) {
     throw new RangeMonitorFatal(`${symbol} stepSize 无效`, String(lotFilter?.stepSize));
   }
-  return {
-    pricePrecision: contract.pricePrecision ?? 8,
-    quantityPrecision: contract.quantityPrecision ?? 8,
-    tickSize,
-    stepSize,
-    minQty: Number(lotFilter?.minQty) || Number(marketLotFilter?.minQty) || null,
-  };
+    return {
+      pricePrecision: contract.pricePrecision ?? 8,
+      quantityPrecision: contract.quantityPrecision ?? 8,
+      tickSize,
+      stepSize,
+      minQty: Number(lotFilter?.minQty) || Number(marketLotFilter?.minQty) || null,
+    };
+  })();
+  binanceRulesCache.set(symbol, rulesPromise);
+  return rulesPromise;
 };
 
 const floorToTick = (price, rules) =>
@@ -253,21 +275,58 @@ const pricesMatchTier = (trigger, target, tickSize) => {
 };
 
 /** 持仓算 xx 拉小时 K：空数组/网络抖常见，有限重试 */
-const XX_KLINE_RETRY = 3;
-const XX_HOUR_MS = 3600 * 1000;
-const XX_KLINE_CACHE_TTL_MS = 60 * 1000;
+const XX_KLINE_RETRY = RANGE_MONITOR_XX_KLINE_RETRY;
+const XX_HOUR_MS = RANGE_MONITOR_XX_HOUR_MS;
+const XX_KLINE_CACHE_TTL_MS = RANGE_MONITOR_XX_KLINE_CACHE_TTL_MS;
 /** 单次小时 K 上限；更长持仓向前翻页 */
-const XX_HOUR_LIMIT = 1500;
+const XX_HOUR_LIMIT = RANGE_MONITOR_XX_HOUR_LIMIT;
 /** 按币对+持仓生命周期缓存开仓后的小时 K，避免 2s 轮询重复拉历史数据。 */
 const xxKlineCache = new Map();
 
-const maxHighFromCandles = candles => {
-  let high = null;
+const TP_ORDER_CACHE_KEY = RANGE_MONITOR_STORAGE_KEYS.tpOrderTiers;
+const readTpOrderCache = () => {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TP_ORDER_CACHE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+};
+const writeTpOrderCache = cache => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(TP_ORDER_CACHE_KEY, JSON.stringify(cache));
+  } catch (_) {
+    /* ignore storage quota/private mode errors */
+  }
+};
+const tpPlaceInFlight = new Set();
+
+const tpCacheKey = pos =>
+  `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${String(pos.positionSide || 'BOTH').toUpperCase()}`;
+const tpCacheHas = (cache, pos, tierKey) => Array.isArray(cache[tpCacheKey(pos)]) && cache[tpCacheKey(pos)].includes(tierKey);
+const tpCacheAdd = (cache, pos, tierKey) => {
+  const key = tpCacheKey(pos);
+  const tiers = Array.isArray(cache[key]) ? cache[key] : [];
+  if (!tiers.includes(tierKey)) cache[key] = [...tiers, tierKey];
+};
+
+const clearTpCacheTier = (cache, pos, tierKey) => {
+  const key = tpCacheKey(pos);
+  const tiers = Array.isArray(cache[key]) ? cache[key].filter(item => item !== tierKey) : [];
+  if (tiers.length) cache[key] = tiers;
+  else delete cache[key];
+};
+
+
+const maxHighFromCandles = (candles, direction = 'LONG') => {
+  let extreme = null;
   (candles || []).forEach(c => {
-    const h = Number(c[2]);
-    if (h > 0 && (high == null || h > high)) high = h;
+    const price = Number(direction === 'SHORT' ? c[3] : c[2]);
+    if (price > 0 && (extreme == null || (direction === 'SHORT' ? price < extreme : price > extreme))) extreme = price;
   });
-  return high;
+  return extreme;
 };
 
 /** 开仓后 → 现在的 1h K（含未收盘当前小时，若交易所返回） */
@@ -308,21 +367,29 @@ const fetchHourlyCandlesSinceOpen = async (symbol, exchange, openTimeMs, endTime
  * - 当日开仓：同样拉「开仓后→现在」小时 K，不再用全日 Socket 高（会掺开仓前）
  * - openTime 使用账户镜像本地固定的首次持仓时间，不使用 Binance positionRisk.updateTime
  */
-const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast }) => {
+const directionalExtreme = (current, price, direction) => {
+  if (!(price > 0)) return current;
+  if (!(current > 0)) return price;
+  return direction === 'SHORT' ? Math.min(current, price) : Math.max(current, price);
+};
+
+const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast, direction = 'LONG' }) => {
   requirePositive(openTimeMs, `${symbol} 持仓首次获取时间 updateTime`);
   const live = Number(liveLast);
   const cacheKey = `${exchange}:${String(symbol).toUpperCase()}:${openTimeMs}`;
   const cached = xxKlineCache.get(cacheKey);
   const now = Date.now();
   if (cached && now - cached.fetchedAt < XX_KLINE_CACHE_TTL_MS) {
-    const xx = Math.max(cached.high || 0, live > 0 ? live : 0);
-    return { xx, a: cached.high || null, b: live > 0 ? live : null, bars: cached.bars, cached: true };
+    const extreme = directionalExtreme(cached.extreme || cached.high, live, direction);
+    return { xx: extreme, a: cached.extreme || cached.high || null, b: live > 0 ? live : null, bars: cached.bars, cached: true };
   }
+
   if (getBinanceBanRemaining() > 0) {
     if (cached?.high > 0) {
+      const extreme = directionalExtreme(cached.extreme || cached.high, live, direction);
       return {
-        xx: Math.max(cached.high, live > 0 ? live : 0),
-        a: cached.high,
+        xx: extreme,
+        a: cached.extreme || cached.high,
         b: live > 0 ? live : null,
         bars: cached.bars,
         cached: true,
@@ -354,11 +421,12 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast }) 
       candles = [];
     }
 
-    const a = maxHighFromCandles(candles);
-    const xx = Math.max(a > 0 ? a : 0, live > 0 ? live : 0);
+    const a = maxHighFromCandles(candles, direction);
+    const extreme = directionalExtreme(a, live, direction);
+    const xx = extreme;
     if (xx > 0) {
-      xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), high: a > 0 ? a : live, bars: candles.length });
-      return { xx, a: a > 0 ? a : null, b: live > 0 ? live : null, bars: candles.length };
+      xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), extreme, high: extreme, bars: candles.length });
+      return { xx, a: extreme, b: live > 0 ? live : null, bars: candles.length };
     }
 
     lastDetail = candles.length
@@ -369,15 +437,15 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast }) 
   }
 
   if (live > 0) {
-    xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), high: live, bars: 0 });
+    xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), extreme: live, high: live, bars: 0 });
     return { xx: live, a: null, b: live, bars: 0, note: `小时K暂空，xx=最新价 · ${lastDetail}` };
   }
 
   return { xx: null, a: null, b: null, skipped: true, detail: `open=${openTimeMs} end=${now} · ${lastDetail}` };
 };
 
-const listAllLongPositions = async () => {
-  const snap = await getBinanceAccountSnapshot();
+const listAllLongPositions = async (snapshotOverride = null) => {
+  const snap = snapshotOverride || (await getBinanceAccountSnapshot());
   if (!snap?.ok) {
     throw new RangeMonitorFatal('拉取多头持仓失败', snap?.error || 'account mirror');
   }
@@ -386,27 +454,29 @@ const listAllLongPositions = async () => {
     throw new RangeMonitorFatal('持仓响应非数组', typeof snap.positions);
   }
   const positions = [];
-  rows.forEach(p => {
+  for (const p of rows) {
     const amt = Number(p?.positionAmt || 0);
     const ps = String(p?.positionSide || '').toUpperCase();
-    if (ps === 'SHORT') return;
-    if (!(amt > 0)) return;
-    const updateTime = Number(p?.updateTime);
+    if (ps === 'SHORT' && !(amt < 0)) continue;
+    if (ps !== 'SHORT' && !(amt > 0)) continue;
+    const positionSide = ps === 'LONG' || ps === 'SHORT' ? ps : 'BOTH';
+    const openTime = await getPositionOpenTime({ symbol: p.symbol, positionSide });
     positions.push({
       exchange: 'binance',
       symbol: p.symbol,
       qty: Math.abs(amt),
       entryPrice: finite(p.entryPrice),
       markPrice: finite(p.markPrice),
-      positionSide: ps === 'LONG' ? 'LONG' : undefined,
-      updateTime: Number.isFinite(updateTime) && updateTime > 0 ? updateTime : null,
+      positionSide,
+      side: ps === 'SHORT' ? 'SHORT' : 'LONG',
+      openTime: Number(openTime) || Number(p.updateTime) || null,
     });
-  });
+  }
   return positions;
 };
 
 const listOpenAlgoOrders = async () => {
-  const snap = await getBinanceAccountSnapshot();
+  const snap = await getBinanceAccountSnapshot({ forceRest: true, ensureStarted: true });
   if (!snap?.ok) {
     throw new RangeMonitorFatal('拉取条件单失败', snap?.error || 'account mirror');
   }
@@ -428,10 +498,27 @@ const groupAlgosBySymbol = algos => {
   return map;
 };
 
+const isExitOrderForPosition = order => {
+  const side = String(order?.side || '').toUpperCase();
+  const type = `${order?.type || ''} ${order?.orderType || ''} ${order?.origType || ''} ${order?.algoType || ''}`.toUpperCase();
+  const reduceOnly = order?.reduceOnly === true || String(order?.reduceOnly).toLowerCase() === 'true';
+  const closePosition = order?.closePosition === true || String(order?.closePosition).toLowerCase() === 'true';
+  return reduceOnly || closePosition || type.includes('STOP') || type.includes('TAKE_PROFIT') || type.includes('TRAILING');
+};
+
+const positionKey = (symbol, side) => `${String(symbol || '').toUpperCase()}:${String(side || 'BOTH').toUpperCase()}`;
+
+
+const positionDirection = pos => String(pos?.positionSide || '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG';
+const exitOrderSide = pos => positionDirection(pos) === 'SHORT' ? 'BUY' : 'SELL';
+const isShortPosition = pos => positionDirection(pos) === 'SHORT';
+const directionalPrice = (pos, longPrice, shortPrice) => isShortPosition(pos) ? shortPrice : longPrice;
+
+
 const placeBreakevenStop = async pos => {
   const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
   const clientOid = `rmsl${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32);
-  const mode = await getBinancePositionMode();
+  const mode = await getBinancePositionModeCached();
   if (!mode?.ok && mode?.response == null) {
     throw new RangeMonitorFatal('查询持仓模式失败', pickErr(mode) || 'positionSide/dual');
   }
@@ -442,7 +529,7 @@ const placeBreakevenStop = async pos => {
 
   const result = await placeFutureClosePositionAlgo({
     symbol: pos.symbol,
-    side: 'SELL',
+    side: exitOrderSide(pos),
     triggerPrice,
     orderType: 'STOP_MARKET',
     positionSide,
@@ -456,7 +543,7 @@ const placeBreakevenStop = async pos => {
   }
   const fallback = await placeFutureQtyStopAlgo({
     symbol: pos.symbol,
-    side: 'SELL',
+    side: exitOrderSide(pos),
     quantity,
     triggerPrice,
     positionSide,
@@ -480,11 +567,11 @@ const placeOneTakeProfit = async (pos, mult) => {
   const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
   const qty = requirePositive(pos.qty, `${pos.symbol} 持仓数量`);
   const rules = await getBinanceRules(pos.symbol);
-  const mode = await getBinancePositionMode();
+  const mode = await getBinancePositionModeCached();
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
   const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
 
-  let closePct = TP_CLOSE_PCT;
+  let closePct = RANGE_MONITOR_TP_CLOSE_PCT;
   let quantity = quantizeQuantity(qty * closePct, rules.stepSize, rules.quantityPrecision);
   let usedFull = false;
   if (isQtyTooSmall(quantity, rules)) {
@@ -499,14 +586,14 @@ const placeOneTakeProfit = async (pos, mult) => {
       `持仓 qty=${qty} → 下单 ${quantity}；minQty=${rules.minQty} step=${rules.stepSize}`
     );
   }
-  const trigger = floorToTick(entry * mult, rules);
+  const trigger = floorToTick(directionalPrice(pos, entry * mult, entry / mult), rules);
   if (!(trigger > 0)) {
     throw new RangeMonitorFatal(`${pos.symbol} 止盈触发价无效`, String(trigger));
   }
 
   const result = await placeFutureQtyTakeProfitAlgo({
     symbol: pos.symbol,
-    side: 'SELL',
+    side: exitOrderSide(pos),
     quantity,
     triggerPrice: trigger,
     positionSide,
@@ -531,7 +618,7 @@ const placeTrail = async (pos, lastPrice) => {
   const qty = requirePositive(pos.qty, `${pos.symbol} 持仓数量`);
   const last = requirePositive(lastPrice, `${pos.symbol} 最新价`);
   const rules = await getBinanceRules(pos.symbol);
-  const mode = await getBinancePositionMode();
+  const mode = await getBinancePositionModeCached();
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
   const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
 
@@ -546,10 +633,10 @@ const placeTrail = async (pos, lastPrice) => {
 
   const result = await placeFutureTrailingStopAlgo({
     symbol: pos.symbol,
-    side: 'SELL',
+    side: exitOrderSide(pos),
     quantity: trailQty,
     activatePrice,
-    callbackRate: TRAIL_CB_PCT,
+    callbackRate: RANGE_MONITOR_TRAIL_CALLBACK_PCT,
     positionSide,
     clientAlgoId: `rmtr${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
   });
@@ -557,7 +644,7 @@ const placeTrail = async (pos, lastPrice) => {
     ok: Boolean(result?.ok),
     detail: result?.ok ? null : pickErr(result) || '追踪提交失败',
     activatePrice,
-    callbackRate: TRAIL_CB_PCT,
+    callbackRate: RANGE_MONITOR_TRAIL_CALLBACK_PCT,
     quantity: trailQty,
     result,
   };
@@ -573,6 +660,7 @@ export const runRangeMonitorCleanup = async ({
   maxRangeMult = RANGE_MONITOR_MAX_MULT,
   nearBandPct = RANGE_MONITOR_NEAR_BAND_PCT,
   priceFeed,
+  binanceSnapshot,
 } = {}) => {
   const aborted = () => signal?.aborted;
   const mult = normalizeMaxRangeMult(maxRangeMult);
@@ -589,7 +677,7 @@ export const runRangeMonitorCleanup = async ({
   }
 
   onStatus?.(`清理：拉取开多委托（高低比≤${mult.toFixed(2)} · 离开近带 yy>${leavePct}%）…`);
-  const { orders, error } = await listLiveLongOpenOrders({ exchanges: MONITOR_EXCHANGES });
+  const { orders, error } = await listLiveLongOpenOrders({ exchanges: MONITOR_EXCHANGES, binanceSnapshot });
   if (aborted()) return { cancelled: 0, kept: 0, failed: 0, aborted: true };
   if (error) {
     throw new RangeMonitorFatal('拉取开多委托失败', error);
@@ -624,6 +712,12 @@ export const runRangeMonitorCleanup = async ({
     if (aborted()) return { cancelled: 0, kept, failed: 0, aborted: true, checked };
     const [id, pairOrders] = pairEntries[i];
     const { exchange, symbol } = pairOrders[0];
+    const recentBreakout = getRecentBreakoutOrder(symbol);
+    if (recentBreakout && Date.now() - recentBreakout.at < 10000) {
+      kept += 1;
+      log({ type: 'open_cleanup_cooldown_skip', symbol, exchange, cooldownRemaining: 10000 - (Date.now() - recentBreakout.at), clientOid: recentBreakout.clientOid });
+      continue;
+    }
     checked += 1;
     onStatus?.(`清理：检查 ${checked}/${pairEntries.length} ${symbol}`);
 
@@ -640,8 +734,14 @@ export const runRangeMonitorCleanup = async ({
 
     const { inRange, hits } = await isStillInMonitorRange({ exchange, symbol }, mult, feed);
     if (!inRange) {
+      log({
+        type: 'cancel_candidate',
+        exchange,
+        symbol,
+        reason: cancelReasons.get(id) || 'out_of_range',
+        orders: pairOrders.map(order => ({ orderId: order.orderId, clientOid: order.clientOid, kind: order.kind })),
+      });
       toCancel.push(...pairOrders);
-      cancelReasons.set(id, 'out_of_range');
       continue;
     }
 
@@ -659,7 +759,8 @@ export const runRangeMonitorCleanup = async ({
     }
 
     kept += 1;
-  } 
+  }
+
   if (aborted()) return { cancelled: 0, kept, failed: 0, aborted: true, checked };
   if (!toCancel.length) {
     onStatus?.(`清理完成：保留 ${kept} 个币对委托`);
@@ -682,10 +783,13 @@ export const runRangeMonitorCleanup = async ({
         exchange: order.exchange,
         symbol: order.symbol,
         count: 0,
+        source: 'range_monitor_cleanup',
+        orderIds: [],
         reason: cancelReasons.get(id) || 'out_of_range',
       });
     }
     cancelledPairs.get(id).count += 1;
+    cancelledPairs.get(id).orderIds.push({ orderId: order.orderId, clientOid: order.clientOid, kind: order.kind });
   });
   cancelledPairs.forEach(pair => {
     log({
@@ -724,6 +828,7 @@ export const runRangeMonitorPositionStops = async ({
   onStatus,
   onLog,
   priceFeed,
+  binanceSnapshot,
 } = {}) => {
   const aborted = () => signal?.aborted;
   const log = entry => onLog?.(entry);
@@ -732,9 +837,8 @@ export const runRangeMonitorPositionStops = async ({
   if (!isLiveOrderEnabled()) {
     throw new RangeMonitorFatal('交易未解锁', '持仓处理');
   }
-
-  onStatus?.('持仓：拉取多头持仓…');
-  const positions = await listAllLongPositions();
+onStatus?.('持仓：拉取多头持仓…');
+  const positions = await listAllLongPositions(binanceSnapshot);
   if (aborted()) return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, aborted: true };
 
   if (!positions.length) {
@@ -743,11 +847,55 @@ export const runRangeMonitorPositionStops = async ({
   }
 
   onStatus?.('持仓：拉取条件单…');
-  const algos = await listOpenAlgoOrders();
+  let algos;
+  try {
+    const liveSnapshot = await getBinanceAccountSnapshot({ forceRest: true, ensureStarted: true });
+    if (!liveSnapshot?.ok || !Array.isArray(liveSnapshot.algoOrders)) {
+      throw new Error(liveSnapshot?.error || '条件单快照不可用');
+    }
+  const liveOrders = Array.isArray(liveSnapshot.openOrders) ? liveSnapshot.openOrders : [];
+    algos = [...liveSnapshot.algoOrders, ...liveOrders];
+    const orderKeys = new Set();
+    algos = algos.filter(order => {
+      const key = order?.algoId != null ? `a:${order.algoId}` : order?.orderId != null ? `o:${order.orderId}` : `c:${order?.clientAlgoId || order?.clientOrderId || ''}`;
+      if (!key || orderKeys.has(key)) return false;
+      orderKeys.add(key);
+      return true;
+    });
+  } catch (e) {
+    log({ type: 'tp_sync_failed', exchange: 'binance', detail: e?.message || String(e) });
+    return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: positions.length, failed: 0, syncFailed: true };
+  }
   if (aborted()) return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, aborted: true };
   const bySym = groupAlgosBySymbol(algos);
+  const activePositions = new Set(positions.map(pos => positionKey(pos.symbol, pos.positionSide)));
+  let orphanExitCancelled = 0;
+  for (const order of algos) {
+    const side = String(order?.side || '').toUpperCase();
+    const expectedPositionSide = side === 'BUY' ? 'SHORT' : side === 'SELL' ? 'LONG' : '';
+    const orderPositionSide = String(order?.positionSide || 'BOTH').toUpperCase();
+    const key = positionKey(order.symbol, orderPositionSide === 'BOTH' ? expectedPositionSide : orderPositionSide);
+    if (!isExitOrderForPosition(order) || activePositions.has(key)) continue;
+    try {
+      const result = order.algoId != null || order.clientAlgoId
+        ? await cancelFutureAlgoOrder({ symbol: order.symbol, ...(order.algoId != null ? { algoId: order.algoId } : {}), ...(order.clientAlgoId ? { clientAlgoId: order.clientAlgoId } : {}) })
+        : await cancelFutureOrder({ symbol: order.symbol, orderId: order.orderId, origClientOrderId: order.clientOrderId });
+      if (result?.ok) {
+        orphanExitCancelled += 1;
+        log({ type: 'orphan_exit_cancelled', exchange: 'binance', symbol: order.symbol, positionSide: orderPositionSide });
+      }
+    } catch (e) {
+      log({ type: 'orphan_exit_cancel_failed', exchange: 'binance', symbol: order.symbol, detail: e?.message || String(e) });
+    }
+  }
+  const tpOrderCache = readTpOrderCache();
+  const activeTpCacheKeys = new Set(positions.map(tpCacheKey));
+  Object.keys(tpOrderCache).forEach(key => {
+    if (!activeTpCacheKeys.has(key)) delete tpOrderCache[key];
+  });
+  writeTpOrderCache(tpOrderCache);
   const activeXxCacheKeys = new Set(
-    positions.map(pos => `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${pos.updateTime}`)
+    positions.map(pos => `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${pos.openTime}`)
   );
   [...xxKlineCache.keys()].forEach(key => {
     if (!activeXxCacheKeys.has(key)) xxKlineCache.delete(key);
@@ -768,19 +916,24 @@ export const runRangeMonitorPositionStops = async ({
     onStatus?.(`持仓：${i + 1}/${positions.length} ${pos.symbol}`);
 
     const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
-    if (!(pos.updateTime > 0)) {
-      throw new RangeMonitorFatal(
-        `${pos.symbol} 缺少持仓首次获取时间 updateTime`,
-        '无法计算自持仓首次获取以来最高价 xx'
-      );
+    if (!(pos.openTime > 0)) {
+      skipped += 1;
+      log({
+        type: 'open_time_unavailable',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+        detail: '历史成交中未找到真实开仓时间，本轮跳过出场计算',
+      });
+      continue;
     }
 
     const quote = await feed.ensureQuote(pos.symbol, '持仓');
     const xxPack = await fetchHighSinceOpenXx({
       symbol: pos.symbol,
       exchange: pos.exchange,
-      openTimeMs: pos.updateTime,
+      openTimeMs: pos.openTime,
       liveLast: quote.last,
+      direction: positionDirection(pos),
     });
     if (xxPack?.rateLimited) {
       log({
@@ -805,13 +958,43 @@ export const runRangeMonitorPositionStops = async ({
     const xx = xxPack.xx;
 
     const symAlgos = bySym.get(sym) || [];
-    const stopOrders = symAlgos.filter(isBinanceLongStopAlgo);
-    const tpOrders = symAlgos.filter(isBinanceLongTakeProfitAlgo);
-    const trailOrders = symAlgos.filter(isBinanceLongTrailingAlgo);
+    const direction = positionDirection(pos);
+    const moveRatio = direction === 'SHORT' ? entry / xx : xx / entry;
+    const stopOrders = symAlgos.filter(o => isBinanceStopAlgo(o, direction));
+    let tpOrders = symAlgos.filter(o => isBinanceTakeProfitAlgo(o, direction));
+    const trailOrders = symAlgos.filter(o => isBinanceTrailingAlgo(o, direction));
     const rules = await getBinanceRules(pos.symbol);
+    const breakevenStops = stopOrders.filter(o => isBreakevenStopAlgo(o, entry, rules.tickSize, direction));
 
-    // 2.1 止损
-    if (xx >= entry * RANGE_MONITOR_SL_ARM_MULT && !stopOrders.length) {
+    // 达到 1.4E 后撤掉开仓价全仓止损，改由追踪止盈保护。
+    if (xx >= entry * RANGE_MONITOR_TRAIL_ARM_MULT && breakevenStops.length) {
+      onStatus?.(`持仓：${pos.symbol} xx≥${RANGE_MONITOR_TRAIL_ARM_MULT}E，撤开仓价止损…`);
+      try {
+        await cancelBreakevenStops(pos.symbol, breakevenStops);
+        breakevenStops.forEach(order => {
+          const key = order.algoId != null ? `a:${order.algoId}` : `ac:${order.clientAlgoId || order.clientOrderId}`;
+          bySym.set(sym, (bySym.get(sym) || []).filter(item => `${item.algoId != null ? `a:${item.algoId}` : `ac:${item.clientAlgoId || item.clientOrderId}`}` !== key));
+        });
+        log({
+          type: 'sl_breakeven_cancelled',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          xx,
+          count: breakevenStops.length,
+        });
+      } catch (e) {
+        log({
+          type: 'sl_breakeven_cancel_failed',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          xx,
+          detail: e?.message || String(e),
+        });
+      }
+    }
+
+    // 2.1 止损：已有追踪委托时由追踪止盈保护，不再重复挂成本止损。
+    if (xx >= entry * RANGE_MONITOR_SL_ARM_MULT && !stopOrders.length && !trailOrders.length) {
       onStatus?.(`持仓：${pos.symbol} xx=${xx} ≥ 开仓×1.2，挂成本止损…`);
       const result = await placeBreakevenStop(pos);
       if (result.ok) {
@@ -836,86 +1019,131 @@ export const runRangeMonitorPositionStops = async ({
         });
         onStatus?.(`持仓止损失败：${pos.symbol} ${result.detail || ''}`);
       }
-      await sleep(PLACE_GAP_MS);
+      await sleep(RANGE_MONITOR_PLACE_GAP_MS);
     }
 
     // 固定止盈：同时最多一笔；按 xx 递进换档
     const wantTier =
       xx < entry * 1.2
-        ? TP_MULTS[0]
+        ? RANGE_MONITOR_TP_MULTS[0]
         : xx < entry * 1.5
-          ? TP_MULTS[1]
+          ? RANGE_MONITOR_TP_MULTS[1]
           : xx < entry * 2.0
-            ? TP_MULTS[2]
+            ? RANGE_MONITOR_TP_MULTS[2]
             : null;
 
-    if (wantTier) {
-      const targetTrigger = entry * wantTier.mult;
-      const hasExact = tpOrders.some(o =>
-        pricesMatchTier(algoTriggerPrice(o), targetTrigger, rules.tickSize)
-      );
+    // 2.2 动态一档：1.2E 前按方向维护，使用 0.2% 滞后避免成本价附近抖动。
+    const firstTier = RANGE_MONITOR_TP_MULTS[0];
+    const firstTarget = directionalPrice(pos, entry * firstTier.mult, entry / firstTier.mult);
+    const shouldArmFirst = direction === 'SHORT' ? quote.last <= entry * 0.998 : quote.last >= entry * 1.002;
+    const shouldCancelFirst = direction === 'SHORT' ? quote.last >= entry * 1.002 : quote.last <= entry * 0.998;
+    const exactFirst = tpOrders.filter(o => pricesMatchTier(algoTriggerPrice(o), firstTarget, rules.tickSize));
 
-      if (!tpOrders.length) {
-        // 没有固定止盈单：首次按当前目标档位挂单。
-        onStatus?.(`持仓：${pos.symbol} 挂止盈 @×${wantTier.mult}…`);
-        const tpResult = await placeOneTakeProfit(pos, wantTier.mult);
-        if (tpResult.ok) {
-          tpPlaced += 1;
-          const tpLabel = tpResult.usedFull
-            ? `止盈 ×${wantTier.mult} 全量（10%过小）`
-            : `止盈 ×${wantTier.mult} 平${Math.round((tpResult.closePct || TP_CLOSE_PCT) * 100)}%`;
-          log({
-            type: 'tp_placed',
-            exchange: pos.exchange,
+    if (moveRatio < RANGE_MONITOR_SL_ARM_MULT && !trailOrders.length) {
+      if (exactFirst.length) {
+        const keepOrder = exactFirst[0];
+        const duplicateOrders = exactFirst.slice(1);
+        for (const order of duplicateOrders) {
+          await cancelFutureAlgoOrder({
             symbol: pos.symbol,
-            entryPrice: entry,
-            xx,
-            submitted: [{ key: wantTier.key, triggerPrice: tpResult.triggerPrice }],
-            detail: tpLabel,
-            usedFull: tpResult.usedFull,
+            ...(order.algoId != null ? { algoId: order.algoId } : {}),
+            ...(order.clientAlgoId || order.clientOrderId
+              ? { clientAlgoId: order.clientAlgoId || order.clientOrderId }
+              : {}),
           });
-          if (tpResult.usedFull) onStatus?.(`持仓：${pos.symbol} ${tpLabel}`);
-        } else {
-          failed += 1;
-          log({
-            type: 'tp_failed',
-            exchange: pos.exchange,
-            symbol: pos.symbol,
-            detail: tpResult.detail,
-          });
-          onStatus?.(`持仓止盈失败：${pos.symbol} ${tpResult.detail || ''}`);
+          await sleep(80);
+          log({ type: 'tp_duplicate_cancelled', exchange: pos.exchange, symbol: pos.symbol, tier: firstTier.key });
         }
-        await sleep(PLACE_GAP_MS);
-      } else if (!hasExact) {
-        // 已有止盈但档位不一致：保留旧单，不自动撤单或换档，仅提示人工处理。
+        if (shouldCancelFirst) {
+          await cancelFutureAlgoOrder({
+            symbol: pos.symbol,
+            ...(keepOrder.algoId != null ? { algoId: keepOrder.algoId } : {}),
+            ...(keepOrder.clientAlgoId || keepOrder.clientOrderId
+              ? { clientAlgoId: keepOrder.clientAlgoId || keepOrder.clientOrderId }
+              : {}),
+          });
+          await sleep(80);
+          clearTpCacheTier(tpOrderCache, pos, firstTier.key);
+          writeTpOrderCache(tpOrderCache);
+          tpOrders = tpOrders.filter(order => !exactFirst.includes(order));
+          log({ type: 'tp_first_cancelled', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, quote: quote.last });
+        } else if (duplicateOrders.length) {
+          tpOrders = [keepOrder, ...tpOrders.filter(order => !exactFirst.includes(order) && order !== keepOrder)];
+        }
+      } else if (!tpOrders.length && shouldArmFirst) {
+        const placeKey = `${pos.exchange}:${sym}:${direction}:${firstTier.key}`;
+        if (tpPlaceInFlight.has(placeKey)) {
+          skipped += 1;
+          log({ type: 'tp_place_inflight_skip', exchange: pos.exchange, symbol: pos.symbol, tier: firstTier.key });
+        } else {
+          tpPlaceInFlight.add(placeKey);
+          let tpResult;
+          try {
+            tpResult = await placeOneTakeProfit(pos, firstTier.mult);
+          } finally {
+            tpPlaceInFlight.delete(placeKey);
+          }
+          if (tpResult?.ok) {
+            tpPlaced += 1;
+            tpCacheAdd(tpOrderCache, pos, firstTier.key);
+            writeTpOrderCache(tpOrderCache);
+            tpOrders = [{ type: 'TAKE_PROFIT_MARKET', orderType: 'TAKE_PROFIT_MARKET', algoType: 'CONDITIONAL', side: exitOrderSide(pos), positionSide: pos.positionSide, triggerPrice: tpResult.triggerPrice, clientAlgoId: tpResult.result?.response?.clientAlgoId }];
+            log({ type: 'tp_first_placed', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, quote: quote.last, triggerPrice: tpResult.triggerPrice });
+          } else {
+            failed += 1;
+            log({ type: 'tp_failed', exchange: pos.exchange, symbol: pos.symbol, detail: tpResult?.detail });
+          }
+          await sleep(RANGE_MONITOR_PLACE_GAP_MS);
+        }
+      }
+    }
+
+    // 2.3 固定止盈：达到 1.2E 后才递进到二档/三档。
+    if (wantTier && moveRatio >= RANGE_MONITOR_SL_ARM_MULT) {
+      const targetTrigger = directionalPrice(pos, entry * wantTier.mult, entry / wantTier.mult);
+      const hasExact = tpOrders.some(o => pricesMatchTier(algoTriggerPrice(o), targetTrigger, rules.tickSize));
+      const cachedExact = tpCacheHas(tpOrderCache, pos, wantTier.key);
+
+      if (cachedExact || hasExact) {
+        if (hasExact) {
+          tpCacheAdd(tpOrderCache, pos, wantTier.key);
+          writeTpOrderCache(tpOrderCache);
+        }
         skipped += 1;
-        const existingTriggers = tpOrders
-          .map(o => algoTriggerPrice(o))
-          .filter(price => price != null)
-          .map(price => Number(price).toPrecision(8));
-        const detail = `${pos.symbol} 当前应为 ×${wantTier.mult}（触发价 ${targetTrigger}），已有止盈 ${
-          existingTriggers.length ? existingTriggers.join('、') : '未知'
-        }，未自动撤换`;
-        log({
-          type: 'tp_tier_mismatch',
-          exchange: pos.exchange,
-          symbol: pos.symbol,
-          entryPrice: entry,
-          xx,
-          targetMult: wantTier.mult,
-          targetTrigger,
-          existingTriggers,
-          detail,
-        });
-        onStatus?.(`持仓提示：${detail}`);
+      } else if (!tpOrders.length) {
+        const placeKey = `${pos.exchange}:${sym}:${direction}:${wantTier.key}`;
+        if (tpPlaceInFlight.has(placeKey)) {
+          skipped += 1;
+          log({ type: 'tp_place_inflight_skip', exchange: pos.exchange, symbol: pos.symbol, tier: wantTier.key });
+        } else {
+          tpPlaceInFlight.add(placeKey);
+          let tpResult;
+          try {
+            tpResult = await placeOneTakeProfit(pos, wantTier.mult);
+          } finally {
+            tpPlaceInFlight.delete(placeKey);
+          }
+          if (tpResult?.ok) {
+            tpPlaced += 1;
+            tpCacheAdd(tpOrderCache, pos, wantTier.key);
+            writeTpOrderCache(tpOrderCache);
+            log({ type: 'tp_placed', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, xx, submitted: [{ key: wantTier.key, triggerPrice: tpResult.triggerPrice }] });
+          } else {
+            failed += 1;
+            log({ type: 'tp_failed', exchange: pos.exchange, symbol: pos.symbol, detail: tpResult?.detail });
+          }
+          await sleep(RANGE_MONITOR_PLACE_GAP_MS);
+        }
+      } else if (!hasExact) {
+        skipped += 1;
+        log({ type: 'tp_tier_mismatch', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, xx, targetMult: wantTier.mult, targetTrigger });
       } else {
         skipped += 1;
       }
     }
-
-    // 2.5 追踪：xx > 开仓×1.2
+// 2.5 追踪：xx > 开仓×1.2
     if (xx > entry * RANGE_MONITOR_TRAIL_ARM_MULT && !trailOrders.length) {
-      onStatus?.(`持仓：${pos.symbol} xx>${RANGE_MONITOR_TRAIL_ARM_MULT}E，挂追踪回调 ${TRAIL_CB_PCT}%…`);
+      onStatus?.(`持仓：${pos.symbol} xx>${RANGE_MONITOR_TRAIL_ARM_MULT}E，挂追踪回调 ${RANGE_MONITOR_TRAIL_CALLBACK_PCT}%…`);
       const trailResult = await placeTrail(pos, quote.last);
       if (trailResult.ok) {
         trailPlaced += 1;
@@ -938,7 +1166,7 @@ export const runRangeMonitorPositionStops = async ({
         });
         onStatus?.(`持仓追踪失败：${pos.symbol} ${trailResult.detail || ''}`);
       }
-      await sleep(PLACE_GAP_MS);
+      await sleep(RANGE_MONITOR_PLACE_GAP_MS);
     }
   }
 
@@ -972,6 +1200,7 @@ export const runRangeMonitorScanAndPlace = async ({
   maxRangeMult = RANGE_MONITOR_MAX_MULT,
   nearBandPct = RANGE_MONITOR_NEAR_BAND_PCT,
   priceFeed,
+  binanceSnapshot,
 } = {}) => {
   const aborted = () => signal?.aborted;
   const mult = normalizeMaxRangeMult(maxRangeMult);
@@ -1004,7 +1233,7 @@ export const runRangeMonitorScanAndPlace = async ({
   if (aborted()) return { placed: 0, skipped: 0, failed: 0, scanned: 0, aborted: true };
 
   onStatus?.(`扫描：内存遍历 ${pairs.length} 币（日 K 缓存）· 同步持仓/委托…`);
-  const statusMaps = await fetchLiveOrderStatusMaps(pairs);
+  const statusMaps = await fetchLiveOrderStatusMaps(pairs, { binanceSnapshot });
   if (aborted()) return { placed: 0, skipped: 0, failed: 0, scanned: 0, aborted: true };
   if (statusMaps.error) {
     throw new RangeMonitorFatal('同步持仓/委托失败', statusMaps.error);
@@ -1012,13 +1241,30 @@ export const runRangeMonitorScanAndPlace = async ({
   const orderedMap = { ...(statusMaps.orderedMap || {}) };
   const positionMap = { ...(statusMaps.positionMap || {}) };
 
-  const positions = await listAllLongPositions();
+  const positions = await listAllLongPositions(binanceSnapshot);
   const n = positions.length;
-  const slotLeft = MAX_ORDERS - n * SLOT_PER_POSITION;
+  const snapshotOrders = [
+    ...(binanceSnapshot?.openOrders || []),
+    ...(binanceSnapshot?.algoOrders || []),
+  ];
+  const activeOrderKeys = new Set();
+  snapshotOrders.forEach(order => {
+    const status = String(order?.status || '').toUpperCase();
+    if (['CANCELED', 'CANCELLED', 'EXPIRED', 'REJECTED', 'FILLED', 'FINISHED', 'TRIGGERED'].includes(status)) return;
+    const key = order?.orderId != null
+      ? `o:${order.orderId}`
+      : order?.algoId != null
+        ? `a:${order.algoId}`
+        : order?.clientOrderId || order?.clientAlgoId;
+    if (key) activeOrderKeys.add(String(key));
+  });
+  const actualOrderCount = activeOrderKeys.size;
+  let slotLeft = RANGE_MONITOR_MAX_ORDERS - actualOrderCount;
   if (!(slotLeft > 0)) {
-    onStatus?.(`扫描：坑位不足 200−${n}×${SLOT_PER_POSITION}=${slotLeft}，跳过开仓`);
-    return { placed: 0, skipped: 0, failed: 0, scanned: 0, hits: 0, slotLeft, n };
-  } 
+    onStatus?.(`扫描：委托已达上限 ${actualOrderCount}/${RANGE_MONITOR_MAX_ORDERS}，跳过开仓`);
+    return { placed: 0, skipped: 0, failed: 0, scanned: 0, hits: 0, slotLeft, n, actualOrderCount };
+  }
+
   let placed = 0;
   let skipped = 0;
   let failed = 0;
@@ -1051,8 +1297,8 @@ export const runRangeMonitorScanAndPlace = async ({
       };
     }
     if (stopOpen) break;
-    if (MAX_ORDERS - n * SLOT_PER_POSITION - placed <= 0) {
-      onStatus?.('扫描：本轮开仓已用尽预留坑位');
+    if (slotLeft - placed <= 0) {
+      onStatus?.(`扫描：本轮可用委托槽位已用尽（已有 ${actualOrderCount} · 上限 ${RANGE_MONITOR_MAX_ORDERS}）`);
       break;
     }
 
@@ -1082,7 +1328,7 @@ export const runRangeMonitorScanAndPlace = async ({
     }
 
     if (!candidates.length) {
-      if (scanned % CACHED_SCAN_YIELD_EVERY === 0) await sleep(0);
+      if (scanned % RANGE_MONITOR_CACHED_SCAN_YIELD_EVERY === 0) await sleep(0);
       continue;
     }
 
@@ -1147,10 +1393,10 @@ export const runRangeMonitorScanAndPlace = async ({
     onStatus?.(
       `开仓：${row.symbol} ~${openNotionalUsdt}U · yy=${yy.toFixed(2)}%≤${bandPct}%`
     );
-    const result = await placeBreakoutTriggerOrder({
-      ...row,
-      openNotionalUsdt,
-    });
+      const result = await placeBreakoutTriggerOrder({
+        ...row,
+        openNotionalUsdt,
+      });
 
     if (result.ok) {
       placed += 1;
@@ -1163,7 +1409,7 @@ export const runRangeMonitorScanAndPlace = async ({
         triggerPrice: result.triggerPrice,
         yy,
       });
-      await sleep(PLACE_GAP_MS);
+      await sleep(RANGE_MONITOR_PLACE_GAP_MS);
     } else if (result.skipped) {
       skipped += 1;
       placeSkipped += 1;
@@ -1225,14 +1471,14 @@ export const runRangeMonitorScanAndPlace = async ({
       onStatus?.(
         `开仓失败(币对级继续)：${row.symbol} · ${result.detail || result.reason || ''}`
       );
-      await sleep(SCAN_GAP_MS);
+      await sleep(RANGE_MONITOR_SCAN_GAP_MS);
     }
   }
-
-  if (!stopOpen) {
+if (!stopOpen) {
     onStatus?.(
       `扫描完成：检 ${scanned} · 在区间 ${hits} · 距上沿≤${bandPct}% ${nearBandIn}` +
         `（已有仓/单 ${nearBandBusy}）· 名义≥20 ${minNotionalSkip}` +
+        ` · 委托 ${actualOrderCount}+${placed}/${RANGE_MONITOR_MAX_ORDERS}` +
         ` · 下单跳过 ${placeSkipped} · 破 ${brokeOutIds.size} · 挂 ${placed} · 败 ${failed}`
     );
   }
@@ -1263,6 +1509,7 @@ export const runRangeMonitorScanAndPlace = async ({
     farBand: Math.max(0, hits - nearBandIn),
     stopOpen,
     n,
+    actualOrderCount,
     slotLeft,
     bandPct,
   };
@@ -1283,6 +1530,7 @@ export const runRangeMonitorRound = async ({
   feed.start();
   await feed.waitReady(20000);
 
+  const binanceSnapshot = await getBinanceAccountSnapshot();
   if (RANGE_MONITOR_STRICT && !Number.isFinite(Number(maxRangeMult))) {
     throw new RangeMonitorFatal('高低比参数无效', String(maxRangeMult));
   }
@@ -1307,6 +1555,7 @@ export const runRangeMonitorRound = async ({
     maxRangeMult,
     nearBandPct,
     priceFeed: feed,
+    binanceSnapshot,
   });
   if (signal?.aborted || cleanup.aborted) {
     return { cleanup, positions: null, scan: null, aborted: true, candleCache };
@@ -1339,6 +1588,7 @@ export const runRangeMonitorRound = async ({
     maxRangeMult,
     nearBandPct,
     priceFeed: feed,
+    binanceSnapshot,
   });
   return { cleanup, positions, scan, candleCache, aborted: Boolean(scan?.aborted) };
 };

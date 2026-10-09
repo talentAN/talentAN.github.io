@@ -27,9 +27,23 @@ import {
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
 import { PNL_NOTIONAL_USDT } from '../backtest/_breakoutPnlSim';
 
+const DEBUG_BREAKOUT_SYMBOLS = new Set(['SOLUSDT', 'WALUSDT', 'OPENAIUSDT']);
+const debugBreakout = (symbol, event, detail = {}) => {
+  if (DEBUG_BREAKOUT_SYMBOLS.has(String(symbol || '').toUpperCase())) {
+    console.warn('[RangeMonitor breakout audit]', { event, symbol: String(symbol).toUpperCase(), at: new Date().toISOString(), ...detail });
+  }
+};
+
+const openPlaceInFlight = new Set();
+const recentBreakoutOrders = new Map();
+const BREAKOUT_CANCEL_COOLDOWN_MS = 10 * 1000;
+
+export const getRecentBreakoutOrder = symbol => recentBreakoutOrders.get(String(symbol || '').toUpperCase());
+
+const breakoutOrderKey = ({ exchange, symbol }) => `${exchange}:${String(symbol || '').toUpperCase()}`;
+
 /**
  * 与收益回测开仓对齐：
- * - 入场参考价 = 区间上沿 rangeHigh（回测以该价成交）
  * - 突破条件 = 价严格 > 上沿（回测 marker：high > maxH）
  * - 实盘名义：币对最小开仓金额 × OPEN_NOTIONAL_MULT
  */
@@ -118,20 +132,21 @@ export const resolveMinOpenNotionalUsdt = async ({ symbol, exchange, price }) =>
   const px = Number(price);
   if (!symbol || !exchange || !(px > 0)) return null;
 
-  if (exchange === 'bitget') {
-    const rules = await getBitgetSymbolRules(symbol);
-    return pickMaxPositive(
-      rules.minTradeUSDT,
-      rules.minTradeNum > 0 ? rules.minTradeNum * px : null
-    );
+  switch (String(exchange).toLowerCase()) {
+    case 'bitget': {
+      const rules = await getBitgetSymbolRules(symbol);
+      return pickMaxPositive(
+        rules.minTradeUSDT,
+        rules.minTradeNum > 0 ? rules.minTradeNum * px : null
+      );
+    }
+    case 'binance': {
+      const rules = await getBinanceSymbolRules(symbol);
+      return pickMaxPositive(rules.minNotional, rules.minQty > 0 ? rules.minQty * px : null);
+    }
+    default:
+      return null;
   }
-
-  if (exchange === 'binance') {
-    const rules = await getBinanceSymbolRules(symbol);
-    return pickMaxPositive(rules.minNotional, rules.minQty > 0 ? rules.minQty * px : null);
-  }
-
-  return null;
 };
 
 /**
@@ -237,7 +252,8 @@ const fetchBitgetEntrustedAll = async fetchPage => {
  * @param {Array<{ exchange: string, symbol: string }>} rows
  * @returns {{ orderedMap: Record<string, boolean>, positionMap: Record<string, boolean>, error?: string }}
  */
-export const fetchLiveOrderStatusMaps = async rows => {
+export const fetchLiveOrderStatusMaps = async (rows, options = {}) => {
+  const { binanceSnapshot } = options;
   const orderedMap = {};
   const positionMap = {};
   if (!isLiveOrderEnabled()) {
@@ -264,7 +280,7 @@ export const fetchLiveOrderStatusMaps = async rows => {
   if (needBn) {
     try {
       // 复用 User Data Stream 账户镜像，避免每轮全量 openOrders（weight≈40）
-      const snap = await getBinanceAccountSnapshot();
+      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
       if (!snap?.ok) {
         errors.push(['BN', snap?.error || 'account mirror not ready'].filter(Boolean).join(' / '));
       } else {
@@ -346,7 +362,7 @@ export const fetchLiveOrderStatusMaps = async rows => {
  * 不含止盈止损等 reduce-only。
  * @param {{ exchanges?: string[] }} [opts] 默认 BN+BG；传 `['binance']` 可跳过 Bitget 签名代理
  */
-export const listLiveLongOpenOrders = async ({ exchanges } = {}) => {
+export const listLiveLongOpenOrders = async ({ exchanges, binanceSnapshot } = {}) => {
   const orders = [];
   if (!isLiveOrderEnabled()) {
     return { orders, error: 'auto_order_disabled' };
@@ -361,7 +377,7 @@ export const listLiveLongOpenOrders = async ({ exchanges } = {}) => {
 
   if (wantBn) {
     try {
-      const snap = await getBinanceAccountSnapshot();
+      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
       if (!snap?.ok) {
         errors.push(['BN', snap?.error || 'account mirror not ready'].filter(Boolean).join(' / '));
       } else {
@@ -374,6 +390,7 @@ export const listLiveLongOpenOrders = async ({ exchanges } = {}) => {
             orderId: o.orderId,
             clientOid: o.clientOrderId,
           });
+          debugBreakout(o.symbol, 'live_open_order_seen', { kind: 'pending', orderId: o.orderId, clientOid: o.clientOrderId });
         });
         (snap.algoOrders || []).forEach(o => {
           if (!o?.symbol || !isLongOpenAlgo(o)) return;
@@ -384,6 +401,7 @@ export const listLiveLongOpenOrders = async ({ exchanges } = {}) => {
             algoId: o.algoId,
             clientOid: o.clientAlgoId,
           });
+          debugBreakout(o.symbol, 'live_open_order_seen', { kind: 'algo', algoId: o.algoId, clientOid: o.clientAlgoId });
         });
       }
     } catch (e) {
@@ -431,9 +449,9 @@ export const listLiveLongOpenOrders = async ({ exchanges } = {}) => {
       errors.push(`BG ${e?.message || e}`);
     }
   }
-
-  return { orders, error: errors.length ? errors.join('；') : undefined };
+return { orders, error: errors.length ? errors.join('；') : undefined };
 };
+
 /** 撤销单笔多头开仓委托（普通 / 计划 / 条件） */
 export const cancelLongOpenOrder = async order => {
   if (!order?.exchange || !order?.symbol) {
@@ -444,12 +462,14 @@ export const cancelLongOpenOrder = async order => {
   }
 
   if (order.exchange === 'binance') {
+    debugBreakout(order.symbol, 'cancel_attempt', { kind: order.kind, orderId: order.orderId, clientOid: order.clientOid, reason: order.reason, source: order.source });
     if (order.kind === 'algo') {
       const result = await cancelBinanceAlgoOrder({
         symbol: order.symbol,
         algoId: order.algoId,
         clientAlgoId: order.clientOid,
       });
+      debugBreakout(order.symbol, 'cancel_result', { kind: order.kind, orderId: order.algoId, clientOid: order.clientOid, ok: result?.ok, detail: pickErr(result) });
       return {
         ok: Boolean(result?.ok),
         detail: result?.ok ? null : pickErr(result) || '撤条件单失败',
@@ -461,6 +481,7 @@ export const cancelLongOpenOrder = async order => {
       orderId: order.orderId,
       origClientOrderId: order.clientOid,
     });
+    debugBreakout(order.symbol, 'cancel_result', { kind: order.kind, orderId: order.orderId, clientOid: order.clientOid, ok: result?.ok, detail: pickErr(result) });
     return {
       ok: Boolean(result?.ok),
       detail: result?.ok ? null : pickErr(result) || '撤挂单失败',
@@ -518,7 +539,7 @@ export const cancelLongOpenOrders = async (orders, { onProgress } = {}) => {
  * 是否已有同向（多头开仓）未成交委托：普通挂单 + 计划/条件单。
  * 不含持仓；用于列表禁用「一键下单」与「过滤已下单」。
  */
-export const checkLongOpenOrders = async ({ symbol, exchange }) => {
+export const checkLongOpenOrders = async ({ symbol, exchange, binanceSnapshot }) => {
   if (!isLiveOrderEnabled()) {
     return { hasOrders: false, unavailable: true, reason: 'auto_order_disabled' };
   }
@@ -547,7 +568,7 @@ export const checkLongOpenOrders = async ({ symbol, exchange }) => {
     }
 
     if (exchange === 'binance') {
-      const snap = await getBinanceAccountSnapshot();
+      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
       if (!snap?.ok) {
         return {
           hasOrders: false,
@@ -586,8 +607,8 @@ export const checkLongOpenOrders = async ({ symbol, exchange }) => {
  * 开多前：只检查多头持仓 / 多头开仓挂单 / 多头计划·条件单。
  * 空头敞口不挡（双向持仓下可与 SurgeAlert 开空并存）。
  */
-export const checkBreakoutOrderExposure = async ({ symbol, exchange }) => {
-  const base = await checkExistingExposure({ symbol, exchange, side: 'long' });
+export const checkBreakoutOrderExposure = async ({ symbol, exchange, binanceSnapshot } = {}) => {
+  const base = await checkExistingExposure({ symbol, exchange, side: 'long', binanceSnapshot });
   if (base.exposed) return base;
 
   try {
@@ -607,7 +628,7 @@ export const checkBreakoutOrderExposure = async ({ symbol, exchange }) => {
     }
 
     if (exchange === 'binance') {
-      const snap = await getBinanceAccountSnapshot();
+      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
       if (!snap?.ok) {
         return {
           exposed: true,
@@ -642,7 +663,7 @@ const skipLabel = reason => SKIP_REASON_LABEL[reason] || reason || '已跳过';
  * 开仓口径对齐收益回测：入场参考价=rangeHigh，数量按 rangeHigh 计；触发价=上沿+1tick（high>上沿）。
  * @returns {{ ok: boolean, skipped?: boolean, reason?: string, detail?: string, size?: number, triggerPrice?: number, entryPrice?: number, result?: object }}
  */
-export const placeBreakoutTriggerOrder = async row => {
+export const placeBreakoutTriggerOrderInternal = async row => {
   const symbol = row?.symbol;
   const exchange = row?.exchange;
   const rangeHigh = Number(row?.rangeHigh);
@@ -794,6 +815,7 @@ export const placeBreakoutTriggerOrder = async row => {
       };
     }
 
+    debugBreakout(symbol, 'submit_start', { clientOid, triggerPrice, quantity: qty, positionSide: hedgeMode ? 'LONG' : 'BOTH' });
     const result = await placeFutureOpenStopMarketAlgo({
       symbol,
       side: 'BUY',
@@ -804,15 +826,23 @@ export const placeBreakoutTriggerOrder = async row => {
       workingType: 'CONTRACT_PRICE',
     });
     if (!result?.ok) {
+      debugBreakout(symbol, 'submit_result', { clientOid, ok: false, detail: pickErr(result), response: result?.response });
       return {
         ok: false,
         reason: 'submit_failed',
-        detail: pickErr(result) || '条件委托提交失败',
         size: qty,
         triggerPrice,
         entryPrice,
         result,
       };
+    }
+    if (result?.ok) {
+      recentBreakoutOrders.set(String(symbol).toUpperCase(), {
+        at: Date.now(),
+        clientOid,
+        algoId: result.response?.algoId || result.response?.orderId,
+      });
+      debugBreakout(symbol, 'submit_result', { clientOid, ok: true, response: result?.response });
     }
     return { ok: true, size: qty, triggerPrice, entryPrice, notional, result, exchange, symbol };
   }
@@ -828,6 +858,17 @@ export const placeBreakoutTriggerOrder = async row => {
 /**
  * 批量下单；串行以免打爆限频。
  */
+export const placeBreakoutTriggerOrder = async row => {
+  const key = breakoutOrderKey(row || {});
+  if (openPlaceInFlight.has(key)) return { ok: false, skipped: true, reason: 'place_inflight', detail: '同币对开仓委托正在提交' };
+  openPlaceInFlight.add(key);
+  try {
+    return await placeBreakoutTriggerOrderInternal(row);
+  } finally {
+    openPlaceInFlight.delete(key);
+  }
+};
+
 export const placeBreakoutTriggerOrdersBatch = async (rows, { onProgress } = {}) => {
   const summary = { total: rows.length, ok: 0, skipped: 0, failed: 0, results: [] };
   for (let i = 0; i < rows.length; i++) {
