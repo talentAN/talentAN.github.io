@@ -29,30 +29,6 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const DEBUG_ACCOUNT_MIRROR = false;
 /** 每个 WS 事件类型各打印前几条原文，避免刷屏 */
 const WS_EVENT_LOG_LIMIT = 3;
-const POSITION_UPDATE_TIME_CACHE_KEY = 'binance-position-update-times';
-
-const readPositionUpdateTimeCache = () => {
-  if (typeof localStorage === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(POSITION_UPDATE_TIME_CACHE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (_) {
-    return {};
-  }
-};
-
-const writePositionUpdateTimeCache = cache => {
-  if (typeof localStorage === 'undefined') return;
-  try {
-    localStorage.setItem(POSITION_UPDATE_TIME_CACHE_KEY, JSON.stringify(cache));
-  } catch (_) {
-    /* ignore storage quota/private mode errors */
-  }
-};
-
-const positionCacheKey = (symbol, positionSide) =>
-  `${String(symbol || '').toUpperCase()}:${String(positionSide || 'BOTH').toUpperCase()}`;
 
 const pickErr = result =>
   result?.error ||
@@ -60,25 +36,39 @@ const pickErr = result =>
   result?.response?.message ||
   (result?.httpStatus != null ? `HTTP ${result.httpStatus}` : null);
 
+const responseList = result => {
+  const response = result?.response;
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.orders)) return response.orders;
+  if (Array.isArray(response?.algoOrders)) return response.algoOrders;
+  return [];
+};
+
 const summarizePosition = p => ({
   symbol: p.symbol,
   positionSide: p.positionSide,
   positionAmt: p.positionAmt,
   entryPrice: p.entryPrice,
   markPrice: p.markPrice,
+  openTime: p.openTime ?? p.updateTime,
   updateTime: p.updateTime,
 });
 
 const summarizeOrder = o => ({
   symbol: o.symbol,
   orderId: o.orderId,
+  clientOrderId: o.clientOrderId,
   side: o.side,
   positionSide: o.positionSide,
   type: o.type || o.origType,
+  orderType: o.orderType || o.type,
+  origType: o.origType,
   status: o.status,
   price: o.price,
   origQty: o.origQty,
   stopPrice: o.stopPrice,
+  triggerPrice: o.triggerPrice,
   reduceOnly: o.reduceOnly,
 });
 
@@ -88,9 +78,15 @@ const summarizeAlgo = o => ({
   clientAlgoId: o.clientAlgoId,
   side: o.side,
   positionSide: o.positionSide,
-  type: o.type || o.orderType,
+  // 条件单接口不同版本可能把类型放在 type/orderType/origType/algoType 任一字段，全部保留供状态表识别。
+  type: o.type || o.orderType || o.origType || o.algoType,
+  orderType: o.orderType || o.type || o.origType || o.algoType,
+  origType: o.origType,
+  algoType: o.algoType,
   status: o.status,
-  triggerPrice: o.triggerPrice,
+  triggerPrice: o.triggerPrice ?? o.stopPrice ?? o.price,
+  stopPrice: o.stopPrice,
+  price: o.price,
   activatePrice: o.activatePrice,
   callbackRate: o.callbackRate,
   quantity: o.quantity,
@@ -113,6 +109,23 @@ const algoKey = o => {
   if (o?.algoId != null) return `a:${o.algoId}`;
   if (o?.clientAlgoId) return `ac:${o.clientAlgoId}`;
   return null;
+};
+
+const AUDIT_SYMBOLS = new Set(['SOLUSDT', 'WALUSDT', 'OPENAIUSDT']);
+const auditOrderEvent = (event, order, detail = {}) => {
+  const symbol = String(order?.symbol || '').toUpperCase();
+  if (!AUDIT_SYMBOLS.has(symbol)) return;
+  console.warn('[BinanceAccountMirror order audit]', {
+    event,
+    symbol,
+    orderId: order?.orderId ?? order?.algoId,
+    clientOrderId: order?.clientOrderId ?? order?.clientAlgoId,
+    status: order?.status,
+    type: order?.type || order?.orderType,
+    side: order?.side,
+    positionSide: order?.positionSide,
+    ...detail,
+  });
 };
 
 const isTerminalOrderStatus = status => {
@@ -165,7 +178,6 @@ class BinanceAccountMirror {
     this.wsReady = false;
     /** @type {Map<string, number>} */
     this.wsEventLogCount = new Map();
-    this.positionUpdateTimeCache = readPositionUpdateTimeCache();
   }
 
   /** 控制台打印当前镜像：持仓 + 普通挂单 + 条件单 */
@@ -335,7 +347,7 @@ class BinanceAccountMirror {
     }
     this.connectGen += 1;
     const gen = this.connectGen;
-    this.detachWs();
+    this.detachWs(); 
 
     (async () => {
       try {
@@ -346,7 +358,8 @@ class BinanceAccountMirror {
         this.activeUrl = url;
         const ws = new WebSocket(url);
         this.ws = ws;
-ws.onopen = () => {
+
+        ws.onopen = () => {
           if (gen !== this.connectGen) return;
           this.wsReady = true;
           this.lastError = null;
@@ -468,7 +481,6 @@ ws.onopen = () => {
   applyAccountUpdate(msg) {
     const positions = msg?.a?.P || msg?.a?.positions || [];
     if (!Array.isArray(positions)) return;
-    const eventTime = Number(msg.E) || Date.now();
     positions.forEach(p => {
       const symbol = String(p.s || p.symbol || '').toUpperCase();
       if (!symbol) return;
@@ -477,22 +489,10 @@ ws.onopen = () => {
       const key = posKey(symbol, positionSide);
       if (!Number.isFinite(amt) || amt === 0) {
         this.positions.delete(key);
-        const cacheKey = positionCacheKey(symbol, positionSide);
-        if (this.positionUpdateTimeCache[cacheKey] != null) {
-          delete this.positionUpdateTimeCache[cacheKey];
-          writePositionUpdateTimeCache(this.positionUpdateTimeCache);
-        }
         return;
       }
-      const cacheKey = positionCacheKey(symbol, positionSide);
-      const cachedUpdateTime = Number(this.positionUpdateTimeCache[cacheKey]);
-      const firstUpdateTime =
-        Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0 ? cachedUpdateTime : eventTime;
-      if (!(Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0)) {
-        this.positionUpdateTimeCache[cacheKey] = firstUpdateTime;
-        writePositionUpdateTimeCache(this.positionUpdateTimeCache);
-      }
       const prev = this.positions.get(key) || {};
+      const firstUpdateTime = Number(prev.openTime || prev.updateTime) || Number(p.T || p.updateTime) || Date.now();
       this.positions.set(key, {
         ...prev,
         symbol,
@@ -500,6 +500,7 @@ ws.onopen = () => {
         positionAmt: String(amt),
         entryPrice: p.ep != null ? String(p.ep) : prev.entryPrice,
         markPrice: p.mp != null ? String(p.mp) : prev.markPrice,
+        openTime: firstUpdateTime,
         updateTime: firstUpdateTime,
         unrealizedProfit: p.up != null ? String(p.up) : prev.unrealizedProfit,
       });
@@ -531,6 +532,7 @@ ws.onopen = () => {
     const key = orderKey(normalized);
     if (!key) return;
     if (isTerminalOrderStatus(status)) {
+      auditOrderEvent('order_terminal', normalized, { source: 'ORDER_TRADE_UPDATE' });
       this.openOrders.delete(key);
       return;
     }
@@ -564,6 +566,7 @@ ws.onopen = () => {
     const key = algoKey(normalized);
     if (!key) return;
     if (isTerminalAlgoStatus(status)) {
+      auditOrderEvent('algo_terminal', normalized, { source: 'ALGO_UPDATE' });
       this.algoOrders.delete(key);
       return;
     }
@@ -576,45 +579,15 @@ ws.onopen = () => {
   }
 
   applyRestBootstrap({ positions, orders, algos, hedgeMode }) {
-    const previousPositions = this.positions;
-    const nextCache = { ...this.positionUpdateTimeCache };
-    const activeCacheKeys = new Set();
-    this.positions = new Map();
+    this.positions.clear();
     (positions || []).forEach(p => {
       const symbol = String(p?.symbol || '').toUpperCase();
       if (!symbol) return;
       const amt = Number(p.positionAmt || 0);
+      if (!(amt !== 0 && Number.isFinite(amt))) return;
       const positionSide = String(p.positionSide || 'BOTH').toUpperCase();
-      const cacheKey = positionCacheKey(symbol, positionSide);
-      if (!(amt !== 0 && Number.isFinite(amt))) {
-        delete nextCache[cacheKey];
-        return;
-      }
-      const key = posKey(symbol, positionSide);
-      const previous = previousPositions.get(key);
-      activeCacheKeys.add(cacheKey);
-      const cachedUpdateTime = Number(nextCache[cacheKey]);
-      const firstUpdateTime =
-        Number.isFinite(cachedUpdateTime) && cachedUpdateTime > 0
-          ? cachedUpdateTime
-          : Number.isFinite(Number(p.updateTime)) && Number(p.updateTime) > 0
-            ? Number(p.updateTime)
-            : Date.now();
-      nextCache[cacheKey] = firstUpdateTime;
-      this.positions.set(key, {
-        ...previous,
-        ...p,
-        symbol,
-        positionSide,
-        // 只使用本地首次获取仓位的时间；positionRisk.updateTime 仅作首次无缓存时的回退。
-        updateTime: firstUpdateTime,
-      });
+      this.positions.set(posKey(symbol, positionSide), { ...p, symbol, positionSide });
     });
-    Object.keys(nextCache).forEach(cacheKey => {
-      if (!activeCacheKeys.has(cacheKey)) delete nextCache[cacheKey];
-    });
-    this.positionUpdateTimeCache = nextCache;
-    writePositionUpdateTimeCache(nextCache);
 
     this.openOrders.clear();
     (orders || []).forEach(o => {
@@ -656,9 +629,9 @@ ws.onopen = () => {
         console.warn('[BinanceAccountMirror] openAlgoOrders', pickErr(algoRes));
       }
       this.applyRestBootstrap({
-        positions: Array.isArray(posRes.response) ? posRes.response : [],
-        orders: orderRes?.ok && Array.isArray(orderRes.response) ? orderRes.response : [],
-        algos: algoRes?.ok && Array.isArray(algoRes.response) ? algoRes.response : [],
+        positions: responseList(posRes),
+        orders: orderRes?.ok ? responseList(orderRes) : [],
+        algos: algoRes?.ok ? responseList(algoRes) : [],
         hedgeMode: Boolean(modeRes?.response?.dualSidePosition),
       });
       if (!orderRes?.ok || !algoRes?.ok) {
@@ -747,4 +720,4 @@ export const refreshBinanceAccountMirror = async () =>
 export const getBinanceAccountMirrorStatus = () => ({
   ...getSharedBinanceAccountMirror().getStatus(),
   acquireCount,
-}); 
+});
