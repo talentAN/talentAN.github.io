@@ -10,6 +10,7 @@ const MORE_KEY = '__more__';
 
 const PRIMARY_ITEMS = [
   { key: '/quick-calc/trade-record', label: '合约交易记录' },
+{ key: '/quick-calc/position-monitor', label: '持仓监控' },
   { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
   { key: '/quick-calc/system_bullish', label: '系统-横盘抬头' },
   { key: '/quick-calc/low-vol-range-blast', label: '系统-低波动横盘暴涨' },
@@ -27,6 +28,7 @@ const MORE_ITEMS = [
 const ROUTE_PRIORITY = [
   '/quick-calc/spot-record',
   '/quick-calc/trade-record',
+  '/quick-calc/position-monitor',
   '/quick-calc/key-log',
   '/quick-calc/pattern',
   '/quick-calc/kang-dan',

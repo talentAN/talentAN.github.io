@@ -10,8 +10,15 @@ const SPOT_BASE = 'https://api.binance.com';
 const WEIGHT_SOFT_LIMIT = 1500;
 // 418/429 是按 IP 封禁，全局共享解禁时间，避免其它请求继续撞墙
 let bannedUntil = 0;
-
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const parseBanUntil = (text, retryAfter) => {
+  const match = String(text || '').match(/banned until\s+(\d+)/i);
+  const bannedAt = match ? Number(match[1]) : 0;
+  const retryAt = Number(retryAfter) > 0 ? Date.now() + Number(retryAfter) * 1000 : 0;
+  const deadline = Math.max(bannedAt, retryAt);
+  return deadline > Date.now() ? deadline + 60 * 1000 : 0;
+};
 
 export const getBinanceBanRemaining = () => Math.max(0, bannedUntil - Date.now());
 
@@ -27,15 +34,15 @@ const fetchWithBackoff = async (url, { signal, retries = 6 } = {}) => {
     const response = await fetch(url, { signal });
 
     if (response.status === 418 || response.status === 429) {
+      const body = await response.clone().text().catch(() => '');
       const retryAfter = Number(response.headers.get('retry-after'));
-      const waitMs =
-        Number.isFinite(retryAfter) && retryAfter > 0
-          ? (retryAfter + 1) * 1000
-          : Math.min(120000, 3000 * 2 ** attempt);
-      bannedUntil = Date.now() + waitMs;
-      console.warn(`Binance ${response.status} 限频，等待 ${Math.round(waitMs / 1000)}s 后重试`);
-      await sleep(waitMs);
-      continue;
+      const parsedDeadline = parseBanUntil(body, retryAfter);
+      const waitMs = parsedDeadline > Date.now()
+        ? parsedDeadline - Date.now()
+        : Math.min(120000, 3000 * 2 ** attempt);
+      bannedUntil = Math.max(bannedUntil, Date.now() + waitMs);
+      console.warn(`Binance ${response.status} 限频，冷却 ${Math.round(waitMs / 1000)}s`);
+      throw new Error(`Binance 限频冷却中 ${Math.round(waitMs / 1000)}s`);
     }
 
     if (!response.ok) {
@@ -59,7 +66,7 @@ function normalizeInterval(granularity) {
   if (g.includes('1d')) return '1d';
   if (g.includes('1h')) return '1h';
   if (g.includes('1m')) return '1m';
-  if (/^\d+m$/.test(g)) return g;   
+  if (/^\d+m$/.test(g)) return g;
   // fallback: try to extract number + unit
   if (/^\d+d$/.test(g)) return g;
   if (/^\d+h$/.test(g)) return g;
@@ -186,9 +193,10 @@ export const getSpotKlineData = async ({ symbol, granularity, limit = 2, startTi
 
 export const getFutureTicker = async symbol => {
   try {
-    const res = await fetch(`${FUTURES_BASE}/fapi/v1/ticker/24hr?symbol=${symbol}`);
-    const data = await res.json();
-    return data;
+    const res = await fetchWithBackoff(
+      `${FUTURES_BASE}/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(symbol)}`
+    );
+    return await res.json();
   } catch (e) {
     console.error('binance getFutureTicker error', e);
     return {};
@@ -255,4 +263,4 @@ export default {
   getSpotKlineData,
   getFutureTicker,
   getSpotTicker,
-};
+}; 

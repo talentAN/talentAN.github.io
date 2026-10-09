@@ -56,8 +56,19 @@ export const getOrder = async ({ symbol, orderId, origClientOrderId }) =>
     },
   });
 
+  export const getUserTrades = async ({ symbol, startTime, endTime, limit = 1000 } = {}) =>
+  signedRequestVerbose({
+    method: 'GET',
+    base: FUTURES_BASE,
+    path: '/fapi/v1/userTrades',
+    params: {
+      symbol,
+      ...(startTime != null ? { startTime } : {}),
+      ...(endTime != null ? { endTime } : {}),
+      ...(limit != null ? { limit } : {}),
+    },
+  });
 /**
- * 查询账户是单向持仓还是双向持仓（Hedge Mode）：GET /fapi/v1/positionSide/dual
  * 文档：https://binance-docs.github.io/apidocs/futures/en/#get-current-position-mode-user_data
  * 返回 { dualSidePosition: true|false }；双向持仓下单必须带 positionSide。
  */
