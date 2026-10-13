@@ -230,8 +230,10 @@ export const placeFutureOpenStopMarketAlgo = async ({
 };
 
 /**
- * 多单追踪止盈：SELL + TRAILING_STOP_MARKET。
- * activatePrice 须高于最新价；callbackRate 为百分比，API 上限通常 10。
+ * 追踪止盈：TRAILING_STOP_MARKET。
+ * - activatePrice 可选：不传则立刻按交易所最新价开始追踪（等同网页不设激活价）。
+ * - 若传入：多仓须高于最新价、空仓须低于最新价，否则易 -2021 立刻触发拒单。
+ * - callbackRate 为百分比，币安常见上限 10。
  */
 export const placeFutureTrailingStopAlgo = async ({
   symbol,
@@ -249,9 +251,11 @@ export const placeFutureTrailingStopAlgo = async ({
     side,
     type: 'TRAILING_STOP_MARKET',
     quantity: String(quantity),
-    activatePrice: String(activatePrice),
     callbackRate: String(callbackRate),
     workingType,
+    ...(activatePrice != null && Number(activatePrice) > 0
+      ? { activatePrice: String(activatePrice) }
+      : {}),
     ...(positionSide ? { positionSide } : { reduceOnly: 'true' }),
     ...(clientAlgoId ? { clientAlgoId } : {}),
   };

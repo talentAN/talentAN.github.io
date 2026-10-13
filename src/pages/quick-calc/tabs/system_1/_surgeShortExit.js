@@ -6,10 +6,11 @@
  *   b：最新价
  *
  * 区间（互斥；「无止盈」时才挂固定止盈）：
- *   zz > 0.8E              → TP@0.8E 平 25%
- *   0.7E < zz ≤ 0.8E       → TP@0.7E 平 25%
- *   0.5E < zz ≤ 0.7E       → TP@0.5E 平 30% + 追踪 15%（无追踪才挂）
- *   zz ≤ 0.5E              → 无止盈且无追踪 → 只挂追踪 15% 平仓
+ *   0.8E < zz ≤ E          → TP@0.8E 平仓比例见 BANDS.shallow（一档）
+ *   0.7E < zz ≤ 0.8E       → TP@mid.mult
+ *   0.5E < zz ≤ 0.7E       → TP@deep + 追踪
+ *   zz ≤ 0.5E              → 无止盈且无追踪 → 只挂追踪
+ *   zz > E                 → 不挂一档（空头未回到成本价以内）
  *
  * 追踪 callbackRate：策略要 15%，币安常见上限 10 → 夹到 10 并在 tip 注明。
  */
@@ -94,16 +95,20 @@ const getRules = async symbol => {
 const typeBlob = o =>
   `${o?.type || ''} ${o?.orderType || ''} ${o?.origType || ''} ${o?.algoType || ''}`.toUpperCase();
 
-/** 空头固定止盈：BUY + TAKE_PROFIT（非追踪） */
+/** 本模块下的空头止盈 clientAlgoId 前缀（placeShortTp 使用 stp…）。 */
+const isSurgeShortTpClientId = o =>
+  /^stp/i.test(String(o?.clientAlgoId || o?.clientOrderId || ''));
+
+/** 空头固定止盈：BUY + TAKE_PROFIT（非追踪）；类型缺失时用 stp 客户端 ID 兜底。 */
 export const isShortTakeProfitOrder = o => {
   const side = String(o?.side || '').toUpperCase();
   if (side !== 'BUY') return false;
-  const blob = typeBlob(o);
-  if (!blob.includes('TAKE_PROFIT')) return false;
-  if (blob.includes('TRAILING')) return false;
   const ps = String(o?.positionSide || '').toUpperCase();
   if (ps === 'LONG') return false;
-  return true;
+  const blob = typeBlob(o);
+  if (blob.includes('TRAILING')) return false;
+  if (blob.includes('TAKE_PROFIT')) return true;
+  return isSurgeShortTpClientId(o);
 };
 
 /** 空头追踪：BUY + TRAILING */
@@ -115,6 +120,26 @@ export const isShortTrailingOrder = o => {
   const ps = String(o?.positionSide || '').toUpperCase();
   if (ps === 'LONG') return false;
   return true;
+};
+
+/** 本轮/会话内已成功挂过的空头止盈：symbol → Set(bandKey)，避免镜像滞后导致重复挂单刷 tip。 */
+const placedTpCache = new Map();
+const tpCacheKey = symbol => String(symbol || '').toUpperCase();
+const tpCacheHas = (symbol, bandKey) => {
+  const set = placedTpCache.get(tpCacheKey(symbol));
+  return Boolean(set && set.has(bandKey));
+};
+const tpCacheAdd = (symbol, bandKey) => {
+  const key = tpCacheKey(symbol);
+  const set = placedTpCache.get(key) || new Set();
+  set.add(bandKey);
+  placedTpCache.set(key, set);
+};
+const pruneTpCache = activeSymbols => {
+  const alive = new Set((activeSymbols || []).map(tpCacheKey));
+  [...placedTpCache.keys()].forEach(key => {
+    if (!alive.has(key)) placedTpCache.delete(key);
+  });
 };
 
 const listShortPositions = rows =>
@@ -200,13 +225,15 @@ export const fetchZzSinceOpen = async ({ symbol, openTimeMs, exchange = 'binance
   }
   zzKlineCache.set(klineKey, { fetchedAt: Date.now(), low: a });
   return { zz: Math.min(a, b), a, b };
-}; 
+};
 
 const pickBand = (zz, entry) => {
-  const e08 = entry * 0.8;
-  const e07 = entry * 0.7;
-  const e05 = entry * 0.5;
-  if (zz > e08) return { kind: 'tp', ...BANDS.shallow };
+  const e = Number(entry);
+  const e08 = e * 0.8;
+  const e07 = e * 0.7;
+  const e05 = e * 0.5;
+  // 一档：跌破成本价但尚未到 0.8E（含等于 E）；zz>E 时不挂一档
+  if (zz > e08 && zz <= e) return { kind: 'tp', ...BANDS.shallow };
   if (zz > e07 && zz <= e08) return { kind: 'tp', ...BANDS.mid };
   if (zz > e05 && zz <= e07) return { kind: 'tp_trail', ...BANDS.deep };
   if (zz <= e05) return { kind: 'trail_only' };
@@ -243,21 +270,14 @@ const placeShortTp = async ({ symbol, qty, entry, ratio, mult, hedgeMode, rules 
   };
 };
 
-/** 空头追踪：activatePrice 须低于最新价 */
-const placeShortTrail = async ({ symbol, qty, lastPrice, hedgeMode, rules }) => {
+/**
+ * 空头追踪：不传 activatePrice，等同网页「立刻激活」、由交易所按提交时最新价开始追踪。
+ * 避免自算 last×0.999 与 CONTRACT_PRICE 不一致导致 -2021 Order would immediately trigger。
+ */
+const placeShortTrail = async ({ symbol, qty, hedgeMode, rules }) => {
   const trailQty = quantizeQuantity(qty, rules.stepSize, rules.quantityPrecision);
   if (!(trailQty > 0) || (rules.minQty > 0 && trailQty < rules.minQty)) {
     return { ok: false, detail: `追踪数量过小 ${trailQty}` };
-  }
-  const last = Number(lastPrice);
-  if (!(last > 0)) return { ok: false, detail: '无最新价，无法挂追踪' };
-
-  let activatePrice = floorToTick(last * 0.999, rules);
-  if (!(activatePrice > 0) || activatePrice >= last) {
-    activatePrice = floorToTick(last - (rules.tickSize || last * 1e-6), rules);
-  }
-  if (!(activatePrice > 0) || activatePrice >= last) {
-    return { ok: false, detail: `追踪激活价无效 activate=${activatePrice} last=${last}` };
   }
 
   const cbRate = Math.min(TRAIL_CB_BN_MAX, TRAIL_CB_WANTED);
@@ -268,7 +288,6 @@ const placeShortTrail = async ({ symbol, qty, lastPrice, hedgeMode, rules }) => 
     symbol,
     side: 'BUY',
     quantity: trailQty,
-    activatePrice,
     callbackRate: cbRate,
     ...(hedgeMode ? { positionSide: 'SHORT' } : {}),
     clientAlgoId: oid('strl'),
@@ -276,14 +295,13 @@ const placeShortTrail = async ({ symbol, qty, lastPrice, hedgeMode, rules }) => 
   return {
     ok: Boolean(result?.ok),
     detail: result?.ok ? null : pickErr(result) || '追踪提交失败',
-    activatePrice,
+    activatePrice: null,
     callbackRate: cbRate,
     quantity: trailQty,
     note,
     result,
   };
 };
-
 /**
  * 处理单个空头：按 zz 区间挂止盈 / 追踪。
  * @returns {{ tips: string[], placed: number, skipped: number, failed: number }}
@@ -295,7 +313,7 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
     ...algos.filter(o => String(o.symbol || '').toUpperCase() === symbol),
     ...orders.filter(o => String(o.symbol || '').toUpperCase() === symbol),
   ];
-  const hasTp = related.some(isShortTakeProfitOrder);
+  const hasTpLive = related.some(isShortTakeProfitOrder);
   const hasTrail = related.some(isShortTrailingOrder);
 
   const zzInfo = await fetchZzSinceOpen({
@@ -317,6 +335,10 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
     return { tips, placed: 0, skipped: 1, failed: 0 };
   }
 
+  // 现场有 TP，或本会话已挂过该档 → 视为已有止盈（防镜像滞后重复挂）
+  const hasTp =
+    hasTpLive || (band.key ? tpCacheHas(symbol, band.key) : false);
+
   if (band.kind === 'trail_only') {
     if (hasTp || hasTrail) {
       tips.push(
@@ -329,13 +351,12 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
     const trail = await placeShortTrail({
       symbol,
       qty: pos.qty,
-      lastPrice: zzInfo.b || pos.markPrice,
       hedgeMode,
       rules,
     });
     if (trail.ok) {
       tips.push(
-        `${symbol}：zz≤0.5E 已挂追踪${trail.callbackRate}% 量${trail.quantity}${
+        `${symbol}：zz≤0.5E 已挂追踪${trail.callbackRate}%（立刻激活）量${trail.quantity}${
           trail.note ? `（${trail.note}）` : ''
         }`
       );
@@ -365,6 +386,7 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
     });
     if (tp.ok) {
       placed += 1;
+      if (band.key) tpCacheAdd(symbol, band.key);
       tips.push(
         `${symbol}：挂 TP@×${band.mult} 平${(band.ratio * 100).toFixed(0)}% @${tp.triggerPrice}（${zzLabel}）`
       );
@@ -384,14 +406,13 @@ export const processShortExit = async (pos, { hedgeMode, algos = [], orders = []
       const trail = await placeShortTrail({
         symbol,
         qty: remainQty > 0 ? remainQty : pos.qty,
-        lastPrice: zzInfo.b || pos.markPrice,
         hedgeMode,
         rules,
       });
       if (trail.ok) {
         placed += 1;
         tips.push(
-          `${symbol}：挂追踪${trail.callbackRate}% 量${trail.quantity}${
+          `${symbol}：挂追踪${trail.callbackRate}%（立刻激活）量${trail.quantity}${
             trail.note ? `（${trail.note}）` : ''
           }`
         );
@@ -428,7 +449,8 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
 
   let snap;
   try {
-    snap = await getBinanceAccountSnapshot();
+    // 强制 REST：WS 镜像条件单常滞后，会导致每轮认不出已挂 TP、重复下单刷 tip。
+    snap = await getBinanceAccountSnapshot({ forceRest: true, ensureStarted: true });
   } catch (e) {
     return {
       ok: false,
@@ -451,13 +473,15 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
 
   const shorts = listShortPositions(snap.positions);
   if (!shorts.length) {
+    placedTpCache.clear();
     onStatus?.('空头止盈：无空头持仓');
     return { ok: true, tips: [], placed: 0, failed: 0, skipped: 0, shortCount: 0 };
   }
+  pruneTpCache(shorts.map(p => p.symbol));
 
   const positionMode = await getCachedPositionMode();
   const hedgeMode = Boolean(positionMode?.response?.dualSidePosition);
-  const algos = Array.isArray(snap.algoOrders) ? snap.algoOrders : [];
+  const algos = Array.isArray(snap.algoOrders) ? [...snap.algoOrders] : [];
   const orders = Array.isArray(snap.openOrders) ? snap.openOrders : [];
 
   const allTips = [];
@@ -475,6 +499,18 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
       placed += r.placed;
       failed += r.failed;
       skipped += r.skipped;
+      // 本轮内立刻记入 algos，避免同轮多仓/后续逻辑再读旧列表。
+      if (r.placed > 0) {
+        algos.push({
+          symbol: pos.symbol,
+          side: 'BUY',
+          positionSide: 'SHORT',
+          type: 'TAKE_PROFIT_MARKET',
+          orderType: 'TAKE_PROFIT_MARKET',
+          algoType: 'CONDITIONAL',
+          clientAlgoId: `stp${pos.symbol}`,
+        });
+      }
     } catch (e) {
       failed += 1;
       allTips.push(`${pos.symbol}：异常 ${e?.message || e}`);
@@ -499,4 +535,4 @@ export const runSurgeShortExitRound = async ({ aborted: isAborted, onStatus } = 
     skipped,
     shortCount: shorts.length,
   };
-}; 
+};

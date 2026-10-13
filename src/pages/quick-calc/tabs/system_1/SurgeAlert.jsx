@@ -577,15 +577,8 @@ const SurgeAlert = ({ docked = false }) => {
               text,
             }));
             setExitTips(prev => [...stamped, ...prev].slice(0, EXIT_TIPS_MAX));
-            if (exitResult.placed > 0) {
+            if (exitResult.failed > 0) {
               setExpanded(true);
-              playAlertSound();
-              bringTabToFront(
-                exitResult.tips
-                  .filter(t => t.includes('已挂') || t.includes('挂 TP') || t.includes('挂追踪'))
-                  .slice(0, 2)
-                  .join(' ') || '空头止盈已挂单'
-              );
             }
           }
         } catch (e) {

@@ -1,21 +1,42 @@
 /** 横盘监控：是否启用自动扫描并挂开仓委托。 */
 export const RANGE_MONITOR_SCAN_ENABLED = true;
-/** 横盘监控：最高价达到开仓价的 1.2 倍后，武装开仓价全仓止损。 */
+/** 横盘监控：盈利达到 20% 后，武装开仓价全仓止损（多 1.2E / 空对称 0.8E）。 */
 export const RANGE_MONITOR_SL_ARM_MULT = 1.2;
-/** 横盘监控：最高价达到开仓价的 1.4 倍后，允许挂追踪止盈。 */
-export const RANGE_MONITOR_TRAIL_ARM_MULT = 1.4;
-/** 横盘监控：固定止盈档位；按最高价区间选择触发倍数。 */
-export const RANGE_MONITOR_TP_MULTS = [
-  // 最高价涨幅达到 20% 前，固定止盈触发价为开仓价的 1.2 倍。
-  { key: 'tp120', mult: 1.2, gainPct: 20 },
-  // 最高价涨幅达到 20% 至 50% 前，固定止盈触发价为开仓价的 1.5 倍。
-  { key: 'tp150', mult: 1.5, gainPct: 50 },
-  // 最高价涨幅达到 50% 至 100% 前，固定止盈触发价为开仓价的 2 倍。
-  { key: 'tp200', mult: 2.0, gainPct: 100 },
+
+/**
+ * 多仓固定止盈（保持原样）：
+ * 1.2E / 1.5E / 2.0E，每档平 10%。
+ */
+export const RANGE_MONITOR_LONG_TP_MULTS = [
+  { key: 'tp120', mult: 1.2, gainPct: 20, closePct: 0.1 },
+  { key: 'tp150', mult: 1.5, gainPct: 50, closePct: 0.1 },
+  { key: 'tp200', mult: 2.0, gainPct: 100, closePct: 0.1 },
 ];
-/** 横盘监控：每个固定止盈档默认平掉当前持仓的 10%。 */
+
+/**
+ * 空仓固定止盈（独立策略）：
+ * - priceMult：触发价 = entry × priceMult
+ * - mult：与 calcMoveRatio（2−xx/entry）对齐的阶段阈值
+ * 一档 0.8E 平 25%；二档 0.7E 平 35%。
+ */
+export const RANGE_MONITOR_SHORT_TP_MULTS = [
+  { key: 'stp80', mult: 1.2, priceMult: 0.8, gainPct: 20, closePct: 0.25 },
+  { key: 'stp70', mult: 1.3, priceMult: 0.7, gainPct: 30, closePct: 0.35 },
+];
+
+/** @deprecated 等同多仓档位；请用 tpTiersForDirection / RANGE_MONITOR_LONG_TP_MULTS */
+export const RANGE_MONITOR_TP_MULTS = RANGE_MONITOR_LONG_TP_MULTS;
+
+/** 多仓：盈利 40%（xx ≥ 1.4E）后允许挂追踪止盈。 */
+export const RANGE_MONITOR_LONG_TRAIL_ARM_MULT = 1.4;
+/** 空仓：价格 ≤ 开仓价 × 0.75（盈利 25%）后允许挂追踪止盈。 */
+export const RANGE_MONITOR_SHORT_TRAIL_ARM_PRICE_MULT = 0.75;
+/** @deprecated 等同多仓追踪武装；请用 trail 方向专用常量 */
+export const RANGE_MONITOR_TRAIL_ARM_MULT = RANGE_MONITOR_LONG_TRAIL_ARM_MULT;
+
+/** 多仓档位默认平仓比例（兼容兜底）。 */
 export const RANGE_MONITOR_TP_CLOSE_PCT = 0.1;
-/** 横盘监控：追踪止盈回撤比例；传给交易所前需遵守交易所上限。 */
+/** 横盘监控：追踪止盈回撤比例。 */
 export const RANGE_MONITOR_TRAIL_CALLBACK_PCT = 12;
 /** 横盘监控：每个持仓占用的开仓委托槽位数量。 */
 export const RANGE_MONITOR_SLOT_PER_POSITION = 2;
@@ -42,12 +63,8 @@ export const RANGE_MONITOR_SCAN_MAX_RANGE_MULT = 2;
 
 /** 横盘监控 localStorage key，统一集中维护。 */
 export const RANGE_MONITOR_STORAGE_KEYS = Object.freeze({
-  // 监控运行状态。
   running: 'range-monitor-running',
-  // 高低比上限。
   maxMult: 'range-monitor-max-mult',
-  // 距上沿近带百分比。
   nearBandPct: 'range-monitor-near-band-pct',
-  // 已成功下过的固定止盈档位。
   tpOrderTiers: 'range-monitor-tp-order-tiers',
 });

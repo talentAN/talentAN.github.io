@@ -14,10 +14,24 @@ import {
 } from '@root/src/container/binance/api/order';
 import { getContracts } from '@root/src/container/binance/api';
 import { isLiveOrderEnabled, quantizeQuantity } from './system_1/_autoOrderModel';
-import { RANGE_MONITOR_TRAIL_ARM_MULT as TRAIL_ARM_MULT } from './low_vol_range_blast/_rangeMonitorParams';
+import { RANGE_MONITOR_TRAIL_CALLBACK_PCT as TRAIL_CALLBACK_RATE } from './low_vol_range_blast/_rangeMonitorParams';
+import {
+  calcMoveRatio,
+  classifyBreakevenStopStatus,
+  classifyTpTierStatus,
+  classifyTrailStatus,
+  directionFromUiSide,
+  exitOrderSide,
+  isBinanceTakeProfitOrder,
+  isBinanceTrailingAlgo,
+  isBreakevenStopAlgo,
+  shouldArmFirstTier,
+  tierTriggerPrice,
+  tpTiersForDirection,
+  trailActivateRawPrice,
+} from './low_vol_range_blast/_rangeMonitorJudges';
 import { getPositionOpenTime } from '@root/src/container/binance/positionOpenTime';
 import { getPositionExtreme } from '@root/src/container/binance/positionExtremes';
-const TRAIL_CALLBACK_RATE = 10;
 let contractsPromise = null;
 let positionModePromise = null;
 const getCachedContracts = () => {
@@ -66,33 +80,6 @@ const baseRowsFromSnapshot = (snapshot, contracts = []) => {
     });
 };
 
-const orderTypeText = order =>
-  `${order?.type || ''} ${order?.orderType || ''} ${order?.origType || ''} ${order?.algoType || ''}`.toUpperCase();
-const isExitOrder = (order, side, kind) => {
-  const orderSide = String(order?.side || '').toUpperCase();
-  const expectedSide = side === '多' ? 'SELL' : 'BUY';
-  if (orderSide !== expectedSide) return false;
-  const text = orderTypeText(order);
-  if (kind === 'trail') return text.includes('TRAILING');
-  if (kind === 'stop') return text.includes('STOP') && !text.includes('TAKE_PROFIT');
-  // 旧版/代理返回可能只保留条件单数据结构，缺少类型字段；按止盈客户端 ID 做最后兜底。
-  return text.includes('TAKE_PROFIT') || /(?:^|_)s3tp|(?:^|_)rmtp|(?:^|_)pmtp/i.test(String(order?.clientAlgoId || order?.clientOrderId || ''));
-};
-
-const getTriggerPrice = order =>
-  Number(order?.triggerPrice ?? order?.stopPrice ?? order?.price ?? order?.activatePrice);
-
-const expectedTakeProfitPrice = (entryPrice, side, multiplier) =>
-  // 止盈档位按收益率计算：多仓 +20%，空仓 -20%，不能用空仓 entry / 1.2。
-  side === '多' ? entryPrice * multiplier : entryPrice * (2 - multiplier);
-
-const matchesTakeProfitTier = (trigger, entryPrice, side, multiplier) => {
-  if (!(trigger > 0) || !(entryPrice > 0)) return false;
-  const expected = expectedTakeProfitPrice(entryPrice, side, multiplier);
-  // 委托可能按区间上沿而非当前持仓均价计算；按目标倍数给 1% 相对容差，兼容 tick 舍入及参考价差异。
-  return Math.abs(trigger - expected) / expected <= 0.01;
-};
-
 const enrichPositionRow = async (row, snapshot) => {
   const openTime = await getPositionOpenTime({ symbol: row.symbol, positionSide: row.positionSide });
   const effectiveOpenTime = openTime || Number(snapshot?.positions?.find(p => p.symbol === row.symbol && String(p.positionSide || 'BOTH').toUpperCase() === row.positionSide)?.updateTime) || 0;
@@ -102,34 +89,42 @@ const enrichPositionRow = async (row, snapshot) => {
     ...(snapshot?.algoOrders || []),
     ...(snapshot?.openOrders || []),
   ].filter(order => String(order.symbol || '').toUpperCase() === row.symbol);
-  const tpOrders = symbolOrders.filter(order => isExitOrder(order, row.side, 'tp'));
-  const trailOrders = symbolOrders.filter(order => isExitOrder(order, row.side, 'trail'));
-  const stopOrders = symbolOrders.filter(order => isExitOrder(order, row.side, 'stop'));
-  const ratio = postOpenExtreme && row.entryPrice ? postOpenExtreme / row.entryPrice : null;
-  const crossed = multiplier => ratio != null && (row.side === '多' ? ratio >= multiplier : ratio <= 1 / multiplier);
-  const tpStatus = multiplier => {
-    const exists = tpOrders.some(order => {
-      const trigger = getTriggerPrice(order);
-      return matchesTakeProfitTier(trigger, row.entryPrice, row.side, multiplier);
+  // 单向仓 positionSide=BOTH，用 UI 多/空 映射方向，与引擎 LONG/SHORT 口径一致。
+  const direction = directionFromUiSide(row.side);
+  const pos = { positionSide: direction };
+  const tpOrders = symbolOrders.filter(order => isBinanceTakeProfitOrder(order, direction));
+  const trailOrders = symbolOrders.filter(order => isBinanceTrailingAlgo(order, direction));
+  const breakevenStops = symbolOrders.filter(order =>
+    isBreakevenStopAlgo(order, row.entryPrice, row.tickSize, direction)
+  );
+  const moveRatio =
+    postOpenExtreme > 0 && row.entryPrice > 0
+      ? calcMoveRatio(row.entryPrice, postOpenExtreme, direction)
+      : null;
+  const tiers = tpTiersForDirection(direction);
+  const tpStatus = tier =>
+    classifyTpTierStatus({
+      tpOrders,
+      pos,
+      entry: row.entryPrice,
+      tier,
+      moveRatio,
+      tickSize: row.tickSize,
     });
-    if (exists) return 'placed';
-    return crossed(multiplier) ? 'filled' : 'pending';
-  };
   return {
     ...row,
     openTime: Number(effectiveOpenTime) || 0,
     postOpenExtreme,
-    tp1Status: tpStatus(1.2),
-    tp2Status: tpStatus(1.5),
-    tp3Status: tpStatus(2),
-    trailStatus: trailOrders.length ? 'placed' : crossed(1.4) ? 'filled' : 'pending',
-    stopStatus: trailOrders.length
-      ? 'tracked'
-      : stopOrders.length
-        ? 'placed'
-        : crossed(1.2)
-          ? 'missing'
-          : 'pending',
+    tp1Status: tpStatus(tiers[0]),
+    tp2Status: tpStatus(tiers[1]),
+    tp3Status: tiers[2] ? tpStatus(tiers[2]) : 'pending',
+    trailStatus: classifyTrailStatus({
+      trailOrders,
+      entry: row.entryPrice,
+      xx: postOpenExtreme,
+      direction,
+    }),
+    stopStatus: classifyBreakevenStopStatus({ trailOrders, breakevenStops, moveRatio }),
   };
 };
 
@@ -171,6 +166,42 @@ const PositionMonitor = () => {
     }
   }, []);
 
+  /** 只刷新单行：REST 对账后更新该持仓；已平仓则从表格移除。不触发整表 loading。 */
+  const refreshRow = useCallback(async row => {
+    const snapshot = await getBinanceAccountSnapshot({ forceRest: true, ensureStarted: true });
+    if (!snapshot?.ok) throw new Error(snapshot?.error || '账户快照不可用');
+    const contracts = await getCachedContracts();
+    const nextRows = baseRowsFromSnapshot(snapshot, contracts);
+    const next = nextRows.find(item => item.key === row.key);
+    if (!next) {
+      setRows(current => current.filter(item => item.key !== row.key));
+      return { removed: true };
+    }
+    // 先写入数量/标记价等基础字段，再异步补全委托状态，避免整表闪烁。
+    setRows(current => current.map(item => (item.key === next.key ? { ...item, ...next } : item)));
+    try {
+      const enriched = await enrichPositionRow(next, snapshot);
+      setRows(current => current.map(item => (item.key === enriched.key ? enriched : item)));
+    } catch (_) {
+      setRows(current =>
+        current.map(item =>
+          item.key === row.key
+            ? {
+                ...item,
+                ...next,
+                tp1Status: 'missing',
+                tp2Status: 'missing',
+                tp3Status: 'missing',
+                trailStatus: 'missing',
+                stopStatus: 'missing',
+              }
+            : item
+        )
+      );
+    }
+    return { removed: false };
+  }, []);
+
   useEffect(() => {
     let alive = true;
     acquireBinanceAccountMirror()
@@ -203,17 +234,37 @@ const PositionMonitor = () => {
     if (!(quantity > 0)) throw new Error('追踪数量无效');
     const entry = row.entryPrice;
     const mark = row.markPrice;
-    let activatePrice = entry * TRAIL_ARM_MULT;
-    if (mark > 0 && activatePrice <= mark) activatePrice = mark * 1.001;
-    if (rules.tickSize > 0) {
-      activatePrice = Math.ceil(activatePrice / rules.tickSize - 1e-10) * rules.tickSize;
+    const direction = directionFromUiSide(row.side);
+    const pos = { positionSide: direction };
+    const armRaw = trailActivateRawPrice(entry, direction);
+    const extreme = Number(row.postOpenExtreme);
+    // 极值已超武装点 → 不设激活价（立刻激活）；否则挂 1.4E / 0.75E
+    let activatePrice = null;
+    if (direction === 'LONG') {
+      const alreadyPast = (extreme > 0 && extreme >= armRaw) || (mark > 0 && mark >= armRaw);
+      if (!alreadyPast) {
+        activatePrice = armRaw;
+        if (mark > 0 && activatePrice <= mark) activatePrice = mark * 1.001;
+        if (rules.tickSize > 0) {
+          activatePrice = Math.ceil(activatePrice / rules.tickSize - 1e-10) * rules.tickSize;
+        }
+      }
+    } else {
+      const alreadyPast = (extreme > 0 && extreme <= armRaw) || (mark > 0 && mark <= armRaw);
+      if (!alreadyPast) {
+        activatePrice = armRaw;
+        if (mark > 0 && activatePrice >= mark) activatePrice = mark * 0.999;
+        if (rules.tickSize > 0) {
+          activatePrice = Math.floor(activatePrice / rules.tickSize + 1e-10) * rules.tickSize;
+        }
+      }
     }
     const positionSide = rules.dualSidePosition ? row.positionSide : undefined;
     const result = await placeFutureTrailingStopAlgo({
       symbol: row.symbol,
-      side: row.side === '多' ? 'SELL' : 'BUY',
+      side: exitOrderSide(pos),
       quantity,
-      activatePrice,
+      ...(activatePrice != null && activatePrice > 0 ? { activatePrice } : {}),
       callbackRate: TRAIL_CALLBACK_RATE,
       positionSide,
       clientAlgoId: `pmtr${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
@@ -226,10 +277,11 @@ const PositionMonitor = () => {
     const rules = await withRules(row.symbol);
     const quantity = quantizeQuantity(row.quantity, rules.stepSize, rules.quantityPrecision);
     if (!(quantity > 0)) throw new Error('平仓数量无效');
+    const pos = { positionSide: directionFromUiSide(row.side) };
     const positionSide = rules.dualSidePosition ? row.positionSide : undefined;
     const result = await placeFutureMarketOrder({
       symbol: row.symbol,
-      side: row.side === '多' ? 'SELL' : 'BUY',
+      side: exitOrderSide(pos),
       quantity,
       reduceOnly: !positionSide,
       positionSide,
@@ -238,19 +290,32 @@ const PositionMonitor = () => {
     if (!result?.ok) throw new Error(result?.error || result?.response?.msg || '市价平仓失败');
   };
 
-  const placeTakeProfit = async (row, multiplier) => {
+  const placeTakeProfit = async (row, tier) => {
+    if (!tier) throw new Error('该方向无此止盈档');
     if (!isLiveOrderEnabled()) throw new Error('交易未解锁');
+    const direction = directionFromUiSide(row.side);
+    const tiers = tpTiersForDirection(direction);
+    // 一档武装条件：多 ≥ entry×1.02；空 ≤ entry×0.98。
+    if (tier === tiers[0] && !shouldArmFirstTier(direction, row.entryPrice, row.markPrice)) {
+      throw new Error(
+        direction === 'SHORT'
+          ? '空头一档：最新价未跌破开仓价×0.98，不下止盈单'
+          : '多头一档：最新价未达开仓价×1.02，不下止盈单'
+      );
+    }
     const rules = await withRules(row.symbol);
-    const quantity = quantizeQuantity(row.quantity * 0.1, rules.stepSize, rules.quantityPrecision);
+    const closePct = Number(tier?.closePct) > 0 ? Number(tier.closePct) : 0.1;
+    const quantity = quantizeQuantity(row.quantity * closePct, rules.stepSize, rules.quantityPrecision);
     if (!(quantity > 0)) throw new Error('止盈数量无效');
-    const triggerPrice = row.entryPrice * (row.side === '多' ? multiplier : 1 / multiplier);
+    const pos = { positionSide: direction };
+    const triggerPrice = tierTriggerPrice(row.entryPrice, tier, direction);
     const result = await placeFutureQtyTakeProfitAlgo({
       symbol: row.symbol,
-      side: row.side === '多' ? 'SELL' : 'BUY',
+      side: exitOrderSide(pos),
       quantity,
       triggerPrice,
       positionSide: rules.dualSidePosition ? row.positionSide : undefined,
-      clientAlgoId: `pmtp${multiplier}${Date.now()}`.slice(0, 32),
+      clientAlgoId: `pmtp${tier.key || tier.mult}${Date.now()}`.slice(0, 32),
     });
     if (!result?.ok) throw new Error(result?.error || result?.response?.msg || '止盈委托失败');
   };
@@ -259,12 +324,23 @@ const PositionMonitor = () => {
     const key = `${type}:${row.key}`;
     setBusyKey(key);
     try {
+      const tiers = tpTiersForDirection(directionFromUiSide(row.side));
       if (type === 'trail') await placeTrail(row);
       else if (type === 'close') await closeMarket(row);
-      else await placeTakeProfit(row, Number(type));
+      else if (type === 'tp1') await placeTakeProfit(row, tiers[0]);
+      else if (type === 'tp2') await placeTakeProfit(row, tiers[1]);
+      else if (type === 'tp3') await placeTakeProfit(row, tiers[2]);
       await refreshBinanceAccountMirror();
-      await load();
-      message.success(type === 'trail' ? `${row.symbol} 追踪委托已提交` : `${row.symbol} 已提交市价平仓`);
+      const result = await refreshRow(row);
+      message.success(
+        type === 'trail'
+          ? `${row.symbol} 追踪委托已提交`
+          : type === 'close'
+            ? result?.removed
+              ? `${row.symbol} 已市价平仓`
+              : `${row.symbol} 已提交市价平仓`
+            : `${row.symbol} 止盈委托已提交`
+      );
     } catch (e) {
       message.error(e?.message || String(e));
     } finally {
@@ -293,7 +369,12 @@ const PositionMonitor = () => {
       },
       { title: '一档止盈', key: 'tp1', align: 'right', render: (_, row) => statusCell(row.tp1Status) },
       { title: '二档止盈', key: 'tp2', align: 'right', render: (_, row) => statusCell(row.tp2Status) },
-      { title: '三档止盈', key: 'tp3', align: 'right', render: (_, row) => statusCell(row.tp3Status) },
+      {
+        title: '三档止盈',
+        key: 'tp3',
+        align: 'right',
+        render: (_, row) => (row.side === '空' ? <span style={{ color: '#8c8c8c' }}>—</span> : statusCell(row.tp3Status)),
+      },
       { title: '追踪委托', key: 'trail', align: 'right', render: (_, row) => statusCell(row.trailStatus) },
       { title: '成本止损', key: 'stop', align: 'right', render: (_, row) => statusCell(row.stopStatus) },
       {
@@ -301,9 +382,11 @@ const PositionMonitor = () => {
         key: 'actions',
         render: (_, row) => (
           <Space>
-            <Button size="small" loading={busyKey === `1.2:${row.key}`} onClick={() => runAction(row, '1.2')}>一档止盈</Button>
-            <Button size="small" loading={busyKey === `1.5:${row.key}`} onClick={() => runAction(row, '1.5')}>二档止盈</Button>
-            <Button size="small" loading={busyKey === `2:${row.key}`} onClick={() => runAction(row, '2')}>三档止盈</Button>
+            <Button size="small" loading={busyKey === `tp1:${row.key}`} onClick={() => runAction(row, 'tp1')}>一档止盈</Button>
+            <Button size="small" loading={busyKey === `tp2:${row.key}`} onClick={() => runAction(row, 'tp2')}>二档止盈</Button>
+            {row.side === '多' ? (
+              <Button size="small" loading={busyKey === `tp3:${row.key}`} onClick={() => runAction(row, 'tp3')}>三档止盈</Button>
+            ) : null}
             <Button size="small" loading={busyKey === `trail:${row.key}`} onClick={() => runAction(row, 'trail')}>
               追踪委托
             </Button>
@@ -319,7 +402,7 @@ const PositionMonitor = () => {
     [busyKey]
   );
 
-return (
+  return (
     <Card bodyStyle={{ padding: 6, fontSize: 12 }}>
       <div
         style={{
