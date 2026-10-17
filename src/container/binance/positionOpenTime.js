@@ -1,8 +1,10 @@
 import { getUserTrades } from './api/query';
 
 const LOOKBACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_LOOKBACK_MS = 100 * 24 * 60 * 60 * 1000;
-const CACHE_TTL_MS = 60 * 1000;
+/** 最多回看 30 天；再长对监控链路不划算 */
+const MAX_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+/** 持仓未平时开仓时间不变，长缓存避免每轮 userTrades */
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const cache = new Map();
 let requestQueue = Promise.resolve();
 
@@ -22,7 +24,6 @@ const isOpeningTrade = (trade, positionSide) => {
   const expectedSide = sideForPosition(normalizedPositionSide);
   if (side !== expectedSide) return false;
   if (normalizedPositionSide !== 'BOTH' && ps !== normalizedPositionSide) return false;
-  // Binance userTrades 的 buyer 表示账户是否为买方：多仓开仓是买入，空仓开仓是卖出。
   return normalizedPositionSide === 'SHORT' ? trade.buyer === false : trade.buyer !== false;
 };
 
@@ -33,23 +34,28 @@ const findLatestOpeningTime = (trades, positionSide) => {
   return Number(opening[0]?.time) || null;
 };
 
-export const getPositionOpenTime = async ({ symbol, positionSide = 'BOTH' }) => enqueue(async () => {
-  const key = `${symbol}:${positionSide}`;
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.checkedAt < CACHE_TTL_MS) return cached.openTime;
+/**
+ * 解析持仓开仓时间（签名 userTrades）。
+ * 优先走长缓存；仅在缓存未命中时回看最多 30 天。
+ */
+export const getPositionOpenTime = async ({ symbol, positionSide = 'BOTH' }) =>
+  enqueue(async () => {
+    const key = `${symbol}:${positionSide}`;
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.checkedAt < CACHE_TTL_MS) return cached.openTime;
 
-  const now = Date.now();
-  let openTime = null;
-  for (let end = now; end > now - MAX_LOOKBACK_MS && !openTime; end -= LOOKBACK_WINDOW_MS) {
-    const start = Math.max(now - MAX_LOOKBACK_MS, end - LOOKBACK_WINDOW_MS + 1);
-    const result = await getUserTrades({ symbol, startTime: start, endTime: end, limit: 1000 });
-    const trades = Array.isArray(result?.response) ? result.response : [];
-    openTime = findLatestOpeningTime(trades, positionSide);
-    if (start <= now - MAX_LOOKBACK_MS) break;
-  }
-  cache.set(key, { checkedAt: Date.now(), openTime });
-  return openTime;
-});
+    const now = Date.now();
+    let openTime = null;
+    for (let end = now; end > now - MAX_LOOKBACK_MS && !openTime; end -= LOOKBACK_WINDOW_MS) {
+      const start = Math.max(now - MAX_LOOKBACK_MS, end - LOOKBACK_WINDOW_MS + 1);
+      const result = await getUserTrades({ symbol, startTime: start, endTime: end, limit: 1000 });
+      const trades = Array.isArray(result?.response) ? result.response : [];
+      openTime = findLatestOpeningTime(trades, positionSide);
+      if (start <= now - MAX_LOOKBACK_MS) break;
+    }
+    cache.set(key, { checkedAt: Date.now(), openTime });
+    return openTime;
+  });
 
 export const clearPositionOpenTime = ({ symbol, positionSide = 'BOTH' }) =>
   cache.delete(`${symbol}:${positionSide}`);

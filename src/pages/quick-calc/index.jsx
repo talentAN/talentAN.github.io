@@ -10,7 +10,7 @@ const MORE_KEY = '__more__';
 
 const PRIMARY_ITEMS = [
   { key: '/quick-calc/trade-record', label: '合约交易记录' },
-{ key: '/quick-calc/position-monitor', label: '持仓监控' },
+  { key: '/quick-calc/position-monitor', label: '持仓监控' },
   { key: '/quick-calc/system_1', label: '系统-放量冲关缩量滞涨' },
   { key: '/quick-calc/system_bullish', label: '系统-横盘抬头' },
   { key: '/quick-calc/low-vol-range-blast', label: '系统-低波动横盘暴涨' },
@@ -45,6 +45,17 @@ const ROUTE_PRIORITY = [
   '/quick-calc/backtest',
 ];
 
+/** 距下一个 UTC 00:01 的毫秒数 */
+const msUntilNextUtc001 = () => {
+  const now = Date.now();
+  const d = new Date(now);
+  let target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 1, 0, 0);
+  if (now >= target) {
+    target += 24 * 60 * 60 * 1000;
+  }
+  return target - now;
+};
+
 const QuickCalc = ({ children, location }) => {
   useEffect(() => {
     const pathname = location?.pathname || '';
@@ -52,6 +63,15 @@ const QuickCalc = ({ children, location }) => {
       navigate('/quick-calc/trade-record');
     }
   }, [location]);
+
+  // UTC+0 每天 00:01 整页刷新（日 K 切日后拉最新状态）
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const timer = setTimeout(() => {
+      window.location.reload();
+    }, msUntilNextUtc001());
+    return () => clearTimeout(timer);
+  }, []);
 
   const cleanPath = (location?.pathname || '/quick-calc/trade-record').split('?')[0];
 

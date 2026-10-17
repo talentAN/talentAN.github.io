@@ -1,8 +1,15 @@
 // Simple market adapter to allow multiple exchange implementations.
 // Default exchange is 'bitget'. Other exchanges can be registered via registerExchange.
+// Binance 公共行情在 binance/api 内已套门闩+退避；其它交易所经本层门闩排队。
 
 import * as bitgetApi from '../bitget/api';
 import * as binanceApi from '../binance/api';
+import { withMarketFetchGate } from './_fetchGate';
+export {
+  getSharedKLineMirror,
+  resetSharedKLineMirror,
+  KLINE_NS,
+} from './klineMirror';
 
 const exchanges = {
   bitget: bitgetApi,
@@ -10,6 +17,12 @@ const exchanges = {
 };
 
 let defaultExchange = 'bitget';
+
+const isBinance = exchange => String(exchange || defaultExchange).startsWith('binance');
+
+/** Binance 已在 api 内门闩，避免双重占坑；其它所在此排队 */
+const throughGateIfNeeded = (exchange, fn) =>
+  (isBinance(exchange) ? fn() : withMarketFetchGate(fn));
 
 export function registerExchange(name, apiModule) {
   exchanges[name] = apiModule;
@@ -30,7 +43,7 @@ function resolveApi(exchange) {
 export async function getTradingPairs(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getTradingPairs !== 'function') throw new Error('getTradingPairs not implemented');
-  return api.getTradingPairs(opts);
+  return throughGateIfNeeded(exchange, () => api.getTradingPairs(opts));
 }
 
 /**
@@ -60,33 +73,33 @@ export async function getMergedTradingPairs(opts = {}) {
 export async function getContracts(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getContracts !== 'function') return [];
-  return api.getContracts(opts);
+  return throughGateIfNeeded(exchange, () => api.getContracts(opts));
 }
 
 export async function getFutureKlineData(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getFutureKlineData !== 'function')
     throw new Error('getFutureKlineData not implemented');
-  return api.getFutureKlineData(opts);
+  return throughGateIfNeeded(exchange, () => api.getFutureKlineData(opts));
 }
 
 export async function getAllFutureDailyKlines(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getAllFutureDailyKlines !== 'function')
     throw new Error('getAllFutureDailyKlines not implemented');
-  return api.getAllFutureDailyKlines(opts);
+  return throughGateIfNeeded(exchange, () => api.getAllFutureDailyKlines(opts));
 }
 
 export async function getFutureTicker(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getFutureTicker !== 'function') throw new Error('getFutureTicker not implemented');
-  return api.getFutureTicker(opts);
+  return throughGateIfNeeded(exchange, () => api.getFutureTicker(opts));
 }
 
 export async function getSpotTicker(opts = {}, exchange) {
   const api = resolveApi(exchange);
   if (typeof api.getSpotTicker !== 'function') throw new Error('getSpotTicker not implemented');
-  return api.getSpotTicker(opts);
+  return throughGateIfNeeded(exchange, () => api.getSpotTicker(opts));
 }
 
 export function getRegisteredExchanges() {

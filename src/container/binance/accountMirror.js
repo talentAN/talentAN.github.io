@@ -19,6 +19,7 @@ import {
 } from './api/userStream';
 
 const KEEP_ALIVE_MS = 30 * 60 * 1000;
+/** 无 force 时的低频 REST 兜底（WS 为主） */
 const RECONCILE_MS = 10 * 60 * 1000;
 const RECONNECT_BASE_MS = 1200;
 const RECONNECT_MAX_MS = 30 * 1000;
@@ -91,6 +92,7 @@ const summarizeAlgo = o => ({
   callbackRate: o.callbackRate,
   quantity: o.quantity,
   reduceOnly: o.reduceOnly,
+  closePosition: o.closePosition,
 });
 
 const posKey = (symbol, positionSide) => {
@@ -178,6 +180,30 @@ class BinanceAccountMirror {
     this.wsReady = false;
     /** @type {Map<string, number>} */
     this.wsEventLogCount = new Map();
+    /** @type {Set<(info: { reason: string }) => void>} */
+    this.changeListeners = new Set();
+  }
+
+  /**
+   * 持仓/委托镜像变更订阅（REST 打底与 WS 增量后触发）。
+   * @returns {() => void}
+   */
+  subscribeChanges(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this.changeListeners.add(listener);
+    return () => this.changeListeners.delete(listener);
+  }
+
+  emitChanges(reason) {
+    if (!this.changeListeners.size) return;
+    const info = { reason: String(reason || 'update') };
+    this.changeListeners.forEach(fn => {
+      try {
+        fn(info);
+      } catch (e) {
+        console.warn('[BinanceAccountMirror] change listener', e);
+      }
+    });
   }
 
   /** 控制台打印当前镜像：持仓 + 普通挂单 + 条件单 */
@@ -347,7 +373,7 @@ class BinanceAccountMirror {
     }
     this.connectGen += 1;
     const gen = this.connectGen;
-    this.detachWs(); 
+    this.detachWs();
 
     (async () => {
       try {
@@ -384,7 +410,6 @@ class BinanceAccountMirror {
             console.warn('[BinanceAccountMirror] parse', e, ev?.data);
           }
         };
-
         ws.onerror = () => {
           if (gen !== this.connectGen) return;
           this.lastError = 'user stream error';
@@ -464,16 +489,19 @@ class BinanceAccountMirror {
     };
     if (event === 'ACCOUNT_UPDATE') {
       this.applyAccountUpdate(msg);
+      this.emitChanges('ACCOUNT_UPDATE');
       if (shouldDumpAfter()) this.logDump(`WS ${event} 后`);
       return;
     }
     if (event === 'ORDER_TRADE_UPDATE') {
       this.applyOrderUpdate(msg.o || msg.order || msg);
+      this.emitChanges('ORDER_TRADE_UPDATE');
       if (shouldDumpAfter()) this.logDump(`WS ${event} 后`);
       return;
     }
     if (event === 'ALGO_UPDATE' || event === 'ALGO_ORDER_UPDATE') {
       this.applyAlgoUpdate(msg.o || msg.ao || msg.algoOrder || msg);
+      this.emitChanges(event);
       if (shouldDumpAfter()) this.logDump(`WS ${event} 后`);
     }
   }
@@ -545,40 +573,53 @@ class BinanceAccountMirror {
     const algoId = o.aid ?? o.algoId ?? o.algoOrderId;
     const clientAlgoId = o.clientAlgoId || o.caid || o.c;
     const status = o.X || o.x || o.status || o.algoStatus;
-    const normalized = {
-      symbol,
-      algoId,
-      clientAlgoId,
-      side: o.S || o.side,
-      positionSide: o.ps || o.positionSide,
-      type: o.o || o.orderType || o.type,
-      orderType: o.o || o.orderType || o.type,
-      algoType: o.algoType || o.at,
-      status,
-      triggerPrice: o.triggerPrice ?? o.sp ?? o.stopPrice,
-      activatePrice: o.activatePrice ?? o.ap,
-      callbackRate: o.callbackRate ?? o.cr,
-      quantity: o.q ?? o.quantity,
-      reduceOnly: o.R ?? o.reduceOnly,
-      closePosition: o.closePosition,
-      updateTime: o.T || o.updateTime || Date.now(),
-    };
-    const key = algoKey(normalized);
+    // 只收集推送里真正带的字段；勿用 undefined 盖掉 REST/前序推送的 type、clientAlgoId
+    // （否则止盈识别失败，下一轮会重复挂单）
+    const patch = { symbol, updateTime: o.T || o.updateTime || Date.now() };
+    if (algoId != null) patch.algoId = algoId;
+    if (clientAlgoId) patch.clientAlgoId = clientAlgoId;
+    if (o.S || o.side) patch.side = o.S || o.side;
+    if (o.ps || o.positionSide) patch.positionSide = o.ps || o.positionSide;
+    const type = o.o || o.orderType || o.type;
+    if (type) {
+      patch.type = type;
+      patch.orderType = type;
+    }
+    if (o.algoType || o.at) patch.algoType = o.algoType || o.at;
+    if (status) patch.status = status;
+    const trigger = o.triggerPrice ?? o.sp ?? o.stopPrice;
+    if (trigger != null && trigger !== '') patch.triggerPrice = trigger;
+    if (o.activatePrice != null || o.ap != null) patch.activatePrice = o.activatePrice ?? o.ap;
+    if (o.callbackRate != null || o.cr != null) patch.callbackRate = o.callbackRate ?? o.cr;
+    if (o.q != null || o.quantity != null) patch.quantity = o.q ?? o.quantity;
+    if (o.R != null || o.reduceOnly != null) patch.reduceOnly = o.R ?? o.reduceOnly;
+    if (o.closePosition != null || o.cp != null) patch.closePosition = o.closePosition ?? o.cp;
+
+    const key = algoKey(patch);
     if (!key) return;
     if (isTerminalAlgoStatus(status)) {
-      auditOrderEvent('algo_terminal', normalized, { source: 'ALGO_UPDATE' });
+      auditOrderEvent('algo_terminal', patch, { source: 'ALGO_UPDATE' });
       this.algoOrders.delete(key);
       return;
     }
+    const prev = this.algoOrders.get(key) || {};
+    const merged = { ...prev, ...patch };
     // 部分推送不带终态字段，但数量已空
-    if (normalized.quantity != null && !(Number(normalized.quantity) > 0) && !normalized.closePosition) {
+    if (merged.quantity != null && !(Number(merged.quantity) > 0) && !merged.closePosition) {
       this.algoOrders.delete(key);
       return;
     }
-    this.algoOrders.set(key, { ...this.algoOrders.get(key), ...normalized });
+    this.algoOrders.set(key, merged);
   }
 
   applyRestBootstrap({ positions, orders, algos, hedgeMode }) {
+    // 保留本地 sticky openTime：REST positionRisk 只有 updateTime，清掉会导致每轮重打 userTrades
+    const prevOpenByKey = new Map();
+    this.positions.forEach((pos, key) => {
+      const t = Number(pos?.openTime);
+      if (t > 0) prevOpenByKey.set(key, t);
+    });
+
     this.positions.clear();
     (positions || []).forEach(p => {
       const symbol = String(p?.symbol || '').toUpperCase();
@@ -586,7 +627,16 @@ class BinanceAccountMirror {
       const amt = Number(p.positionAmt || 0);
       if (!(amt !== 0 && Number.isFinite(amt))) return;
       const positionSide = String(p.positionSide || 'BOTH').toUpperCase();
-      this.positions.set(posKey(symbol, positionSide), { ...p, symbol, positionSide });
+      const key = posKey(symbol, positionSide);
+      const stickyOpen = prevOpenByKey.get(key);
+      const updateTime = Number(p.updateTime) || Date.now();
+      this.positions.set(key, {
+        ...p,
+        symbol,
+        positionSide,
+        openTime: stickyOpen > 0 ? stickyOpen : updateTime,
+        updateTime,
+      });
     });
 
     this.openOrders.clear();
@@ -611,16 +661,15 @@ class BinanceAccountMirror {
   async bootstrapRest(reason = 'manual') {
     if (this.restInflight) return this.restInflight;
     this.restInflight = (async () => {
-      const [posRes, orderRes, algoRes, modeRes] = await Promise.all([
-        getPositionRisk({}),
-        getOpenOrders({}),
-        getOpenAlgoOrders({}),
-        getPositionMode(),
-      ]);
+      // 串行：openOrders 无 symbol 时 weight≈40，禁止与 klines 双飞叠打
+      const posRes = await getPositionRisk({});
       if (!posRes?.ok) {
         this.lastError = pickErr(posRes) || 'positionRisk';
         throw new Error(`账户镜像 REST 失败：${this.lastError}（${reason}）`);
       }
+      const orderRes = await getOpenOrders({});
+      const algoRes = await getOpenAlgoOrders({});
+      const modeRes = await getPositionMode();
       // openOrders / algo 失败时仍用持仓打底，但标记错误
       if (!orderRes?.ok) {
         console.warn('[BinanceAccountMirror] openOrders', pickErr(orderRes));
@@ -640,6 +689,7 @@ class BinanceAccountMirror {
         this.lastError = null;
       }
       this.logDump(`REST 打底完成（${reason}）`);
+      this.emitChanges(`REST:${reason}`);
       return this.snapshot();
     })().finally(() => {
       this.restInflight = null;
@@ -648,18 +698,25 @@ class BinanceAccountMirror {
   }
 
   /**
-   * @param {{ forceRest?: boolean, ensureStarted?: boolean }} [opts]
+   * @param {{ forceRest?: boolean, ensureStarted?: boolean, maxStaleMs?: number }} [opts]
+   * maxStaleMs：距上次 REST 超过该值才对账（比 forceRest 更温和）
    */
   async getSnapshot(opts = {}) {
-    const { forceRest = false, ensureStarted = true } = opts;
+    const { forceRest = false, ensureStarted = true, maxStaleMs } = opts;
     if (ensureStarted) {
       await this.start();
     }
 
+    const now = Date.now();
+    const staleByMax =
+      Number.isFinite(maxStaleMs) &&
+      maxStaleMs >= 0 &&
+      (this.lastRestAt <= 0 || now - this.lastRestAt > maxStaleMs);
+    const staleByDefault =
+      this.lastRestAt > 0 && now - this.lastRestAt > RECONCILE_MS;
+
     const needReconcile =
-      forceRest ||
-      !this.bootstrapped ||
-      (this.lastRestAt > 0 && Date.now() - this.lastRestAt > RECONCILE_MS);
+      forceRest || !this.bootstrapped || staleByMax || (!Number.isFinite(maxStaleMs) && staleByDefault);
 
     if (needReconcile) {
       try {
@@ -721,3 +778,28 @@ export const getBinanceAccountMirrorStatus = () => ({
   ...getSharedBinanceAccountMirror().getStatus(),
   acquireCount,
 });
+
+/** 背景补 H：账户 REST 打底进行中时让路，避免与 openOrders 叠打 */
+export const isBinanceAccountMirrorRestInflight = () =>
+  Boolean(getSharedBinanceAccountMirror().restInflight);
+
+/** 订阅账户镜像变更（持仓/普通单/条件单） */
+export const subscribeBinanceAccountMirrorChanges = listener =>
+  getSharedBinanceAccountMirror().subscribeChanges(listener);
+
+/**
+ * 用真实成交开仓时间校正镜像 sticky openTime（仅允许改得更早）。
+ * sticky 默认是「首次见到仓位」的 updateTime，偏晚会裁掉开仓后极值小时 K。
+ */
+export const patchBinancePositionOpenTime = ({ symbol, positionSide = 'BOTH', openTime }) => {
+  const mirror = getSharedBinanceAccountMirror();
+  const t = Number(openTime);
+  if (!(t > 0)) return false;
+  const key = posKey(symbol, positionSide);
+  const pos = mirror.positions.get(key);
+  if (!pos) return false;
+  const prev = Number(pos.openTime) || 0;
+  if (prev > 0 && !(t < prev)) return false;
+  mirror.positions.set(key, { ...pos, openTime: t });
+  return true;
+};

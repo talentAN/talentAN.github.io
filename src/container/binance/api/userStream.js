@@ -1,13 +1,28 @@
 /**
  * 币安 U 本位 User Data Stream：listenKey 创建 / 续命 / 关闭。
- * 这类接口只需 API Key，不需要签名。
+ * 这类接口只需 API Key，不需要签名；HTTP 仍走统一 IP 门闩。
  * 文档：https://developers.binance.com/docs/derivatives/usds-margined-futures/user-data-streams
  */
 
 import { getApiConfig } from '../utils/auth';
+import {
+  withBinanceIpGate,
+  reportBinanceRateLimit,
+  reportBinanceUsedWeight,
+  waitBinanceBanIfNeeded,
+} from '../../market/_fetchGate';
 
 const FUTURES_BASE = 'https://fapi.binance.com';
 const LISTEN_KEY_PATH = '/fapi/v1/listenKey';
+
+const parseCooldownMs = (body, retryAfter) => {
+  const match = String(body || '').match(/banned until\s+(\d+)/i);
+  const bannedAt = match ? Number(match[1]) : 0;
+  const fromBan = bannedAt > Date.now() ? bannedAt - Date.now() + 1000 : 0;
+  const retrySec = Number(retryAfter);
+  const fromRetry = retrySec > 0 ? retrySec * 1000 : 0;
+  return Math.max(fromBan, fromRetry, 20000);
+};
 
 const listenKeyRequest = async method => {
   const { apiKey } = getApiConfig();
@@ -20,20 +35,37 @@ const listenKeyRequest = async method => {
     };
   }
   try {
-    const res = await fetch(`${FUTURES_BASE}${LISTEN_KEY_PATH}`, {
-      method,
-      headers: { 'X-MBX-APIKEY': apiKey },
-    });
+    await waitBinanceBanIfNeeded();
+    const res = await withBinanceIpGate(() =>
+      fetch(`${FUTURES_BASE}${LISTEN_KEY_PATH}`, {
+        method,
+        headers: { 'X-MBX-APIKEY': apiKey },
+      })
+    );
     const httpStatus = res.status;
-    const response = await res.json().catch(() => null);
+    const bodyText = await res.clone().text().catch(() => '');
+    let response = null;
+    try {
+      response = JSON.parse(bodyText || 'null');
+    } catch (_) {
+      response = null;
+    }
+    if (
+      httpStatus === 418 ||
+      httpStatus === 429 ||
+      response?.code === -1003 ||
+      /too many requests|banned until/i.test(bodyText || '')
+    ) {
+      reportBinanceRateLimit(parseCooldownMs(bodyText, res.headers.get('retry-after')));
+    }
+    const used = Number(res.headers.get('x-mbx-used-weight-1m'));
+    if (Number.isFinite(used)) reportBinanceUsedWeight(used);
     const ok = res.ok && !response?.code;
     return {
       ok,
       httpStatus,
       response,
-      error: ok
-        ? null
-        : response?.msg || response?.message || `HTTP ${httpStatus}`,
+      error: ok ? null : response?.msg || response?.message || `HTTP ${httpStatus}`,
       listenKey: response?.listenKey || null,
     };
   } catch (e) {
@@ -56,7 +88,6 @@ export const closeFuturesListenKey = () => listenKeyRequest('DELETE');
  */
 export const buildFuturesUserDataWsUrls = listenKey => {
   const key = encodeURIComponent(listenKey);
-  // 官方新格式：events 用 / 分隔（见 USDⓈ-M Futures WS 升级说明）
   const events = [
     'ORDER_TRADE_UPDATE',
     'ACCOUNT_UPDATE',
