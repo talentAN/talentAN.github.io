@@ -11,15 +11,20 @@ import {
 import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
 import {
   placeFutureQtyTakeProfitAlgo,
-  placeFutureQtyStopAlgo,
   placeFutureTrailingStopAlgo,
   placeFutureClosePositionAlgo,
 } from '@root/src/container/binance/api/order';
+import { fetchBinanceSymbolLiveBook } from '@root/src/container/binance/liveExposure';
 import {
   isLiveOrderEnabled,
   quantizeQuantity,
   SKIP_REASON_LABEL,
 } from '../system_1/_autoOrderModel';
+import {
+  isBinanceStopAlgo,
+  isBinanceTakeProfitOrder,
+  isBinanceTrailingAlgo,
+} from './_rangeMonitorJudges';
 
 /**
  * 回测默认组 #3（奔跑派）出场结构，实盘止盈委托对齐此口径。
@@ -36,7 +41,7 @@ export const STRATEGY3_EXIT = {
   ],
   slArmPct: 20,
   slPricePct: 0,
-  /** 横盘监控定稿：xx>开仓×1.2 即挂追踪（原回测为 40） */
+  /** 与回测策略3保持一致：涨幅达到 40% 后激活追踪止盈。 */
   trailArmPct: 40,
   trailCbPct: 12,
 };
@@ -245,7 +250,27 @@ export const placeStrategy3TakeProfitOrders = async row => {
       await sleep(80);
     }
   } else if (exchange === 'binance') {
-    const [rules, mode] = await Promise.all([getBinanceRules(symbol), getBinancePositionMode()]);
+    const [rules, mode, book] = await Promise.all([
+      getBinanceRules(symbol),
+      getBinancePositionMode(),
+      fetchBinanceSymbolLiveBook(symbol),
+    ]);
+    if (!book.ok) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: 'query_failed',
+        detail: book.error || '实时委托查询失败',
+      };
+    }
+    if ((book.algoOrders || []).some(o => isBinanceTakeProfitOrder(o, 'LONG'))) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: 'has_orders',
+        detail: '已有止盈委托（REST），跳过',
+      };
+    }
     const hedgeMode = Boolean(mode?.response?.dualSidePosition);
     const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
 
@@ -277,6 +302,7 @@ export const placeStrategy3TakeProfitOrders = async row => {
   } else {
     return { ok: false, skipped: true, reason: 'unsupported_exchange', detail: `不支持 ${exchange}` };
   }
+
   const ok = submitted.length > 0 && failed.length === 0;
   const partial = submitted.length > 0 && failed.length > 0;
   // 三档全被数量等规则跳过、无真实失败 → 视为 skipped（调用方勿当失败弹窗）
@@ -422,11 +448,31 @@ export const placeStrategy3ExitOrders = async row => {
       }
     }
   } else if (exchange === 'binance') {
-    const [rules, mode] = await Promise.all([getBinanceRules(symbol), getBinancePositionMode()]);
+    const [rules, mode, book] = await Promise.all([
+      getBinanceRules(symbol),
+      getBinancePositionMode(),
+      fetchBinanceSymbolLiveBook(symbol),
+    ]);
+    if (!book.ok) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: 'query_failed',
+        detail: book.error || '实时委托查询失败',
+      };
+    }
+    const liveAlgos = book.algoOrders || [];
     const hedgeMode = Boolean(mode?.response?.dualSidePosition);
     const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
+    const hasLiveTp = liveAlgos.some(o => isBinanceTakeProfitOrder(o, 'LONG'));
+    const hasLiveSl = liveAlgos.some(o => isBinanceStopAlgo(o, 'LONG'));
+    const hasLiveTrail = liveAlgos.some(o => isBinanceTrailingAlgo(o, 'LONG'));
 
     for (const leg of levels.tps) {
+      if (hasLiveTp) {
+        skipped.push({ key: leg.key, detail: '已有止盈委托（REST），跳过' });
+        continue;
+      }
       const quantity = quantizeQuantity(leg.size, rules.stepSize, rules.quantityPrecision);
       // 止盈卖出触发价向下取整，避免抬高
       const tpPrice =
@@ -451,34 +497,26 @@ export const placeStrategy3ExitOrders = async row => {
     }
 
     if (mark != null && mark >= levels.slArmPrice) {
-      const stopPrice =
-        rules.tickSize > 0
-          ? roundNum(Math.floor(levels.slStopPrice / rules.tickSize + 1e-10) * rules.tickSize, rules.pricePrecision)
-          : roundNum(levels.slStopPrice, rules.pricePrecision);
-      const result = await placeFutureClosePositionAlgo({
-        symbol,
-        side: 'SELL',
-        triggerPrice: stopPrice,
-        orderType: 'STOP_MARKET',
-        positionSide,
-        clientAlgoId: oid(),
-      });
-      if (result?.ok) submitted.push({ key: 'sl', triggerPrice: stopPrice });
-      else {
-        // 回退：按数量止损
-        const quantity = quantizeQuantity(pos.qty, rules.stepSize, rules.quantityPrecision);
-        const fallback = await placeFutureQtyStopAlgo({
+      if (hasLiveSl) {
+        skipped.push({ key: 'sl', detail: '已有止损委托（REST），跳过' });
+      } else {
+        const stopPrice =
+          rules.tickSize > 0
+            ? roundNum(Math.floor(levels.slStopPrice / rules.tickSize + 1e-10) * rules.tickSize, rules.pricePrecision)
+            : roundNum(levels.slStopPrice, rules.pricePrecision);
+        const result = await placeFutureClosePositionAlgo({
           symbol,
           side: 'SELL',
-          quantity,
           triggerPrice: stopPrice,
+          orderType: 'STOP_MARKET',
           positionSide,
           clientAlgoId: oid(),
         });
-        if (fallback?.ok) submitted.push({ key: 'sl', triggerPrice: stopPrice, quantity });
-        else failed.push({ key: 'sl', detail: pickErr(result) || pickErr(fallback) || '止损提交失败' });
+        // 成本止损必须 closePosition（全部平仓），不回退按数量
+        if (result?.ok) submitted.push({ key: 'sl', triggerPrice: stopPrice });
+        else failed.push({ key: 'sl', detail: pickErr(result) || '成本止损（全部平仓）提交失败' });
+        await sleep(80);
       }
-      await sleep(80);
     } else {
       skipped.push({
         key: 'sl',
@@ -501,7 +539,9 @@ export const placeStrategy3ExitOrders = async row => {
           : roundNum(bumped, rules.pricePrecision);
     }
     const trailQty = quantizeQuantity(levels.trailSize, rules.stepSize, rules.quantityPrecision);
-    if (!(trailQty > 0) || (rules.minQty > 0 && trailQty < rules.minQty)) {
+    if (hasLiveTrail) {
+      skipped.push({ key: 'trail', detail: '已有追踪委托（REST），跳过' });
+    } else if (!(trailQty > 0) || (rules.minQty > 0 && trailQty < rules.minQty)) {
       skipped.push({ key: 'trail', detail: `追踪数量过小 ${trailQty}` });
     } else {
       const result = await placeFutureTrailingStopAlgo({

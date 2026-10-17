@@ -13,11 +13,14 @@ import {
   getContracts as getBinanceContracts,
   getFutureFundingRate as getBinanceFundingRate,
 } from '@root/src/container/binance/api';
-import { getBinanceAccountSnapshot } from '@root/src/container/binance/accountMirror';
+import { fetchBinanceSymbolLiveBook } from '@root/src/container/binance/liveExposure';
+import {
+  peekLocalOpenSuccess,
+  rememberOpenSuccess,
+} from '@root/src/container/binance/placeGate';
 import { getFutureFundingRate as getBitgetFundingRate } from '@root/src/container/bitget/api';
 import { getFutureTicker } from '@root/src/container/market';
 import { getTradeSession } from '@root/src/utils/tradeSession';
-import { withMarketFetchGate } from '../_marketFetchGate';
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
 
 /**
@@ -102,6 +105,8 @@ export const STATUS_LABEL = {
   submitting: '提交中…',
   open: '已挂单',
   partial: '部分成功',
+  filled: '已成交',
+  missing: '委托缺失',
   unknown: '结果待确认',
   closed: '已离场',
   failed: '提交失败',
@@ -126,22 +131,35 @@ export const SKIP_REASON_LABEL = {
 };
 
 const LISTING_MS = MIN_LISTING_DAYS * 24 * 60 * 60 * 1000;
+/** 资格校验最多翻日 K 页数（每页 1000 根），避免老币多页堵门闩 */
+const ELIG_KLINE_MAX_PAGES = 4;
+
+/** @type {Map<string, { dayKey: string, result: object, probe: number, candles: any[] }>} */
+const high100EligCache = new Map();
+
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+};
+
+const eligCacheKey = (exchange, symbol) =>
+  `${String(exchange || '').toLowerCase()}:${String(symbol || '').toUpperCase()}:${todayKey()}`;
 
 /**
  * high100 自动下单资格：与回测标记日口径一致
  * - 上市未满 MIN_LISTING_DAYS（30）天 → 排除
  * - max(当日最高价, 开盘×4) 相对此前全部日 K 为历史新高突破 → 排除
  *
- * 仅在即将下单时拉取完整日 K（新币全量很少；老币也只触发一次/天）。
+ * 按 UTC 日缓存；probe 抬升时仅用已缓存 K 重算 ATH，不重复翻页。
+ * 日 K 最多 ELIG_KLINE_MAX_PAGES 页：截断只会让 prevAth 偏低 → 更易判 ath_breakout 跳过，
+ * 不会把真 ATH 突破误判为允许开空（资金安全方向）。
  */
 export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs, open: openHint, high: highHint }) => {
-  try {
-    const candles = await getAllFutureDailyKlines({ symbol }, exchange);
-    const sorted = [...(candles || [])]
-      .filter(c => Array.isArray(c) && c.length >= 5 && Number.isFinite(Number(c[0])))
-      .sort((a, b) => Number(a[0]) - Number(b[0]));
+  const cacheKey = eligCacheKey(exchange, symbol);
+  const cached = high100EligCache.get(cacheKey);
 
-    if (sorted.length < 2) {
+  const evalWithCandles = sorted => {
+    if (!sorted || sorted.length < 2) {
       return { allowed: false, reason: 'history_unavailable', listingDays: 0 };
     }
 
@@ -184,7 +202,55 @@ export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs, open
       };
     }
 
-    return { allowed: true, listingDays, candleCount: sorted.length };
+    return { allowed: true, listingDays, candleCount: sorted.length, athProbe, open, high };
+  };
+
+  // 终态：当天不再打 REST
+  if (
+    cached?.result &&
+    (cached.result.reason === 'listing_too_new' || cached.result.reason === 'ath_breakout')
+  ) {
+    return cached.result;
+  }
+
+  // 已允许：probe 未抬升则复用；抬升则用缓存 K 重算 ATH
+  if (cached?.candles?.length && cached.result?.allowed) {
+    const open = Number(openHint) > 0 ? Number(openHint) : cached.result.open;
+    const high = Number(highHint) > 0 ? Number(highHint) : cached.result.high;
+    const athProbe = Math.max(high || 0, (open || 0) * 4);
+    if (athProbe > 0 && athProbe <= (cached.probe || 0)) {
+      return cached.result;
+    }
+    const next = evalWithCandles(cached.candles);
+    high100EligCache.set(cacheKey, {
+      dayKey: todayKey(),
+      result: next,
+      probe: next.athProbe || athProbe || cached.probe || 0,
+      candles: cached.candles,
+    });
+    return next;
+  }
+
+  try {
+    const candles = await getAllFutureDailyKlines(
+      { symbol, maxPages: ELIG_KLINE_MAX_PAGES },
+      exchange
+    );
+    const sorted = [...(candles || [])]
+      .filter(c => Array.isArray(c) && c.length >= 5 && Number.isFinite(Number(c[0])))
+      .sort((a, b) => Number(a[0]) - Number(b[0]));
+
+    const result = evalWithCandles(sorted);
+    // history_unavailable 不长期缓存，允许稍后重试
+    if (result.reason !== 'history_unavailable') {
+      high100EligCache.set(cacheKey, {
+        dayKey: todayKey(),
+        result,
+        probe: result.athProbe || Math.max(Number(highHint) || 0, (Number(openHint) || 0) * 4) || 0,
+        candles: sorted,
+      });
+    }
+    return result;
   } catch (e) {
     console.warn('[AutoOrder] high100 eligibility', symbol, e);
     return { allowed: false, reason: 'history_unavailable', listingDays: 0 };
@@ -192,11 +258,6 @@ export const checkHigh100Eligibility = async ({ symbol, exchange, candleTs, open
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const todayKey = () => {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
-};
 
 /** UTC 日 00:00 的毫秒时间戳（与 1Dutc K 线、todayKey 对齐） */
 export const utcDayStartTs = ts => {
@@ -227,11 +288,31 @@ export const saveAutoOrderEnabled = enabled => {
   localStorage.setItem(AUTO_ORDER_ENABLED_KEY, enabled ? '1' : '0');
 };
 
+/**
+ * submitting 超过该时长视为卡死。
+ * 降为 unknown（非 failed）：可能已部分成交，禁止自动重试防双挂。
+ */
+export const SUBMITTING_STALE_MS = 90_000;
+
 export const loadAutoOrderBatches = () => {
   if (typeof window === 'undefined') return [];
   try {
     const raw = JSON.parse(localStorage.getItem(AUTO_ORDER_BATCHES_KEY) || '[]');
-    return Array.isArray(raw) ? raw : [];
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    // 启动时清掉陈旧 submitting → unknown，避免「提交中」永久卡住，且不自动再挂
+    return raw.map(b => {
+      if (!b || b.status !== 'submitting') return b;
+      const started = Number(b.eligStartedAt || b.queuedAt || b.checkedAt || b.createdAt || 0);
+      const stale = !(started > 0) || now - started >= SUBMITTING_STALE_MS;
+      if (!stale) return b;
+      return {
+        ...b,
+        status: 'unknown',
+        skipDetail: b.skipDetail || '提交中断（重启/超时），请人工核对委托后处理',
+        checkedAt: now,
+      };
+    });
   } catch (_) {
     return [];
   }
@@ -304,12 +385,19 @@ const isShortHoldSide = holdSide => {
 const isBuySide = side => String(side || '').toLowerCase() === 'buy';
 const isSellSide = side => String(side || '').toLowerCase() === 'sell';
 
-/** 普通挂单是否算作该方向的「开仓侧」敞口（平仓/reduceOnly 不计） */
+/** 普通挂单/条件单是否算作该方向的「开仓侧」敞口（平仓/reduceOnly/closePosition 不计） */
 const isOpenSideOrder = (order, side) => {
   const reduceOnly = order.reduceOnly === true || order.reduceOnly === 'true' || order.reduceOnly === 'YES';
   if (reduceOnly) return false;
+  const closePosition =
+    order.closePosition === true || String(order.closePosition).toLowerCase() === 'true';
+  if (closePosition) return false;
   const tradeSide = String(order.tradeSide || '').toLowerCase();
   if (tradeSide === 'close') return false;
+  // 出场类条件单（止盈/追踪）即使 side 与开仓同向也不算开仓敞口
+  const typeBlob =
+    `${order?.type || ''} ${order?.orderType || ''} ${order?.origType || ''} ${order?.algoType || ''}`.toUpperCase();
+  if (typeBlob.includes('TAKE_PROFIT') || typeBlob.includes('TRAILING')) return false;
 
   if (side === 'long') {
     if (!isBuySide(order.side)) return false;
@@ -370,7 +458,8 @@ const parseExposure = (exchange, posResult, orderResult, side = null) => {
       orderHttpStatus: orderResult?.httpStatus ?? null,
     };
   }
-if (exchange === 'bitget') {
+
+  if (exchange === 'bitget') {
     const positions = Array.isArray(posResult.response?.data) ? posResult.response.data : [];
     const hasPosition = side
       ? hasSidePosition('bitget', positions, side)
@@ -403,10 +492,7 @@ if (exchange === 'bitget') {
 };
 
 /**
- * 下单前置检查：该币对在指定方向上有没有持仓或未成交开仓委托。
- * @param {{ symbol: string, exchange: string, side?: 'long'|'short'|null }} opts
- *   side 缺省时保持旧行为（任意方向都算敞口）；传 long/short 则只检查该侧。
- * 查询失败时保守按「已有仓位」处理。
+ * 资金费率门槛（开空前）。查询失败时放行并标记 unavailable。
  */
 export const checkFundingRate = async ({ symbol, exchange }) => {
   if (!isLiveOrderEnabled()) return { allowed: false, reason: 'auto_order_disabled' };
@@ -431,51 +517,120 @@ export const checkFundingRate = async ({ symbol, exchange }) => {
   }
 };
 
+/** 这些批次状态表示本机已开空（或结果不明禁止重挂），可跳过 REST */
+const LOCAL_SHORT_BATCH_BLOCK = new Set(['open', 'partial', 'filled', 'unknown']);
+
+/** 找当日该币对的暴涨阶梯批次记录 */
+const findTodayShortBatch = (symbol, exchange) => {
+  const sym = String(symbol || '').toUpperCase();
+  const ex = String(exchange || '').toLowerCase();
+  const day = todayKey();
+  const batchId = `${day}:${ex}:${sym}`;
+  return loadAutoOrderBatches().find(
+    b =>
+      b?.id === batchId ||
+      (String(b?.symbol || '').toUpperCase() === sym &&
+        String(b?.exchange || '').toLowerCase() === ex &&
+        String(b?.id || '').startsWith(`${day}:`))
+  );
+};
+
+/** 本机开空是否已有成功缓存，或当日阶梯批次已挂上 */
+const peekLocalOpenShort = (symbol, exchange) => {
+  const cached = peekLocalOpenSuccess({ exchange, symbol, side: 'short' });
+  if (cached.hit) return cached;
+  const batch = findTodayShortBatch(symbol, exchange);
+  if (batch && LOCAL_SHORT_BATCH_BLOCK.has(batch.status)) {
+    return { hit: true, reason: 'has_orders', detail: `本机批次 ${batch.status}` };
+  }
+  return { hit: false };
+};
+
+/** 把本地命中结果收成 checkExistingExposure 的 exposed 返回值 */
+const asLocalExposed = (local, side) => ({
+  exposed: true,
+  reason: local.reason,
+  detail: local.detail,
+  fromLocalCache: true,
+  side: side || 'any',
+});
+
+/** 先查本机开仓缓存/批次；有则直接当敞口，无需 REST */
+const tryLocalOpenExposure = (symbol, exchange, side) => {
+  if (side === 'short' || side == null) {
+    const localShort = peekLocalOpenShort(symbol, exchange);
+    if (localShort.hit) return asLocalExposed(localShort, side);
+  }
+  if (side === 'long' || side == null) {
+    const localLong = peekLocalOpenSuccess({ exchange, symbol, side: 'long' });
+    if (localLong.hit) return asLocalExposed(localLong, side);
+  }
+  return null;
+};
+
+/** REST 查币安账本并 parse；确认有敞口则写入本机开仓缓存 */
+const checkBinanceOpenExposureViaRest = async (symbol, exchange, side) => {
+  const book = await fetchBinanceSymbolLiveBook(symbol);
+  if (!book.ok) {
+    return {
+      exposed: true,
+      reason: 'query_failed',
+      detail: book.error || 'symbol live book query failed',
+    };
+  }
+  const orders = [...(book.openOrders || []), ...(book.algoOrders || [])];
+  const parsed = parseExposure(
+    'binance',
+    { ok: true, response: book.positions },
+    { ok: true, response: orders },
+    side
+  );
+  if (
+    parsed.exposed &&
+    (parsed.reason === 'has_position' || parsed.reason === 'has_orders') &&
+    (side === 'long' || side === 'short')
+  ) {
+    rememberOpenSuccess({ exchange, symbol, side, source: 'rest_confirm' });
+  }
+  return parsed;
+};
+
+/** Bitget：拉持仓+挂单后走同一套 parseExposure */
+const checkBitgetOpenExposure = async (symbol, side) => {
+  const [posResult, orderResult] = await Promise.all([
+    getBitgetPosition({ symbol }),
+    getBitgetPendingOrders({ symbol }),
+  ]);
+  return parseExposure('bitget', posResult, orderResult, side);
+};
+
+/** 查询异常时一律当「已有敞口」，避免双挂 */
+const mapExposureQueryError = (e, exchange, symbol) => {
+  const msg = e?.message || String(e);
+  console.error(`[SurgeAlert][EXPOSURE] ${exchange} ${symbol} 查询持仓/委托失败`, e);
+  if (/请先配置 API Key|GATSBY_BINANCE|GATSBY_BITGET|签名代理/i.test(msg)) {
+    return { exposed: true, reason: 'api_key_missing', detail: msg, error: msg };
+  }
+  return { exposed: true, reason: 'query_error', detail: msg, error: msg };
+};
+
+/**
+ * 开仓前查该币对同向是否已有持仓/开仓委托。
+ * 流程：live 关 → 本机缓存/批次 → Binance REST → 记缓存；失败当已有敞口。
+ */
 export const checkExistingExposure = async ({ symbol, exchange, side = null }) => {
   if (!isLiveOrderEnabled()) {
     return { exposed: true, reason: 'auto_order_disabled' };
   }
   try {
-    if (exchange === 'bitget') {
-      const [posResult, orderResult] = await Promise.all([
-        getBitgetPosition({ symbol }),
-        getBitgetPendingOrders({ symbol }),
-      ]);
-      return parseExposure('bitget', posResult, orderResult, side);
-    }
-    if (exchange === 'binance') {
-      // 复用账户镜像（WS），避免暴涨扫描里按币对打 openOrders
-      const snap = await getBinanceAccountSnapshot();
-      if (!snap?.ok) {
-        return {
-          exposed: true,
-          reason: 'query_failed',
-          detail: snap?.error || 'account mirror not ready',
-        };
-      }
-      const sym = String(symbol || '').toUpperCase();
-      const positions = (snap.positions || []).filter(
-        p => String(p?.symbol || '').toUpperCase() === sym
-      );
-      const orders = [
-        ...(snap.openOrders || []).filter(o => String(o?.symbol || '').toUpperCase() === sym),
-        ...(snap.algoOrders || []).filter(o => String(o?.symbol || '').toUpperCase() === sym),
-      ];
-      return parseExposure(
-        'binance',
-        { ok: true, response: positions },
-        { ok: true, response: orders },
-        side
-      );
-    }
-    return { exposed: true, reason: 'unsupported_exchange' };
+    if (exchange === 'bitget') return checkBitgetOpenExposure(symbol, side);
+    if (exchange !== 'binance') return { exposed: true, reason: 'unsupported_exchange' };
+
+    const local = tryLocalOpenExposure(symbol, exchange, side);
+    if (local) return local;
+    return checkBinanceOpenExposureViaRest(symbol, exchange, side);
   } catch (e) {
-    const msg = e?.message || String(e);
-    console.error(`[SurgeAlert][EXPOSURE] ${exchange} ${symbol} 查询持仓/委托失败`, e);
-    if (/请先配置 API Key|GATSBY_BINANCE|GATSBY_BITGET|签名代理/i.test(msg)) {
-      return { exposed: true, reason: 'api_key_missing', detail: msg, error: msg };
-    }
-    return { exposed: true, reason: 'query_error', detail: msg, error: msg };
+    return mapExposureQueryError(e, exchange, symbol);
   }
 };
 
@@ -585,7 +740,8 @@ const EXCHANGE_BATCH_LIMIT_API = {
  */
 const fetchLatestPrice = async (exchange, symbol) => {
   try {
-    const ticker = await withMarketFetchGate(() => getFutureTicker(symbol, exchange));
+    // Binance ticker 已门闩+退避；Bitget 经 market 门闩
+    const ticker = await getFutureTicker(symbol, exchange);
     const price = Number(
       ticker?.lastPrice ?? ticker?.lastPr ?? ticker?.last ?? ticker?.close ?? ticker?.price
     );
@@ -697,7 +853,7 @@ const applyBatchResult = (exchange, legs, result) => {
   const skippedResults = legs
     .filter(leg => skippedOids.has(leg.clientOid))
     .map(leg => ({ ...leg, ok: false, status: 'skipped', error: '数量四舍五入到合约精度后为 0，已跳过' }));
-  const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid)); 
+  const sendableLegs = legs.filter(leg => !skippedOids.has(leg.clientOid));
 
   let sentResults;
   if (exchange === 'binance' && Array.isArray(result.response)) {
@@ -710,15 +866,17 @@ const applyBatchResult = (exchange, legs, result) => {
     sentResults = sendableLegs.map((leg, index) => {
       const item = responseByOid.get(leg.clientOid) || (canUseIndex ? result.response[index] : null);
       if (!item) return { ...leg, ok: null, status: 'unknown', response: null, httpStatus: result.httpStatus };
-      const rejected = item.code != null || item.msg && !item.orderId;
+      // 必须有 orderId 才算挂上；仅 msg/无单号（含 GTX 拒单）一律 rejected
+      const orderId = item.orderId ?? item.algoId ?? null;
+      const rejected = item.code != null || orderId == null;
       return {
         ...leg,
         ok: !rejected,
         status: rejected ? 'rejected' : 'submitted',
-        orderId: item.orderId ?? null,
+        orderId,
         response: item,
         httpStatus: result.httpStatus,
-        error: rejected ? item.msg : undefined,
+        error: rejected ? item.msg || item.message || '无 orderId' : undefined,
       };
     });
   } else if (exchange === 'bitget') {
@@ -772,6 +930,105 @@ const getBatchStatus = legs => {
   return 'failed';
 };
 
+/** 镜像里该币空头数量（单向 BOTH 负仓 / 双向 SHORT）。 */
+const shortPositionAmtFromSnap = (snap, symbol) => {
+  const sym = String(symbol || '').toUpperCase();
+  let shortAmt = 0;
+  (snap?.positions || []).forEach(p => {
+    if (String(p?.symbol || '').toUpperCase() !== sym) return;
+    const amt = Number(p.positionAmt);
+    if (!Number.isFinite(amt) || amt === 0) return;
+    const ps = String(p.positionSide || 'BOTH').toUpperCase();
+    if (ps === 'SHORT') shortAmt += Math.abs(amt);
+    else if (ps === 'BOTH' && amt < 0) shortAmt += Math.abs(amt);
+  });
+  return shortAmt;
+};
+
+/**
+ * 用账户镜像核对本地「已挂单」批次：有 surge* 挂单 → 已挂单；
+ * 无挂单但有空仓 → 已成交；提交超过宽限期仍皆无 → 委托缺失。
+ * 避免 localStorage 假「已挂单」与币安对不上。
+ */
+export const reconcileLadderBatchWithMirror = (batch, snap, { graceMs = 20_000 } = {}) => {
+  if (!batch || !snap?.ok) return batch;
+  if (!['open', 'partial', 'unknown', 'missing', 'filled'].includes(batch.status)) return batch;
+
+  const sym = String(batch.symbol || '').toUpperCase();
+  const clientIds = new Set();
+  (batch.legs || []).forEach(leg => {
+    if (leg?.clientOid) clientIds.add(String(leg.clientOid));
+    if (leg?.marketClientOid) clientIds.add(String(leg.marketClientOid));
+  });
+  if (batch.marketOpen?.clientOid) clientIds.add(String(batch.marketOpen.clientOid));
+
+  const openRows = [
+    ...(Array.isArray(snap.openOrders) ? snap.openOrders : []),
+    ...(Array.isArray(snap.algoOrders) ? snap.algoOrders : []),
+  ].filter(o => String(o?.symbol || '').toUpperCase() === sym);
+
+  const liveSurgeOrders = openRows.filter(o => {
+    const cid = String(o?.clientOrderId || o?.clientAlgoId || o?.origClientOrderId || '');
+    if (!cid) return false;
+    if (clientIds.has(cid)) return true;
+    return /^surge(mkt)?\d/i.test(cid);
+  });
+
+  const shortAmt = shortPositionAmtFromSnap(snap, sym);
+  const submittedClaimed = (batch.legs || []).filter(l => l.status === 'submitted').length;
+  const age = Date.now() - Number(batch.submittedAt || batch.createdAt || 0);
+  const reconciledAt = Date.now();
+
+  if (liveSurgeOrders.length > 0) {
+    const nextStatus =
+      submittedClaimed > 0 && liveSurgeOrders.length < submittedClaimed ? 'partial' : 'open';
+    if (
+      batch.status === nextStatus &&
+      batch.liveOrderCount === liveSurgeOrders.length &&
+      batch.liveShortAmt === shortAmt
+    ) {
+      return batch;
+    }
+    return {
+      ...batch,
+      status: nextStatus,
+      liveOrderCount: liveSurgeOrders.length,
+      liveShortAmt: shortAmt,
+      reconciledAt,
+      skipDetail: undefined,
+    };
+  }
+
+  if (shortAmt > 0) {
+    if (batch.status === 'filled' && batch.liveShortAmt === shortAmt) return batch;
+    return {
+      ...batch,
+      status: 'filled',
+      liveOrderCount: 0,
+      liveShortAmt: shortAmt,
+      reconciledAt,
+      skipDetail: undefined,
+    };
+  }
+
+  // 镜像可能滞后：宽限期内不改成 missing
+  if (!(age >= graceMs)) return batch;
+
+  if (submittedClaimed > 0 || batch.status === 'open' || batch.status === 'partial') {
+    if (batch.status === 'missing') return batch;
+    return {
+      ...batch,
+      status: 'missing',
+      liveOrderCount: 0,
+      liveShortAmt: 0,
+      reconciledAt,
+      skipDetail: '本地显示已提交，账户中无对应 surge 委托/空仓',
+    };
+  }
+
+  return batch;
+};
+
 /** 阶梯限价挂出后，再挂交易所侧仓位止损（平掉该方向全部仓位）
  * ⚠️ 已停用：平仓由用户自行处理，不再自动挂交易所止损。
  */
@@ -822,6 +1079,27 @@ export const submitLadderPlan = async plan => {
   }
 
   try {
+    // 真正发单前再 REST 查一次：资格检查与下单之间另一台机器可能已挂上
+    const exposure = await checkExistingExposure({
+      symbol: plan.symbol,
+      exchange: plan.exchange,
+      side: 'short',
+    });
+    if (exposure.exposed) {
+      return {
+        ...plan,
+        legs: legsWithOid.map(l => ({
+          ...l,
+          ok: false,
+          status: 'skipped',
+          error: exposure.reason || 'has_exposure',
+        })),
+        status: 'skipped',
+        skipReason: exposure.reason,
+        skipDetail: exposure.detail || SKIP_REASON_LABEL[exposure.reason] || exposure.reason,
+      };
+    }
+
     const lastPrice = await fetchLatestPrice(plan.exchange, plan.symbol);
     const { crossed, resting } = splitLegsByLastPrice(legsWithOid, lastPrice);
 
@@ -849,11 +1127,14 @@ export const submitLadderPlan = async plan => {
           lastPrice,
         });
         marketRequest = mktResult.request || null;
-        const rejected = mktResult.skipped || isExchangeOrderRejected(plan.exchange, mktResult);
         const orderId =
           mktResult.response?.orderId ??
           mktResult.response?.data?.orderId ??
           null;
+        const rejected =
+          mktResult.skipped ||
+          isExchangeOrderRejected(plan.exchange, mktResult) ||
+          orderId == null;
         marketMeta = {
           lastPrice,
           notional: marketNotional,
@@ -865,7 +1146,7 @@ export const submitLadderPlan = async plan => {
             ? mktResult.error ||
               mktResult.response?.msg ||
               mktResult.response?.message ||
-              '市价开空失败'
+              (orderId == null ? '市价响应无 orderId' : '市价开空失败')
             : undefined,
         };
         console.warn(
@@ -938,6 +1219,15 @@ export const submitLadderPlan = async plan => {
         }
     );
     const status = getBatchStatus(legs);
+    // 本机发单成功或结果待确认 → 落盘，后续开空闸门可跳过 REST
+    if (status === 'open' || status === 'partial' || status === 'filled' || status === 'unknown') {
+      rememberOpenSuccess({
+        exchange: plan.exchange,
+        symbol: plan.symbol,
+        side: 'short',
+        source: status === 'unknown' ? 'place_unknown' : 'place',
+      });
+    }
 
     return {
       ...plan,
@@ -1028,4 +1318,4 @@ export const isPastMarkerDay = (batch, candleTs) => {
     return false;
   }
   return true;
-}; 
+};

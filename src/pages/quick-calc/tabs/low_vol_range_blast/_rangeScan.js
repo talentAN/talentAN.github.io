@@ -5,7 +5,7 @@ import {
   LOW_VOL_RANGE_BLAST_V01,
   findActiveLowVolRanges,
 } from '../backtest/_lowVolRangeBlastRules';
-import { withMarketFetchGate, waitBinanceBanIfNeeded } from '../_marketFetchGate';
+import { waitBinanceBanIfNeeded } from '../_marketFetchGate';
 import { OPEN_NOTIONAL_MULT } from './_breakoutOrder';
 
 export const RANGE_LOOKBACK_DAYS = 200;
@@ -62,17 +62,16 @@ export const fetchLookbackCandles = async (pair, lookbackDays = RANGE_LOOKBACK_D
 
   if (pair.exchange !== 'bitget') {
     await waitBinanceBanIfNeeded(getBinanceBanRemaining);
-    const res = await withMarketFetchGate(() =>
-      getFutureKlineData(
-        {
-          symbol: pair.symbol,
-          granularity: '1Dutc',
-          limit: lookbackDays + 5,
-          startTime,
-          endTime,
-        },
-        pair.exchange
-      )
+    // Binance：api 内门闩+退避；勿再套一层
+    const res = await getFutureKlineData(
+      {
+        symbol: pair.symbol,
+        granularity: '1Dutc',
+        limit: lookbackDays + 5,
+        startTime,
+        endTime,
+      },
+      pair.exchange
     );
     return (Array.isArray(res?.data) ? res.data : []).sort(
       (a, b) => Number(a[0]) - Number(b[0])
@@ -83,17 +82,16 @@ export const fetchLookbackCandles = async (pair, lookbackDays = RANGE_LOOKBACK_D
   let chunkEnd = endTime;
   while (chunkEnd > startTime) {
     const chunkStart = Math.max(startTime, chunkEnd - BITGET_MAX_SPAN_MS + 1);
-    const res = await withMarketFetchGate(() =>
-      getFutureKlineData(
-        {
-          symbol: pair.symbol,
-          granularity: '1Dutc',
-          limit: 100,
-          startTime: chunkStart,
-          endTime: chunkEnd,
-        },
-        'bitget'
-      )
+    // Bitget：经 market 层门闩
+    const res = await getFutureKlineData(
+      {
+        symbol: pair.symbol,
+        granularity: '1Dutc',
+        limit: 100,
+        startTime: chunkStart,
+        endTime: chunkEnd,
+      },
+      'bitget'
     );
     const chunk = Array.isArray(res?.data) ? res.data : [];
     chunk.forEach(c => byTs.set(Number(c[0]), c));
@@ -112,16 +110,13 @@ export const monitorRangeRules = (maxRangeMult = RANGE_MONITOR_MAX_MULT) => ({
 /**
  * 按监控口径找仍在盒内的横盘命中（默认高低比 ≤ 1.60）。
  *
- * findActiveLowVolRanges 只要求「区间终点落在近 recentDays」——例如 QTUMUSDT
- * 盒子两天前结束，之后已上破，仍会被标成 active。监控挂单前必须再滤：
- * - 区间结束后任意日 K 的 high 已 > rangeHigh；或
- * - 最新日 K high/close 已 > rangeHigh
- * 否则会去挂上沿+1tick 条件单，BN 直接 -2021（Order would immediately trigger）。
+ * 监控候选：盒子终点必须是 UTC 昨天（上一根已收盘日 K），不是「近三日」窗口。
+ * 几何算完后还须再滤走出区间（上破/下破），否则会去挂上沿+1tick 条件单，BN -2021。
  */
-/** 未做「已破上沿」过滤的监控候选（仅横盘几何 + recentDays） */
+/** 未做走出区间过滤的监控候选（横盘几何 + 终点=昨天） */
 export const findMonitorCandidateRanges = (candles, pair, maxRangeMult = RANGE_MONITOR_MAX_MULT) =>
   findActiveLowVolRanges(candles, pair, monitorRangeRules(maxRangeMult), {
-    recentDays: RANGE_RECENT_DAYS,
+    requireEndYesterday: true,
   });
 
 /**
@@ -196,7 +191,85 @@ export const getMonitorBreakAboveHigh = (candles, hit, liveLast = null) => {
   return null;
 };
 
-export const findMonitorActiveRanges = (candles, pair, maxRangeMult = RANGE_MONITOR_MAX_MULT) => {
+/**
+ * 是否已走出横盘盒（与回测标记日一致：上破上沿或下破下沿）。
+ * 「在区间」必须两边都未破；挂突破单预检仍只用 getMonitorBreakAboveHigh（下破不影响 -2021）。
+ */
+export const getMonitorLeftRange = (candles, hit, liveLast = null) => {
+  const above = getMonitorBreakAboveHigh(candles, hit, liveLast);
+  if (above) return { ...above, side: 'above' };
+
+  const rl = Number(hit?.rangeLow);
+  if (!(rl > 0)) return null;
+
+  const sorted = [...(candles || [])].sort((a, b) => Number(a[0]) - Number(b[0]));
+  const lastBar = sorted[sorted.length - 1];
+  const lastLow = lastBar != null ? Number(lastBar[3]) : null;
+  const lastClose = lastBar != null ? Number(lastBar[4]) : null;
+  const lastTs = lastBar != null ? Number(lastBar[0]) : null;
+  const rangeToTs = Number(hit.rangeToTs);
+  const todayStart = moment.utc().startOf('day').valueOf();
+  const isTodayTs = ts => Number.isFinite(ts) && ts >= todayStart;
+
+  if (Number.isFinite(rangeToTs)) {
+    for (let i = 0; i < sorted.length; i += 1) {
+      const ts = Number(sorted[i][0]);
+      if (!(ts > rangeToTs)) continue;
+      const low = Number(sorted[i][3]);
+      if (Number.isFinite(low) && low < rl) {
+        const freshToday = isTodayTs(ts);
+        return {
+          reason: freshToday ? '今日日K已下破' : '盒子结束后日K已下破',
+          lastHigh: lastBar != null ? Number(lastBar[2]) : null,
+          lastClose,
+          freshToday,
+          firstBreakTs: ts,
+          side: 'below',
+        };
+      }
+    }
+  }
+
+  if (Number.isFinite(lastLow) && lastLow < rl) {
+    return {
+      reason: isTodayTs(lastTs) ? '当日日K最低已破下沿' : '历史日K最低已破下沿',
+      lastHigh: lastBar != null ? Number(lastBar[2]) : null,
+      lastClose,
+      freshToday: isTodayTs(lastTs),
+      firstBreakTs: lastTs,
+      side: 'below',
+    };
+  }
+  if (Number.isFinite(lastClose) && lastClose < rl) {
+    return {
+      reason: isTodayTs(lastTs) ? '当日收盘/现价写入已破下沿' : '历史收盘已破下沿',
+      lastHigh: lastBar != null ? Number(lastBar[2]) : null,
+      lastClose,
+      freshToday: isTodayTs(lastTs),
+      firstBreakTs: lastTs,
+      side: 'below',
+    };
+  }
+  const live = Number(liveLast);
+  if (live > 0 && live < rl) {
+    return {
+      reason: '现价已破下沿',
+      lastHigh: lastBar != null ? Number(lastBar[2]) : null,
+      lastClose,
+      freshToday: true,
+      firstBreakTs: todayStart,
+      side: 'below',
+    };
+  }
+  return null;
+};
+
+export const findMonitorActiveRanges = (
+  candles,
+  pair,
+  maxRangeMult = RANGE_MONITOR_MAX_MULT,
+  liveLast = null
+) => {
   const hits = findMonitorCandidateRanges(candles, pair, maxRangeMult);
   if (!hits.length) return [];
 
@@ -204,9 +277,11 @@ export const findMonitorActiveRanges = (candles, pair, maxRangeMult = RANGE_MONI
   const lastBar = sorted[sorted.length - 1];
   const lastHigh = lastBar != null ? Number(lastBar[2]) : null;
   const lastClose = lastBar != null ? Number(lastBar[4]) : null;
+  const live = Number(liveLast);
 
   return hits
-    .filter(hit => !getMonitorBreakAboveHigh(candles, hit))
+    // 在区间 = 未上破且未下破（与回测走出区间一致）；仅上破过滤会把大量「已砸穿下沿」仍算进去
+    .filter(hit => !getMonitorLeftRange(candles, hit, live > 0 ? live : null))
     .map(hit => ({
       ...hit,
       lastHigh: Number.isFinite(lastHigh) ? lastHigh : hit.lastHigh,

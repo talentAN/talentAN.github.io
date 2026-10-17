@@ -199,6 +199,8 @@ export const findActiveLowVolRanges = (
   opts = {}
 ) => {
   const recentDays = Number(opts.recentDays) > 0 ? Number(opts.recentDays) : 3;
+  /** 监控口径：盒子终点必须是 UTC 昨天（上一根已收盘日），不含今日、不是近三日窗口 */
+  const requireEndYesterday = Boolean(opts.requireEndYesterday);
   const startTs = startDateToTs(rules.defaultStartDate) ?? Date.UTC(2022, 0, 1);
   const minExclusive = Number(rules.minDaysExclusive) || 25;
   const maxRangeMult = Number(rules.maxRangeMult) || 2;
@@ -207,20 +209,43 @@ export const findActiveLowVolRanges = (
   if (bars.length <= minExclusive) return [];
 
   const recentStartIdx = Math.max(0, bars.length - recentDays);
+  let yesterdayIdx = -1;
+  if (requireEndYesterday) {
+    const now = new Date();
+    const yesterdayStart = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - 1
+    );
+    for (let k = bars.length - 1; k >= 0; k -= 1) {
+      if (Number(bars[k].openTime) === yesterdayStart) {
+        yesterdayIdx = k;
+        break;
+      }
+    }
+    if (yesterdayIdx < 0) return [];
+  }
+
+  // 终点卡在昨天时，几何只搜到昨天（今日未收盘 K 不参与拉长盒子）
+  const searchEndIdx = requireEndYesterday ? yesterdayIdx : bars.length - 1;
   let best = null;
 
-  for (let i = 0; i < bars.length; i++) {
+  for (let i = 0; i <= searchEndIdx; i++) {
     let minL = Infinity;
     let maxH = -Infinity;
     let bestJ = -1;
 
-    for (let j = i; j < bars.length; j++) {
+    for (let j = i; j <= searchEndIdx; j++) {
       minL = Math.min(minL, bars[j].low);
       maxH = Math.max(maxH, bars[j].high);
       if (!(minL > 0) || maxH > maxRangeMult * minL) break;
       if (j - i + 1 > minExclusive) bestJ = j;
     }
-    if (bestJ < 0 || bestJ < recentStartIdx) continue;
+    if (requireEndYesterday) {
+      if (bestJ !== yesterdayIdx) continue;
+    } else if (bestJ < 0 || bestJ < recentStartIdx) {
+      continue;
+    }
 
     minL = Infinity;
     maxH = -Infinity;
@@ -238,7 +263,7 @@ export const findActiveLowVolRanges = (
     const posInRange =
       rangeSpan > 0 && Number.isFinite(lastClose) ? (lastClose - minL) / rangeSpan : null;
 
-    // 最近三天里有几天整根 K 都在盒子内
+    // 最近三天里有几天整根 K 都在盒子内（展示用；终点=昨天时仍按日历近窗统计）
     let inBoxDays = 0;
     for (let k = recentStartIdx; k < bars.length; k++) {
       if (bars[k].high <= maxH && bars[k].low >= minL) inBoxDays += 1;
@@ -260,7 +285,7 @@ export const findActiveLowVolRanges = (
       lastClose,
       posInRange,
       inBoxDays,
-      recentDays,
+      recentDays: requireEndYesterday ? 1 : recentDays,
     };
   }
 

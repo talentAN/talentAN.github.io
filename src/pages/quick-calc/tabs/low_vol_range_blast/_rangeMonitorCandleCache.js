@@ -1,18 +1,27 @@
 /**
  * 横盘监控日 K 缓存：
+ * - 存储：统一 KLineMirror.rangeLookback（与暴涨分桶，互不覆盖）
  * - 已收盘日 K：同 UTC 日内复用，不每轮 REST
- * - 当日未收盘：REST 首轮写入 O/H/L/C，之后用 Socket 最新价只向外扩张 H/L、刷新 C
+ * - 当日未收盘：REST 首轮写入 O/H/L/C；读时仅把 close 换成 Socket last
  * - UTC 切日：整表失效，下一轮全量 REST
  */
 
 import moment from 'moment';
 import { getMergedTradingPairs } from '@root/src/container/market';
+import {
+  getSharedKLineMirror,
+  createEmptyRangeLookbackBucket,
+} from '@root/src/container/market/klineMirror';
 import { loadStockSymbolSet } from '../backtest/_tradFiSymbols';
 import { filterBlacklistedPairs } from '../_symbolBlacklist';
 import { fetchLookbackCandles, RANGE_LOOKBACK_DAYS } from './_rangeScan';
 import { RangeMonitorFatal, getSharedMiniTickerFeed } from './_rangeMonitorPriceFeed';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** 横盘日 K 桶：落在统一 KLineMirror.rangeLookback，语义与原模块级 cacheState 相同 */
+const rangeBucket = () => getSharedKLineMirror().rangeLookback;
+const setRangeBucket = next => getSharedKLineMirror().replaceRangeLookback(next);
 
 export const utcDayKey = (ts = Date.now()) => {
   const d = new Date(ts);
@@ -33,44 +42,33 @@ const cloneBar = bar => (Array.isArray(bar) ? [...bar] : null);
  */
 
 /**
- * 模块级单例：停止/再开监控不清理；仅 UTC 切日或 force 才全量 REST。
+ * 统一仓储中的横盘桶：停止/再开监控不清理；仅 UTC 切日或 force 才全量 REST。
  * complete=true 表示上一轮全量 REST 已跑完，可安全复用。
  * 高低比不参与失效——改高低比只重算盒子，不重拉 K。
  */
-/** @type {{ dayKey: string, bySymbol: Map<string, CandleCacheEntry>, builtAt: number, pairCount: number, complete: boolean }} */
-let cacheState = {
-  dayKey: '',
-  bySymbol: new Map(),
-  builtAt: 0,
-  pairCount: 0,
-  complete: false,
-};
-
-const newEmptyCacheState = () => ({
-  dayKey: '',
-  bySymbol: new Map(),
-  builtAt: 0,
-  pairCount: 0,
-  complete: false,
-});
+const newEmptyCacheState = createEmptyRangeLookbackBucket;
 
 export const clearRangeMonitorCandleCache = () => {
-  cacheState = newEmptyCacheState();
+  setRangeBucket(newEmptyCacheState());
 };
 
-export const getRangeMonitorCandleCacheMeta = () => ({
-  dayKey: cacheState.dayKey,
-  size: cacheState.bySymbol.size,
-  pairCount: cacheState.pairCount,
-  builtAt: cacheState.builtAt,
-  complete: cacheState.complete,
-  fresh:
-    cacheState.complete &&
-    cacheState.dayKey === utcDayKey() &&
-    cacheState.bySymbol.size > 0,
-});
+export const getRangeMonitorCandleCacheMeta = () => {
+  const cacheState = rangeBucket();
+  return {
+    dayKey: cacheState.dayKey,
+    size: cacheState.bySymbol.size,
+    pairCount: cacheState.pairCount,
+    builtAt: cacheState.builtAt,
+    complete: cacheState.complete,
+    fresh:
+      cacheState.complete &&
+      cacheState.dayKey === utcDayKey() &&
+      cacheState.bySymbol.size > 0,
+  };
+};
 
 const isReusableToday = () => {
+  const cacheState = rangeBucket();
   if (
     !cacheState.complete ||
     cacheState.dayKey !== utcDayKey() ||
@@ -157,6 +155,7 @@ export const syncCandleCacheTodayFromFeed = () => 0;
 export const getCachedMonitorCandles = (symbol, priceFeed) => {
   const key = String(symbol || '').toUpperCase();
   const day = utcDayKey();
+  const cacheState = rangeBucket();
   if (cacheState.dayKey !== day) return null;
   const entry = cacheState.bySymbol.get(key);
   if (!entry) return null;
@@ -177,8 +176,10 @@ export const getCachedMonitorCandles = (symbol, priceFeed) => {
 export const fetchAndCacheMonitorCandles = async (pair, priceFeed) => {
   const feed = priceFeed || getSharedMiniTickerFeed();
   const day = utcDayKey();
+  let cacheState = rangeBucket();
   if (cacheState.dayKey && cacheState.dayKey !== day) {
     clearRangeMonitorCandleCache();
+    cacheState = rangeBucket();
   }
   cacheState.dayKey = day;
 
@@ -249,8 +250,10 @@ export const ensureRangeMonitorCandleCache = async ({
       ? ` · 高低比≤${Number(maxRangeMult).toFixed(2)}（只重算盒子）`
       : '';
 
+  let cacheState = rangeBucket();
   if (!force && isReusableToday()) {
     const synced = syncCandleCacheTodayFromFeed(feed);
+    cacheState = rangeBucket();
     onStatus?.(
       `日 K 缓存复用：${cacheState.bySymbol.size} 币 · UTC ${day} · Socket 同步 ${synced}${multHint}`
     );
@@ -265,6 +268,7 @@ export const ensureRangeMonitorCandleCache = async ({
   }
 
   // 重建前快照：abort 时恢复，避免「半截重建」毁掉已可复用的完整缓存
+  cacheState = rangeBucket();
   const backup =
     cacheState.complete && cacheState.dayKey === day && cacheState.bySymbol.size > 0
       ? {
@@ -282,16 +286,16 @@ export const ensureRangeMonitorCandleCache = async ({
       : `日 K 首次/跨日：准备全量 REST（UTC ${day}）…`
   );
 
-  cacheState = {
+  cacheState = setRangeBucket({
     ...newEmptyCacheState(),
     dayKey: day,
     complete: false,
-  };
+  });
 
   const pairs = await loadMonitorPairs(onStatus);
   if (aborted()) {
     if (backup) {
-      cacheState = backup;
+      cacheState = setRangeBucket(backup);
       onStatus?.(`日 K REST 中断：已回滚复用 ${cacheState.bySymbol.size} 币 · UTC ${day}`);
       return {
         fromCache: true,
@@ -309,10 +313,13 @@ export const ensureRangeMonitorCandleCache = async ({
   let loaded = 0;
   let empty = 0;
   const total = pairs.length;
-  for (let i = 0; i < pairs.length; i += 1) {
+  /** 与行情门闩 MAX_CONCURRENT=2 对齐 */
+  const COLD_PARALLEL = 2;
+  for (let i = 0; i < pairs.length; i += COLD_PARALLEL) {
+    cacheState = rangeBucket();
     if (aborted()) {
       if (backup) {
-        cacheState = backup;
+        cacheState = setRangeBucket(backup);
         onStatus?.(`日 K REST 中断：已回滚复用 ${cacheState.bySymbol.size} 币 · UTC ${day}`);
         return {
           fromCache: true,
@@ -327,41 +334,50 @@ export const ensureRangeMonitorCandleCache = async ({
       clearRangeMonitorCandleCache();
       return { fromCache: false, aborted: true, size: 0, dayKey: day, complete: false };
     }
-    const pair = pairs[i];
-    const key = String(pair.symbol).toUpperCase();
-    const idx = i + 1;
-    // 每币更新进度，并 yield 让 React 有机会上色
-    if (idx === 1 || idx === total || idx % 5 === 0) {
-      const pct = Math.round((idx / total) * 100);
-      onStatus?.(
-        `日 K REST ${idx}/${total}（${pct}%）· 已写入 ${cacheState.bySymbol.size} · ${key}`
-      );
-      await sleep(0);
+    const chunk = pairs.slice(i, i + COLD_PARALLEL);
+    const done = Math.min(i + chunk.length, total);
+    const pct = Math.round((done / total) * 100);
+    onStatus?.(
+      `日 K REST ${done}/${total}（${pct}%）· 已写入 ${cacheState.bySymbol.size} · 并行${chunk.length}`
+    );
+
+    const results = await Promise.all(
+      chunk.map(async pair => {
+        const key = String(pair.symbol).toUpperCase();
+        try {
+          const candles = await fetchLookbackCandles(pair, RANGE_LOOKBACK_DAYS);
+          return { pair, key, candles, error: null };
+        } catch (e) {
+          return { pair, key, candles: null, error: e };
+        }
+      })
+    );
+
+    for (const { pair, key, candles, error } of results) {
+      if (error) {
+        if (backup) setRangeBucket(backup);
+        if (error instanceof RangeMonitorFatal) throw error;
+        throw new RangeMonitorFatal(`${key} 拉 K 失败`, error?.message || String(error));
+      }
+      if (!Array.isArray(candles) || !candles.length) {
+        empty += 1;
+        continue;
+      }
+      const { closedBars, today } = splitClosedAndToday(candles);
+      const todaySeed = today || null;
+      if (todaySeed) seedFeedFromToday(feed, key, todaySeed);
+      rangeBucket().bySymbol.set(key, {
+        pair: { exchange: pair.exchange, symbol: key },
+        closedBars,
+        todaySeed,
+        today: todaySeed,
+      });
+      loaded += 1;
     }
-    let candles;
-    try {
-      candles = await fetchLookbackCandles(pair, RANGE_LOOKBACK_DAYS);
-    } catch (e) {
-      if (backup) cacheState = backup;
-      if (e instanceof RangeMonitorFatal) throw e;
-      throw new RangeMonitorFatal(`${key} 拉 K 失败`, e?.message || String(e));
-    }
-    if (!Array.isArray(candles) || !candles.length) {
-      empty += 1;
-      continue;
-    }
-    const { closedBars, today } = splitClosedAndToday(candles);
-    const todaySeed = today || null;
-    if (todaySeed) seedFeedFromToday(feed, key, todaySeed);
-    cacheState.bySymbol.set(key, {
-      pair: { exchange: pair.exchange, symbol: key },
-      closedBars,
-      todaySeed,
-      today: todaySeed,
-    });
-    loaded += 1;
+    await sleep(0);
   }
 
+  cacheState = rangeBucket();
   cacheState.builtAt = Date.now();
   cacheState.pairCount = pairs.length;
   cacheState.complete = true;
@@ -386,5 +402,5 @@ export const ensureRangeMonitorCandleCache = async ({
 /** 仅完整当日缓存可列出（供开仓扫描） */
 export const listCachedMonitorPairs = () => {
   if (!isReusableToday()) return [];
-  return [...cacheState.bySymbol.values()].map(e => e.pair);
+  return [...rangeBucket().bySymbol.values()].map(e => e.pair);
 };

@@ -102,6 +102,18 @@ export class BinanceBookTickerFeed {
     this.connectGen = 0;
     this.activeUrl = null;
     this.lastClose = null;
+    /** @type {Set<(symbols: string[]) => void>} */
+    this.quoteListeners = new Set();
+  }
+
+  /**
+   * 订阅报价更新（每帧 ingest 后回调本次变更的 symbol 列表）。
+   * @returns {() => void} unsubscribe
+   */
+  subscribeQuotes(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this.quoteListeners.add(listener);
+    return () => this.quoteListeners.delete(listener);
   }
 
   start() {
@@ -171,6 +183,8 @@ export class BinanceBookTickerFeed {
     const now = Date.now();
     const day = utcDayKey(now);
     let n = 0;
+    /** @type {string[]} */
+    const updated = [];
     items.forEach(item => {
       const symbol = String(item?.s || '').toUpperCase();
       if (!symbol) return;
@@ -195,6 +209,7 @@ export class BinanceBookTickerFeed {
         ts: now,
         via: 'bookTicker',
       });
+      updated.push(symbol);
       n += 1;
     });
     if (!n) return false;
@@ -202,6 +217,15 @@ export class BinanceBookTickerFeed {
     if (!this.ready) {
       this.ready = true;
       this.resolveAllWaiters();
+    }
+    if (this.quoteListeners.size && updated.length) {
+      this.quoteListeners.forEach(fn => {
+        try {
+          fn(updated);
+        } catch (e) {
+          console.warn('[BookTickerFeed] quote listener', e);
+        }
+      });
     }
     return true;
   }
@@ -315,8 +339,8 @@ export class BinanceBookTickerFeed {
       }, RECONNECT_MS);
     };
   }
-
-  async waitReady(timeoutMs = 25000) {
+  
+async waitReady(timeoutMs = 25000) {
     if (this.ready && this.bySymbol.size > 0) return;
     this.start();
     await new Promise((resolve, reject) => {

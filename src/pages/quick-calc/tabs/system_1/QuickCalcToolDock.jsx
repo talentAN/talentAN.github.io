@@ -2,6 +2,7 @@ import React from 'react';
 import SurgeAlert from './SurgeAlert';
 import TakeProfitCalculator from './TakeProfitCalculator';
 import RangeMonitor from '../low_vol_range_blast/RangeMonitor';
+import SocketLinkStatus from './SocketLinkStatus';
 
 /**
  * 嵌在行情条右侧；由 PriceTickerBanner（wrapPageElement）挂载，
@@ -13,6 +14,7 @@ const SHOW_TAKE_PROFIT_CALCULATOR = false;
 
 const QuickCalcToolDock = () => (
   <div className="quick-calc-tool-dock" aria-label="快捷工具">
+    <SocketLinkStatus />
     <SurgeAlert docked />
     <RangeMonitor docked />
     {SHOW_TAKE_PROFIT_CALCULATOR ? <TakeProfitCalculator docked /> : null}

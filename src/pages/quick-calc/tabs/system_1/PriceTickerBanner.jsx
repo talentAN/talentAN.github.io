@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import moment from 'moment';
 import { getFutureKlineData } from '@root/src/container/market';
+import { getBinanceBanRemaining } from '@root/src/container/market/_fetchGate';
 import * as s from './pairSelector.module.less';
 import { MARKET_CONFIG } from '@root/src/consts/pairSelectorConfig';
 import { MARKET_DATA_CONFIG } from '@root/src/configs/pairSelectorConfig';
 import QuickCalcToolDock from './QuickCalcToolDock';
-import SocketLinkStatus from './SocketLinkStatus';
 
 const SYMBOLS = ['BTC', 'ETH'];
+/** 顶栏行情：降频，避免与监控扫 K / 签名 REST 叠打 IP */
+const TICKER_REFRESH_MS = 30000;
 
 const calculatePriceChange = (data, days) => {
   if (!Array.isArray(data) || data.length <= days) return null;
@@ -24,36 +26,37 @@ const PriceTickerBanner = () => {
   useEffect(() => {
     let disposed = false;
     const refresh = async () => {
+      if (getBinanceBanRemaining() > 0) return;
       const endTime = moment().valueOf();
       const startTime = moment().subtract(MARKET_CONFIG.klineDays, 'days').valueOf();
-      const results = await Promise.all(
-        SYMBOLS.map(async symbol => {
-          try {
-            const result = await getFutureKlineData(
-              {
-                symbol: `${symbol}USDT`,
-                granularity: '1D',
-                limit: MARKET_CONFIG.klineDays,
-                startTime,
-                endTime,
-              },
-              'binance'
-            );
-            const data = Array.isArray(result?.data) ? result.data : [];
-            return [
-              symbol,
-              {
-                latest: data.length ? Number(data[data.length - 1]?.[4]) : null,
-                day7: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[0]),
-                day15: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[1]),
-                day45: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[2]),
-              },
-            ];
-          } catch (_) {
-            return [symbol, null];
-          }
-        })
-      );
+      const results = [];
+      for (const symbol of SYMBOLS) {
+        if (disposed || getBinanceBanRemaining() > 0) break;
+        try {
+          const result = await getFutureKlineData(
+            {
+              symbol: `${symbol}USDT`,
+              granularity: '1D',
+              limit: MARKET_CONFIG.klineDays,
+              startTime,
+              endTime,
+            },
+            'binance'
+          );
+          const data = Array.isArray(result?.data) ? result.data : [];
+          results.push([
+            symbol,
+            {
+              latest: data.length ? Number(data[data.length - 1]?.[4]) : null,
+              day7: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[0]),
+              day15: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[1]),
+              day45: calculatePriceChange(data, MARKET_DATA_CONFIG.displayPeriods[2]),
+            },
+          ]);
+        } catch (_) {
+          results.push([symbol, null]);
+        }
+      }
       if (disposed) return;
       setMarketData(prev => {
         const next = { ...prev };
@@ -65,7 +68,7 @@ const PriceTickerBanner = () => {
       setLoading(false);
     };
     refresh();
-    const timer = window.setInterval(refresh, 10000);
+    const timer = window.setInterval(refresh, TICKER_REFRESH_MS);
     return () => {
       disposed = true;
       window.clearInterval(timer);
@@ -107,7 +110,6 @@ const PriceTickerBanner = () => {
             {renderStats('ETH', marketData.ETH)}
           </>
         )}
-        <SocketLinkStatus />
       </div>
       <QuickCalcToolDock />
     </div>

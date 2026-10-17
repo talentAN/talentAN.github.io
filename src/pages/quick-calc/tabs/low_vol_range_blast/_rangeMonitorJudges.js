@@ -159,9 +159,37 @@ export const isBinanceStopAlgo = (o, positionSide = 'LONG') => {
   );
 };
 
-/** 止损触发价是否等于开仓价（成本价全仓止损）。 */
+/** 条件单是否明确声明 closePosition（币安 UI 数量列「全部平仓」）。 */
+export const isClosePositionAlgo = o => {
+  const raw = o?.closePosition ?? o?.cp;
+  return raw === true || String(raw).toLowerCase() === 'true';
+};
+
+/**
+ * 明确的按数量止损（旧回退形态）。closePosition 缺失但带正数量的全平回包不算，
+ * 避免误撤交易所已挂的全部平仓单。
+ */
+export const isQtyBasedStopAlgo = o => {
+  if (isClosePositionAlgo(o)) return false;
+  if (o?._rememberedAt) return false; // 本地影子单，不可当交易所数量单去撤
+  const raw = o?.closePosition ?? o?.cp;
+  if (raw === false || String(raw).toLowerCase() === 'false') {
+    const q = Number(o?.quantity ?? o?.origQty);
+    return Number.isFinite(q) && q > 0;
+  }
+  const reduceOnly =
+    o?.reduceOnly === true || String(o?.reduceOnly).toLowerCase() === 'true';
+  const q = Number(o?.quantity ?? o?.origQty);
+  return reduceOnly && Number.isFinite(q) && q > 0;
+};
+
+/** 止损触发价是否等于开仓价（成本价止损；含误挂的按数量单，引擎会改挂全平）。 */
 export const isBreakevenStopAlgo = (o, entry, tickSize, positionSide = 'LONG') =>
   isBinanceStopAlgo(o, positionSide) && pricesMatchTier(algoTriggerPrice(o), entry, tickSize);
+
+/** 成本价 + closePosition 全仓止损（目标形态）。 */
+export const isBreakevenClosePositionStopAlgo = (o, entry, tickSize, positionSide = 'LONG') =>
+  isBreakevenStopAlgo(o, entry, tickSize, positionSide) && isClosePositionAlgo(o);
 
 /** 是否为指定方向的止盈条件单（非追踪）。 */
 export const isBinanceTakeProfitAlgo = (o, positionSide = 'LONG') => {
@@ -202,23 +230,30 @@ export const isBinanceTrailingAlgo = (o, positionSide = 'LONG') => {
 };
 
 /**
- * 是否为「出场类」委托（孤儿清理用）：
- * reduceOnly / closePosition，或类型含 STOP / TAKE_PROFIT / TRAILING。
+ * 是否为「出场类」委托（孤儿清理用）。
+ * 注意：开多突破也是 STOP_MARKET + BUY，绝不能只凭 type 含 STOP 就当作出场。
  */
 export const isExitOrderForPosition = order => {
+  const clientId = String(order?.clientAlgoId || order?.clientOrderId || order?.clientOid || '');
+  // 横盘开多突破单
+  if (/^lvb/i.test(clientId)) return false;
+
   const type =
     `${order?.type || ''} ${order?.orderType || ''} ${order?.origType || ''} ${order?.algoType || ''}`.toUpperCase();
   const reduceOnly =
     order?.reduceOnly === true || String(order?.reduceOnly).toLowerCase() === 'true';
   const closePosition =
     order?.closePosition === true || String(order?.closePosition).toLowerCase() === 'true';
-  return (
-    reduceOnly ||
-    closePosition ||
-    type.includes('STOP') ||
-    type.includes('TAKE_PROFIT') ||
-    type.includes('TRAILING')
-  );
+
+  if (reduceOnly || closePosition) return true;
+  if (type.includes('TAKE_PROFIT') || type.includes('TRAILING')) return true;
+
+  // 止损：STOP 且方向为平仓向（多=SELL / 空=BUY）；开多 STOP_MARKET+BUY 排除
+  if (type.includes('STOP') && !type.includes('TAKE_PROFIT')) {
+    if (isBinanceStopAlgo(order, 'LONG') || isBinanceStopAlgo(order, 'SHORT')) return true;
+    return false;
+  }
+  return false;
 };
 
 /** 下单数量是否过小（≤0，或低于合约 minQty）。 */

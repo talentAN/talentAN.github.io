@@ -17,6 +17,13 @@ import {
 import { getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
 import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
 import { getBinanceAccountSnapshot } from '@root/src/container/binance/accountMirror';
+import { fetchBinanceSymbolLiveBook } from '@root/src/container/binance/liveExposure';
+import {
+  peekLocalOpenSuccess,
+  rememberOpenSuccess,
+  PlaceIntent,
+} from '@root/src/container/binance/placeGate';
+import { clearPlaceSuccessByIntent } from '@root/src/container/binance/placeSuccessCache';
 import {
   checkExistingExposure,
   isLiveOrderEnabled,
@@ -191,8 +198,18 @@ const isLongOpenAlgo = order => {
   const side = String(order?.side || '').toUpperCase();
   if (side !== 'BUY') return false;
   if (order?.reduceOnly === true || order?.reduceOnly === 'true') return false;
+  const closePosition =
+    order?.closePosition === true || String(order?.closePosition).toLowerCase() === 'true';
+  if (closePosition) return false;
   const ps = String(order?.positionSide || '').toUpperCase();
   if (ps === 'SHORT') return false;
+  // 排除止盈/追踪/平仓止损（出场单也可能 side=BUY 在空仓上）
+  const blob =
+    `${order?.type || ''} ${order?.orderType || ''} ${order?.origType || ''} ${order?.algoType || ''}`.toUpperCase();
+  if (blob.includes('TAKE_PROFIT') || blob.includes('TRAILING')) return false;
+  // 横盘开多固定 lvb 前缀；有 clientId 时只认开多，避免扫到其它 BUY 条件单
+  const clientId = String(order?.clientAlgoId || order?.clientOrderId || '');
+  if (clientId && !/^lvb/i.test(clientId)) return false;
   return true;
 };
 
@@ -200,11 +217,16 @@ const isLongOpenPending = order => {
   const reduceOnly =
     order?.reduceOnly === true || order?.reduceOnly === 'true' || order?.reduceOnly === 'YES';
   if (reduceOnly) return false;
+  const closePosition =
+    order?.closePosition === true || String(order?.closePosition).toLowerCase() === 'true';
+  if (closePosition) return false;
   const tradeSide = String(order?.tradeSide || '').toLowerCase();
   if (tradeSide === 'close') return false;
   if (!isBuySideLoose(order?.side)) return false;
   const ps = String(order?.positionSide || '').toUpperCase();
   if (ps === 'SHORT') return false;
+  const clientId = String(order?.clientOrderId || order?.clientOid || '');
+  if (clientId && !/^lvb/i.test(clientId)) return false;
   return true;
 };
 
@@ -349,7 +371,6 @@ export const fetchLiveOrderStatusMaps = async (rows, options = {}) => {
       errors.push(`BG ${e?.message || e}`);
     }
   }
-
   return {
     orderedMap,
     positionMap,
@@ -449,7 +470,8 @@ export const listLiveLongOpenOrders = async ({ exchanges, binanceSnapshot } = {}
       errors.push(`BG ${e?.message || e}`);
     }
   }
-return { orders, error: errors.length ? errors.join('；') : undefined };
+
+  return { orders, error: errors.length ? errors.join('；') : undefined };
 };
 
 /** 撤销单笔多头开仓委托（普通 / 计划 / 条件） */
@@ -523,12 +545,24 @@ export const cancelLongOpenOrder = async order => {
  */
 export const cancelLongOpenOrders = async (orders, { onProgress } = {}) => {
   const summary = { total: orders.length, ok: 0, failed: 0, results: [] };
+  const clearedSymbols = new Set();
   for (let i = 0; i < orders.length; i += 1) {
     const order = orders[i];
     const result = await cancelLongOpenOrder(order);
     summary.results.push({ order, result });
-    if (result.ok) summary.ok += 1;
-    else summary.failed += 1;
+    if (result.ok) {
+      summary.ok += 1;
+      const sym = String(order?.symbol || '').toUpperCase();
+      const ex = String(order?.exchange || 'binance').toLowerCase();
+      if (sym && !clearedSymbols.has(`${ex}:${sym}`)) {
+        clearPlaceSuccessByIntent({
+          exchange: ex,
+          symbol: sym,
+          intent: PlaceIntent.OPEN_LONG,
+        });
+        clearedSymbols.add(`${ex}:${sym}`);
+      }
+    } else summary.failed += 1;
     onProgress?.({ index: i, order, result, summary: { ...summary } });
     await sleep(150);
   }
@@ -568,24 +602,45 @@ export const checkLongOpenOrders = async ({ symbol, exchange, binanceSnapshot })
     }
 
     if (exchange === 'binance') {
-      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
-      if (!snap?.ok) {
+      // 下单相关判定走 REST；若调用方显式传入 snapshot 则仅用于 UI 批量展示
+      if (binanceSnapshot?.ok) {
+        const sym = String(symbol || '').toUpperCase();
+        const pending = (binanceSnapshot.openOrders || []).filter(
+          o => String(o?.symbol || '').toUpperCase() === sym
+        );
+        const algos = (binanceSnapshot.algoOrders || []).filter(
+          o => String(o?.symbol || '').toUpperCase() === sym
+        );
+        const hasPending = pending.some(isLongOpenPending);
+        const hasAlgo = algos.some(isLongOpenAlgo);
+        return {
+          hasOrders: hasPending || hasAlgo,
+          reason: hasPending || hasAlgo ? 'has_orders' : null,
+        };
+      }
+      const local = peekLocalOpenSuccess({ exchange, symbol, side: 'long' });
+      if (local.hit) {
+        return { hasOrders: true, reason: 'has_orders', fromLocalCache: true };
+      }
+      const book = await fetchBinanceSymbolLiveBook(symbol);
+      if (!book.ok) {
         return {
           hasOrders: false,
           unavailable: true,
           reason: 'query_failed',
-          detail: snap?.error || 'account mirror not ready',
+          detail: book.error || 'symbol live book query failed',
         };
       }
-      const sym = String(symbol || '').toUpperCase();
-      const pending = (snap.openOrders || []).filter(
-        o => String(o?.symbol || '').toUpperCase() === sym
-      );
-      const algos = (snap.algoOrders || []).filter(
-        o => String(o?.symbol || '').toUpperCase() === sym
-      );
-      const hasPending = pending.some(isLongOpenPending);
-      const hasAlgo = algos.some(isLongOpenAlgo);
+      const hasPending = (book.openOrders || []).some(isLongOpenPending);
+      const hasAlgo = (book.algoOrders || []).some(isLongOpenAlgo);
+      if (hasPending || hasAlgo) {
+        rememberOpenSuccess({
+          exchange,
+          symbol,
+          side: 'long',
+          source: 'rest_confirm',
+        });
+      }
       return {
         hasOrders: hasPending || hasAlgo,
         reason: hasPending || hasAlgo ? 'has_orders' : null,
@@ -607,8 +662,9 @@ export const checkLongOpenOrders = async ({ symbol, exchange, binanceSnapshot })
  * 开多前：只检查多头持仓 / 多头开仓挂单 / 多头计划·条件单。
  * 空头敞口不挡（双向持仓下可与 SurgeAlert 开空并存）。
  */
-export const checkBreakoutOrderExposure = async ({ symbol, exchange, binanceSnapshot } = {}) => {
-  const base = await checkExistingExposure({ symbol, exchange, side: 'long', binanceSnapshot });
+export const checkBreakoutOrderExposure = async ({ symbol, exchange } = {}) => {
+  // Binance：checkExistingExposure 已 REST 查持仓+挂单+条件单（开仓侧）
+  const base = await checkExistingExposure({ symbol, exchange, side: 'long' });
   if (base.exposed) return base;
 
   try {
@@ -628,24 +684,6 @@ export const checkBreakoutOrderExposure = async ({ symbol, exchange, binanceSnap
     }
 
     if (exchange === 'binance') {
-      const snap = binanceSnapshot || (await getBinanceAccountSnapshot());
-      if (!snap?.ok) {
-        return {
-          exposed: true,
-          reason: 'query_failed',
-          detail: snap?.error || '条件单查询失败',
-        };
-      }
-      const sym = String(symbol || '').toUpperCase();
-      const list = (snap.algoOrders || []).filter(
-        o => String(o?.symbol || '').toUpperCase() === sym
-      );
-      const openOrders = (snap.openOrders || []).filter(
-        o => String(o?.symbol || '').toUpperCase() === sym
-      );
-      if (list.some(isLongOpenAlgo) || openOrders.some(isLongOpenPending)) {
-        return { exposed: true, reason: 'has_orders', side: 'long' };
-      }
       return { exposed: false, reason: null, side: 'long' };
     }
 
@@ -657,7 +695,6 @@ export const checkBreakoutOrderExposure = async ({ symbol, exchange, binanceSnap
 };
 
 const skipLabel = reason => SKIP_REASON_LABEL[reason] || reason || '已跳过';
-
 /**
  * 对单条横盘结果下「严格上破上沿 → 市价开多」计划/条件单。
  * 开仓口径对齐收益回测：入场参考价=rangeHigh，数量按 rangeHigh 计；触发价=上沿+1tick（high>上沿）。
@@ -777,6 +814,13 @@ export const placeBreakoutTriggerOrderInternal = async row => {
         result,
       };
     }
+    rememberOpenSuccess({
+      exchange,
+      symbol,
+      side: 'long',
+      source: 'place',
+      meta: { clientOid },
+    });
     return { ok: true, size, triggerPrice, entryPrice, notional, result, exchange, symbol };
   }
 
@@ -841,6 +885,13 @@ export const placeBreakoutTriggerOrderInternal = async row => {
         at: Date.now(),
         clientOid,
         algoId: result.response?.algoId || result.response?.orderId,
+      });
+      rememberOpenSuccess({
+        exchange,
+        symbol,
+        side: 'long',
+        source: 'place',
+        meta: { clientOid },
       });
       debugBreakout(symbol, 'submit_result', { clientOid, ok: true, response: result?.response });
     }

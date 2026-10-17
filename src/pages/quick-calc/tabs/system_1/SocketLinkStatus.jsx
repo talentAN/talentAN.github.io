@@ -66,7 +66,6 @@ const SocketLinkStatus = () => {
       role="img"
       aria-label={title}
       style={{
-        marginLeft: 'auto',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',

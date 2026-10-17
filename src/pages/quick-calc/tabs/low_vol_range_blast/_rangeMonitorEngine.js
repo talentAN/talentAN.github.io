@@ -4,11 +4,17 @@ import { getBinanceBanRemaining } from '@root/src/container/binance/api';
 import { getPositionMode as getBinancePositionMode } from '@root/src/container/binance/api/query';
 import {
   getBinanceAccountSnapshot,
+  patchBinancePositionOpenTime,
   refreshBinanceAccountMirror,
 } from '@root/src/container/binance/accountMirror';
 import {
+  gateBeforeExitPlace,
+  rememberExitSuccess,
+  PlaceIntent,
+} from '@root/src/container/binance/placeGate';
+import { clearPlaceSuccessByIntent } from '@root/src/container/binance/placeSuccessCache';
+import {
   placeFutureClosePositionAlgo,
-  placeFutureQtyStopAlgo,
   placeFutureQtyTakeProfitAlgo,
   placeFutureTrailingStopAlgo,
   cancelFutureAlgoOrder,
@@ -17,11 +23,11 @@ import {
 import { loadStockSymbolSet } from '../backtest/_tradFiSymbols';
 import { isBlacklistedSymbol } from '../_symbolBlacklist';
 import { isLiveOrderEnabled, quantizeQuantity } from '../system_1/_autoOrderModel';
-import { waitBinanceBanIfNeeded, withMarketFetchGate } from '../_marketFetchGate';
+import { waitBinanceBanIfNeeded } from '../_marketFetchGate';
 import {
-  findMonitorActiveRanges,
   findMonitorCandidateRanges,
   getMonitorBreakAboveHigh,
+  getMonitorLeftRange,
   calcDistBelowRangeHighPct,
   normalizeNearBandPct,
   RANGE_MONITOR_MAX_MULT,
@@ -48,6 +54,7 @@ import {
 } from './_breakoutOrder';
 import { getContracts as getBinanceContracts } from '@root/src/container/binance/api';
 import { getPositionOpenTime } from '@root/src/container/binance/positionOpenTime';
+import { getSharedKLineMirror } from '@root/src/container/market/klineMirror';
 import { RangeMonitorFatal, getSharedMiniTickerFeed } from './_rangeMonitorPriceFeed';
 import {
   RANGE_MONITOR_SCAN_ENABLED,
@@ -75,7 +82,9 @@ import {
   isBinanceTakeProfitOrder,
   isBinanceTrailingAlgo,
   isBreakevenStopAlgo,
+  isClosePositionAlgo,
   isExitOrderForPosition,
+  isQtyBasedStopAlgo,
   isInFirstTierDynamicPhase,
   isInFixedTpPhase,
   isQtyTooSmall,
@@ -184,25 +193,43 @@ const resolveMonitorCandles = async (pair, priceFeed) => {
   return candles;
 };
 
-const isStillInMonitorRange = async (pair, maxRangeMult, priceFeed) => {
+/**
+ * 清理用：有几何候选盒子即 keep 候选；不要用 active（已破上沿会空，会把待成交突破单误撤）。
+ */
+const resolveCleanupBox = async (pair, maxRangeMult, priceFeed) => {
   const candles = await resolveMonitorCandles(pair, priceFeed);
   if (!Array.isArray(candles) || !candles.length) {
     throw new RangeMonitorFatal(`${pair.symbol} 历史 K 线为空`, '清理/扫描无法重算高低比');
   }
-  const hits = findMonitorActiveRanges(candles, pair, maxRangeMult);
-  return { inRange: hits.length > 0, hits, candles };
+  const hits = findMonitorCandidateRanges(candles, pair, maxRangeMult);
+  return { hasBox: hits.length > 0, hits, candles };
 };
 
-/** 逐笔撤销指定币对的成本价止损条件单，缺少订单 ID 的记录直接跳过。 */
+const isRangeMonitorOpenOrder = order =>
+  /^lvb/i.test(String(order?.clientOid || order?.clientAlgoId || order?.clientOrderId || ''));
+
+/** 条件单去重键：优先 clientAlgoId，避免「本地影子(无 algoId)」与「交易所真单」被当成两笔。 */
+const algoIdentityKey = order => {
+  const clientId = String(order?.clientAlgoId || order?.clientOrderId || '').trim();
+  if (clientId) return `c:${clientId}`;
+  if (order?.algoId != null) return `a:${order.algoId}`;
+  if (order?.orderId != null) return `o:${order.orderId}`;
+  return '';
+};
+
+/** 逐笔撤销指定币对的成本价止损条件单；跳过本地影子单（无交易所 algoId），避免误撤真单。 */
 const cancelBreakevenStops = async (symbol, orders) => {
   for (const order of orders) {
+    // 仅 _rememberedAt、尚无 algoId 的是进程内乐观记录，对其 cancel(clientAlgoId) 会误撤刚挂上的真单
+    if (order?._rememberedAt && order?.algoId == null && order?.orderId == null) continue;
     const algoId = order.algoId ?? order.orderId;
     const clientAlgoId = order.clientAlgoId || order.clientOrderId;
     if (algoId == null && !clientAlgoId) continue;
     await cancelFutureAlgoOrder({
       symbol,
       ...(algoId != null ? { algoId } : {}),
-      ...(clientAlgoId ? { clientAlgoId } : {}),
+      // 有 algoId 时不要再带 clientAlgoId，减少误伤同 client 的其它形态
+      ...(algoId == null && clientAlgoId ? { clientAlgoId } : {}),
     });
     await sleep(80);
   }
@@ -264,8 +291,8 @@ const XX_HOUR_MS = RANGE_MONITOR_XX_HOUR_MS;
 const XX_KLINE_CACHE_TTL_MS = RANGE_MONITOR_XX_KLINE_CACHE_TTL_MS;
 /** 单次小时 K 上限；更长持仓向前翻页 */
 const XX_HOUR_LIMIT = RANGE_MONITOR_XX_HOUR_LIMIT;
-/** 按币对+持仓生命周期缓存开仓后的小时 K，避免 2s 轮询重复拉历史数据。 */
-const xxKlineCache = new Map();
+/** 按币对+持仓生命周期缓存开仓后的小时 K；落在统一 KLineMirror.hourXx */
+const xxKlineCache = () => getSharedKLineMirror().hourXx;
 
 const TP_ORDER_CACHE_KEY = RANGE_MONITOR_STORAGE_KEYS.tpOrderTiers;
 const readTpOrderCache = () => {
@@ -286,6 +313,52 @@ const writeTpOrderCache = cache => {
   }
 };
 const tpPlaceInFlight = new Set();
+/** 成本止损 / 追踪挂单 inflight，防止事件驱动并发双挂 */
+const slPlaceInFlight = new Set();
+const trailPlaceInFlight = new Set();
+/** 刚成功挂上成本止损的冷却（镜像尚未带回新单时防重挂） */
+const slArmedAt = new Map();
+const SL_ARM_COOLDOWN_MS = 60_000;
+/** 刚成功挂上的止盈档冷却 */
+const tpArmedAt = new Map();
+const TP_ARM_COOLDOWN_MS = 120_000;
+/**
+ * 本进程刚挂出、镜像可能尚未带回的出场条件单（按 symbol）。
+ * 下一轮合并进 bySym，避免账户变更立刻再跑时重复挂止盈。
+ */
+const recentExitAlgosBySym = new Map();
+const RECENT_EXIT_ALGO_TTL_MS = 120_000;
+
+const rememberRecentExitAlgo = (symbol, algo) => {
+  const sym = String(symbol || '').toUpperCase();
+  if (!sym || !algo) return;
+  const list = recentExitAlgosBySym.get(sym) || [];
+  list.push({ ...algo, _rememberedAt: Date.now() });
+  recentExitAlgosBySym.set(sym, list);
+};
+
+const mergeRecentExitAlgos = bySym => {
+  const now = Date.now();
+  recentExitAlgosBySym.forEach((list, sym) => {
+    const alive = list.filter(o => now - (o._rememberedAt || 0) < RECENT_EXIT_ALGO_TTL_MS);
+    if (!alive.length) {
+      recentExitAlgosBySym.delete(sym);
+      return;
+    }
+    recentExitAlgosBySym.set(sym, alive);
+    const existing = bySym.get(sym) || [];
+    const keys = new Set(existing.map(algoIdentityKey).filter(Boolean));
+    alive.forEach(o => {
+      const key = algoIdentityKey(o);
+      // 镜像已有同 clientAlgoId 真单时不再塞影子，否则去重会 cancel(clientId) 误撤真单
+      if (key && !keys.has(key)) {
+        existing.push(o);
+        keys.add(key);
+      }
+    });
+    bySym.set(sym, existing);
+  });
+};
 
 const tpCacheAdd = (cache, pos, tierKey) => {
   const key = tpCacheKey(pos);
@@ -318,22 +391,20 @@ const fetchHourlyCandlesSinceOpen = async (symbol, exchange, openTimeMs, endTime
   while (chunkEnd > openTimeMs) {
     const chunkStart = Math.max(openTimeMs, chunkEnd - spanMs + 1);
     await waitBinanceBanIfNeeded(getBinanceBanRemaining);
-    const res = await withMarketFetchGate(() =>
-      getFutureKlineData(
-        {
-          symbol,
-          granularity: '1H',
-          startTime: chunkStart,
-          endTime: chunkEnd,
-          limit: XX_HOUR_LIMIT,
-        },
-        exchange
-      )
+    const res = await getFutureKlineData(
+      {
+        symbol,
+        granularity: '1H',
+        startTime: chunkStart,
+        endTime: chunkEnd,
+        limit: XX_HOUR_LIMIT,
+      },
+      exchange
     );
     const chunk = Array.isArray(res?.data) ? res.data : [];
     chunk.forEach(c => {
       const ts = Number(c[0]);
-      // 只要开仓之后的根（根开盘时间 ≥ 开仓时刻）；开仓当小时若开盘更早则整根不计入，靠 liveLast 补
+      // 开仓之后的根（根开盘 ≥ 开仓时刻）；开仓当小时靠 liveLast / sticky 极值补
       if (Number.isFinite(ts) && ts >= openTimeMs) byTs.set(ts, c);
     });
     if (!chunk.length || chunkStart <= openTimeMs) break;
@@ -354,26 +425,54 @@ const directionalExtreme = (current, price, direction) => {
   return direction === 'SHORT' ? Math.min(current, price) : Math.max(current, price);
 };
 
-const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast, direction = 'LONG' }) => {
+const persistXxExtreme = (cacheKey, prev, extreme, bars, direction = 'LONG') => {
+  // sticky：有利极值只升不降，避免冲高回落后 TTL 重拉把 xx 打回 1.2 以下、漏挂成本止损
+  const sticky = directionalExtreme(prev?.extreme || prev?.high, extreme, direction);
+  const row = {
+    fetchedAt: Date.now(),
+    extreme: sticky,
+    high: sticky,
+    bars: bars != null ? bars : prev?.bars || 0,
+    _direction: direction,
+  };
+  xxKlineCache().set(cacheKey, row);
+  return row;
+};
+
+const fetchHighSinceOpenXx = async ({
+  symbol,
+  exchange,
+  openTimeMs,
+  liveLast,
+  direction = 'LONG',
+}) => {
   requirePositive(openTimeMs, `${symbol} 持仓首次获取时间 updateTime`);
   const live = Number(liveLast);
   const cacheKey = `${exchange}:${String(symbol).toUpperCase()}:${openTimeMs}`;
-  const cached = xxKlineCache.get(cacheKey);
+  const cached = xxKlineCache().get(cacheKey);
+  if (cached && !cached._direction) cached._direction = direction;
   const now = Date.now();
+
+  const withLiveSticky = base => {
+    const merged = directionalExtreme(base, live, direction);
+    const row = persistXxExtreme(cacheKey, cached, merged, cached?.bars, direction);
+    return {
+      xx: row.extreme,
+      a: row.extreme,
+      b: live > 0 ? live : null,
+      bars: row.bars,
+      cached: true,
+    };
+  };
+
   if (cached && now - cached.fetchedAt < XX_KLINE_CACHE_TTL_MS) {
-    const extreme = directionalExtreme(cached.extreme || cached.high, live, direction);
-    return { xx: extreme, a: cached.extreme || cached.high || null, b: live > 0 ? live : null, bars: cached.bars, cached: true };
+    return withLiveSticky(cached.extreme || cached.high);
   }
 
   if (getBinanceBanRemaining() > 0) {
-    if (cached?.high > 0) {
-      const extreme = directionalExtreme(cached.extreme || cached.high, live, direction);
+    if (cached?.extreme > 0 || cached?.high > 0 || live > 0) {
       return {
-        xx: extreme,
-        a: cached.extreme || cached.high,
-        b: live > 0 ? live : null,
-        bars: cached.bars,
-        cached: true,
+        ...withLiveSticky(cached?.extreme || cached?.high),
         rateLimited: true,
       };
     }
@@ -388,7 +487,10 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast, di
   }
 
   if (!(now >= openTimeMs)) {
-    if (live > 0) return { xx: live, a: null, b: live };
+    if (live > 0) {
+      const row = persistXxExtreme(cacheKey, cached, live, 0, direction);
+      return { xx: row.extreme, a: null, b: live };
+    }
     return { xx: null, a: null, b: null, skipped: true, detail: '持仓首次获取时间晚于当前' };
   }
 
@@ -403,11 +505,15 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast, di
     }
 
     const a = maxHighFromCandles(candles, direction);
-    const extreme = directionalExtreme(a, live, direction);
-    const xx = extreme;
-    if (xx > 0) {
-      xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), extreme, high: extreme, bars: candles.length });
-      return { xx, a: extreme, b: live > 0 ? live : null, bars: candles.length };
+    const fromBarsAndLive = directionalExtreme(a, live, direction);
+    const extreme = directionalExtreme(
+      cached?.extreme || cached?.high,
+      fromBarsAndLive,
+      direction
+    );
+    if (extreme > 0) {
+      const row = persistXxExtreme(cacheKey, cached, extreme, candles.length, direction);
+      return { xx: row.extreme, a: a || row.extreme, b: live > 0 ? live : null, bars: candles.length };
     }
 
     lastDetail = candles.length
@@ -417,15 +523,22 @@ const fetchHighSinceOpenXx = async ({ symbol, exchange, openTimeMs, liveLast, di
     if (attempt < XX_KLINE_RETRY) await sleep(500 * attempt);
   }
 
-  if (live > 0) {
-    xxKlineCache.set(cacheKey, { fetchedAt: Date.now(), extreme: live, high: live, bars: 0 });
-    return { xx: live, a: null, b: live, bars: 0, note: `小时K暂空，xx=最新价 · ${lastDetail}` };
+  if (live > 0 || cached?.extreme > 0 || cached?.high > 0) {
+    const extreme = directionalExtreme(cached?.extreme || cached?.high, live, direction);
+    const row = persistXxExtreme(cacheKey, cached, extreme, 0, direction);
+    return {
+      xx: row.extreme,
+      a: cached?.extreme || cached?.high || null,
+      b: live > 0 ? live : null,
+      bars: 0,
+      note: `小时K暂空，xx=sticky极值 · ${lastDetail}`,
+    };
   }
 
   return { xx: null, a: null, b: null, skipped: true, detail: `open=${openTimeMs} end=${now} · ${lastDetail}` };
 };
 
-const listAllLongPositions = async (snapshotOverride = null) => {
+const listAllLongPositions = async (snapshotOverride = null, { onStatus } = {}) => {
   const snap = snapshotOverride || (await getBinanceAccountSnapshot());
   if (!snap?.ok) {
     throw new RangeMonitorFatal('拉取多头持仓失败', snap?.error || 'account mirror');
@@ -434,14 +547,41 @@ const listAllLongPositions = async (snapshotOverride = null) => {
   if (!rows) {
     throw new RangeMonitorFatal('持仓响应非数组', typeof snap.positions);
   }
-  const positions = [];
+
+  const candidates = [];
   for (const p of rows) {
     const amt = Number(p?.positionAmt || 0);
     const ps = String(p?.positionSide || '').toUpperCase();
     if (ps === 'SHORT' && !(amt < 0)) continue;
     if (ps !== 'SHORT' && !(amt > 0)) continue;
     const positionSide = ps === 'LONG' || ps === 'SHORT' ? ps : 'BOTH';
-    const openTime = await getPositionOpenTime({ symbol: p.symbol, positionSide });
+    candidates.push({ p, amt, ps, positionSide });
+  }
+
+  const positions = [];
+  for (let i = 0; i < candidates.length; i += 1) {
+    const { p, amt, ps, positionSide } = candidates[i];
+    // 镜像 sticky openTime = 首次见到仓位的 updateTime，常晚于真实成交。
+    // 算 xx / 武装成本止损必须用 userTrades 开仓时间（与持仓监控页一致）；getPositionOpenTime 有 6h 缓存。
+    const stickyOpen = Number(p.openTime) || 0;
+    onStatus?.(
+      `持仓：解析开仓时间 ${i + 1}/${candidates.length} ${String(p.symbol).toUpperCase()}…`
+    );
+    const tradeOpen =
+      Number(await getPositionOpenTime({ symbol: p.symbol, positionSide })) || 0;
+    const openTime =
+      tradeOpen > 0 ? tradeOpen : stickyOpen || Number(p.updateTime) || null;
+    if (tradeOpen > 0 && (stickyOpen <= 0 || tradeOpen < stickyOpen)) {
+      try {
+        patchBinancePositionOpenTime({
+          symbol: p.symbol,
+          positionSide,
+          openTime: tradeOpen,
+        });
+      } catch (_) {
+        /* ignore */
+      }
+    }
     positions.push({
       exchange: 'binance',
       symbol: p.symbol,
@@ -450,7 +590,8 @@ const listAllLongPositions = async (snapshotOverride = null) => {
       markPrice: finite(p.markPrice),
       positionSide,
       side: ps === 'SHORT' ? 'SHORT' : 'LONG',
-      openTime: Number(openTime) || Number(p.updateTime) || null,
+      openTime,
+      openTimeSource: tradeOpen > 0 ? 'trade' : stickyOpen > 0 ? 'sticky' : 'updateTime',
     });
   }
   return positions;
@@ -481,65 +622,110 @@ const groupAlgosBySymbol = algos => {
 
 const positionKey = (symbol, side) => `${String(symbol || '').toUpperCase()}:${String(side || 'BOTH').toUpperCase()}`;
 
-const placeBreakevenStop = async pos => {
+/** 算成本止损触发价、持仓方向、clientOid（数量用 closePosition 全平） */
+const prepareBreakevenStop = async pos => {
   const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
-  const clientOid = `rmsl${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32);
   const mode = await getBinancePositionModeCached();
   if (!mode?.ok && mode?.response == null) {
     throw new RangeMonitorFatal('查询持仓模式失败', pickErr(mode) || 'positionSide/dual');
   }
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
-  const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
   const rules = await getBinanceRules(pos.symbol);
-  const triggerPrice = floorToTick(entry, rules);
-
-  const result = await placeFutureClosePositionAlgo({
-    symbol: pos.symbol,
-    side: exitOrderSide(pos),
-    triggerPrice,
-    orderType: 'STOP_MARKET',
-    positionSide,
-    clientAlgoId: clientOid,
-  });
-  if (result?.ok) return { ok: true, triggerPrice, result };
-
-  const quantity = quantizeQuantity(pos.qty, rules.stepSize, rules.quantityPrecision);
-  if (!(quantity > 0)) {
-    throw new RangeMonitorFatal(`${pos.symbol} 止损数量无效`, String(quantity));
-  }
-  const fallback = await placeFutureQtyStopAlgo({
-    symbol: pos.symbol,
-    side: exitOrderSide(pos),
-    quantity,
-    triggerPrice,
-    positionSide,
-    clientAlgoId: `${clientOid}f`.slice(0, 32),
-  });
   return {
-    ok: Boolean(fallback?.ok),
-    detail: fallback?.ok ? null : pickErr(result) || pickErr(fallback) || '止损提交失败',
-    triggerPrice,
-    result: fallback?.ok ? fallback : result,
+    symbol: pos.symbol,
+    direction: positionDirection(pos),
+    triggerPrice: floorToTick(entry, rules),
+    positionSide: hedgeMode ? pos.positionSide || 'LONG' : undefined,
+    clientOid: `rmsl${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
   };
 };
 
-/**
- * 挂单档止盈：按档位 closePct 平仓；若精度/最小量导致不可用，改挂该档全仓止盈。
- */
-const placeOneTakeProfit = async (pos, tier) => {
+/** 向交易所提交成本止损条件单，成功则写入本机 EXIT_SL 缓存 */
+const submitBreakevenStop = async (pos, prepared) => {
+  const result = await placeFutureClosePositionAlgo({
+    symbol: prepared.symbol,
+    side: exitOrderSide(pos),
+    triggerPrice: prepared.triggerPrice,
+    orderType: 'STOP_MARKET',
+    positionSide: prepared.positionSide,
+    clientAlgoId: prepared.clientOid,
+  });
+  const body = result?.response;
+  const algoId = body?.algoId ?? body?.orderId;
+  if (result?.ok && algoId != null && !(Number(body?.code) < 0)) {
+    rememberExitSuccess({
+      symbol: prepared.symbol,
+      intent: PlaceIntent.EXIT_SL,
+      tag: prepared.direction,
+      meta: { clientAlgoId: body?.clientAlgoId || prepared.clientOid, algoId },
+    });
+    return {
+      ok: true,
+      triggerPrice: prepared.triggerPrice,
+      result,
+      algoId,
+      clientAlgoId: body?.clientAlgoId || prepared.clientOid,
+    };
+  }
+  return {
+    ok: false,
+    detail: pickErr(result) || '成本止损（全部平仓）提交失败',
+    triggerPrice: prepared.triggerPrice,
+    result,
+  };
+};
+
+/** 成本价止损主流程：准备参数 → 闸门防重 → 提交 closePosition 单 */
+const placeBreakevenStop = async pos => {
+  const prepared = await prepareBreakevenStop(pos);
+  const gate = await gateBeforeExitPlace({
+    symbol: prepared.symbol,
+    intent: PlaceIntent.EXIT_SL,
+    tag: prepared.direction,
+    alreadyOnBook: book =>
+      (book.algoOrders || []).some(o => isBinanceStopAlgo(o, prepared.direction)),
+    localDetail: '本机已挂成本止损缓存',
+    restDetail: '已有止损委托（REST）',
+  });
+  if (gate.alreadyExists) {
+    return {
+      ok: true,
+      alreadyExists: true,
+      detail: gate.detail,
+      triggerPrice: prepared.triggerPrice,
+    };
+  }
+  if (!gate.allowPlace) {
+    return { ok: false, detail: gate.detail, triggerPrice: prepared.triggerPrice };
+  }
+  return submitBreakevenStop(pos, prepared);
+};
+
+/** 从 bySym 映射里去掉已撤销的条件单，避免本轮误判「还在」 */
+const dropAlgosFromBySym = (bySym, sym, orders) => {
+  const dropKeys = new Set((orders || []).map(algoIdentityKey).filter(Boolean));
+  bySym.set(
+    sym,
+    (bySym.get(sym) || []).filter(item => {
+      const key = algoIdentityKey(item);
+      return !key || !dropKeys.has(key);
+    })
+  );
+};
+
+/** 算止盈数量与触发价；比例量化后过小则改挂该档全仓 */
+const prepareOneTakeProfit = async (pos, tier) => {
   const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
   const qty = requirePositive(pos.qty, `${pos.symbol} 持仓数量`);
   const rules = await getBinanceRules(pos.symbol);
   const mode = await getBinancePositionModeCached();
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
-  const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
   const direction = positionDirection(pos);
 
   let closePct = Number(tier?.closePct) > 0 ? Number(tier.closePct) : RANGE_MONITOR_TP_CLOSE_PCT;
   let quantity = quantizeQuantity(qty * closePct, rules.stepSize, rules.quantityPrecision);
   let usedFull = false;
   if (isQtyTooSmall(quantity, rules)) {
-    // 该档比例过小（如 qty=14、step=1 → 1 仍低于 min）→ 该档全量止盈
     closePct = 1;
     quantity = quantizeQuantity(qty, rules.stepSize, rules.quantityPrecision);
     usedFull = true;
@@ -555,85 +741,169 @@ const placeOneTakeProfit = async (pos, tier) => {
     throw new RangeMonitorFatal(`${pos.symbol} 止盈触发价无效`, String(trigger));
   }
 
-  const result = await placeFutureQtyTakeProfitAlgo({
-    symbol: pos.symbol,
-    side: exitOrderSide(pos),
-    quantity,
-    triggerPrice: trigger,
-    positionSide,
-    clientAlgoId: `rmtp${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
-  });
   return {
-    ok: Boolean(result?.ok),
-    detail: result?.ok
-      ? null
-      : pickErr(result) || '止盈提交失败',
-    triggerPrice: trigger,
+    symbol: pos.symbol,
+    direction,
+    positionSide: hedgeMode ? pos.positionSide || 'LONG' : undefined,
+    trigger,
     quantity,
-    mult: tier?.mult,
     closePct,
     usedFull,
-    result,
+    mult: tier?.mult,
+    tpTag: `${direction}:${tier?.key || tier?.mult || 'tp'}`,
   };
 };
 
-/**
- * 挂追踪止盈。
- * @param {*} pos
- * @param {number} lastPrice 最新价
- * @param {number} [extremeXx] 开仓后极值（多=最高价，空=最低价）；已超过武装价时不传 activatePrice（立刻激活）
- */
-const placeTrail = async (pos, lastPrice, extremeXx) => {
+/** 把 prepared 字段摊成 placeOneTakeProfit 的统一返回形状 */
+const tpResultShape = (prepared, extra) => ({
+  triggerPrice: prepared.trigger,
+  quantity: prepared.quantity,
+  mult: prepared.mult,
+  closePct: prepared.closePct,
+  usedFull: prepared.usedFull,
+  ...extra,
+});
+
+/** 提交止盈条件单，成功则记 EXIT_TP 缓存 */
+const submitOneTakeProfit = async (pos, prepared) => {
+  const result = await placeFutureQtyTakeProfitAlgo({
+    symbol: prepared.symbol,
+    side: exitOrderSide(pos),
+    quantity: prepared.quantity,
+    triggerPrice: prepared.trigger,
+    positionSide: prepared.positionSide,
+    clientAlgoId: `rmtp${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
+  });
+  if (result?.ok) {
+    rememberExitSuccess({
+      symbol: prepared.symbol,
+      intent: PlaceIntent.EXIT_TP,
+      tag: prepared.tpTag,
+    });
+  }
+  return tpResultShape(prepared, {
+    ok: Boolean(result?.ok),
+    detail: result?.ok ? null : pickErr(result) || '止盈提交失败',
+    result,
+  });
+};
+
+/** 挂一档止盈：准备 → 闸门防重 → 提交 */
+const placeOneTakeProfit = async (pos, tier) => {
+  const prepared = await prepareOneTakeProfit(pos, tier);
+  const gate = await gateBeforeExitPlace({
+    symbol: prepared.symbol,
+    intent: PlaceIntent.EXIT_TP,
+    tag: prepared.tpTag,
+    alreadyOnBook: book =>
+      (book.algoOrders || []).some(o => isBinanceTakeProfitOrder(o, prepared.direction)),
+    localDetail: '本机已挂止盈缓存',
+    restDetail: '已有止盈委托（REST）',
+  });
+  if (gate.alreadyExists) {
+    return tpResultShape(prepared, { ok: true, alreadyExists: true, detail: gate.detail });
+  }
+  if (!gate.allowPlace) {
+    return tpResultShape(prepared, { ok: false, detail: gate.detail });
+  }
+  return submitOneTakeProfit(pos, prepared);
+};
+
+/** 算追踪激活价；已过武装点返回 null（立刻激活、不传 activatePrice） */
+const calcTrailActivatePrice = ({ direction, entry, last, extremeXx, rules }) => {
+  const armRaw = trailActivateRawPrice(entry, direction);
+  const xx = Number(extremeXx);
+  if (direction === 'LONG') {
+    const alreadyPast = (xx > 0 && xx >= armRaw) || last >= armRaw;
+    if (alreadyPast) return null;
+    let activatePrice = ceilToTick(armRaw, rules);
+    if (activatePrice <= last) activatePrice = ceilToTick(last * 1.001, rules);
+    return activatePrice;
+  }
+  const alreadyPast = (xx > 0 && xx <= armRaw) || last <= armRaw;
+  if (alreadyPast) return null;
+  let activatePrice = floorToTick(armRaw, rules);
+  if (activatePrice >= last) activatePrice = floorToTick(last * 0.999, rules);
+  return activatePrice;
+};
+
+/** 准备追踪数量、方向与激活价 */
+const prepareTrail = async (pos, lastPrice, extremeXx) => {
   const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
   const qty = requirePositive(pos.qty, `${pos.symbol} 持仓数量`);
   const last = requirePositive(lastPrice, `${pos.symbol} 最新价`);
   const rules = await getBinanceRules(pos.symbol);
   const mode = await getBinancePositionModeCached();
   const hedgeMode = Boolean(mode?.response?.dualSidePosition);
-  const positionSide = hedgeMode ? pos.positionSide || 'LONG' : undefined;
   const direction = positionDirection(pos);
-  const armRaw = trailActivateRawPrice(entry, direction);
-
-  // 极值已达/超过武装点 → 不设激活价，立刻追踪（多 1.4E / 空 0.75E）
-  // 未达武装点时才挂 activatePrice（手动补单等路径）
-  const xx = Number(extremeXx);
-  let activatePrice = null;
-  if (direction === 'LONG') {
-    const alreadyPast = (xx > 0 && xx >= armRaw) || last >= armRaw;
-    if (!alreadyPast) {
-      activatePrice = ceilToTick(armRaw, rules);
-      if (activatePrice <= last) activatePrice = ceilToTick(last * 1.001, rules);
-    }
-  } else {
-    const alreadyPast = (xx > 0 && xx <= armRaw) || last <= armRaw;
-    if (!alreadyPast) {
-      activatePrice = floorToTick(armRaw, rules);
-      if (activatePrice >= last) activatePrice = floorToTick(last * 0.999, rules);
-    }
-  }
-
   const trailQty = quantizeQuantity(qty, rules.stepSize, rules.quantityPrecision);
   if (!(trailQty > 0)) {
     throw new RangeMonitorFatal(`${pos.symbol} 追踪数量无效`, String(trailQty));
   }
-
-  const result = await placeFutureTrailingStopAlgo({
+  return {
     symbol: pos.symbol,
-    side: exitOrderSide(pos),
-    quantity: trailQty,
-    ...(activatePrice != null && activatePrice > 0 ? { activatePrice } : {}),
+    direction,
+    positionSide: hedgeMode ? pos.positionSide || 'LONG' : undefined,
+    activatePrice: calcTrailActivatePrice({ direction, entry, last, extremeXx, rules }),
+    trailQty,
     callbackRate: RANGE_MONITOR_TRAIL_CALLBACK_PCT,
-    positionSide,
+  };
+};
+
+/** 把 prepared 字段摊成 placeTrail 的统一返回形状 */
+const trailResultShape = (prepared, extra) => ({
+  activatePrice: prepared.activatePrice,
+  callbackRate: prepared.callbackRate,
+  quantity: prepared.trailQty,
+  ...extra,
+});
+
+/** 提交追踪止盈，成功则记 EXIT_TRAIL 缓存 */
+const submitTrail = async (pos, prepared) => {
+  const result = await placeFutureTrailingStopAlgo({
+    symbol: prepared.symbol,
+    side: exitOrderSide(pos),
+    quantity: prepared.trailQty,
+    ...(prepared.activatePrice != null && prepared.activatePrice > 0
+      ? { activatePrice: prepared.activatePrice }
+      : {}),
+    callbackRate: prepared.callbackRate,
+    positionSide: prepared.positionSide,
     clientAlgoId: `rmtr${Date.now()}${Math.floor(Math.random() * 1e4)}`.slice(0, 32),
   });
-  return {
+  if (result?.ok) {
+    rememberExitSuccess({
+      symbol: prepared.symbol,
+      intent: PlaceIntent.EXIT_TRAIL,
+      tag: prepared.direction,
+    });
+  }
+  return trailResultShape(prepared, {
     ok: Boolean(result?.ok),
     detail: result?.ok ? null : pickErr(result) || '追踪提交失败',
-    activatePrice,
-    callbackRate: RANGE_MONITOR_TRAIL_CALLBACK_PCT,
-    quantity: trailQty,
     result,
-  };
+  });
+};
+
+/** 挂追踪止盈：准备 → 闸门防重 → 提交 */
+const placeTrail = async (pos, lastPrice, extremeXx) => {
+  const prepared = await prepareTrail(pos, lastPrice, extremeXx);
+  const gate = await gateBeforeExitPlace({
+    symbol: prepared.symbol,
+    intent: PlaceIntent.EXIT_TRAIL,
+    tag: prepared.direction,
+    alreadyOnBook: book =>
+      (book.algoOrders || []).some(o => isBinanceTrailingAlgo(o, prepared.direction)),
+    localDetail: '本机已挂追踪缓存',
+    restDetail: '已有追踪委托（REST）',
+  });
+  if (gate.alreadyExists) {
+    return trailResultShape(prepared, { ok: true, alreadyExists: true, detail: gate.detail });
+  }
+  if (!gate.allowPlace) {
+    return trailResultShape(prepared, { ok: false, detail: gate.detail });
+  }
+  return submitTrail(pos, prepared);
 };
 
 /**
@@ -676,6 +946,7 @@ export const runRangeMonitorCleanup = async ({
 
   const byPair = new Map();
   orders.forEach(o => {
+    if (!isRangeMonitorOpenOrder(o)) return;
     const id = pairIdOf(o);
     if (!byPair.has(id)) byPair.set(id, []);
     byPair.get(id).push(o);
@@ -718,8 +989,9 @@ export const runRangeMonitorCleanup = async ({
       continue;
     }
 
-    const { inRange, hits } = await isStillInMonitorRange({ exchange, symbol }, mult, feed);
-    if (!inRange) {
+    const { hasBox, hits } = await resolveCleanupBox({ exchange, symbol }, mult, feed);
+    // 已破上沿仍有几何盒子 → 保留突破单等成交；仅无盒子才 out_of_range
+    if (!hasBox) {
       log({
         type: 'cancel_candidate',
         exchange,
@@ -730,14 +1002,14 @@ export const runRangeMonitorCleanup = async ({
       toCancel.push(...pairOrders);
       continue;
     }
-
-    const row = [...hits].sort((a, b) => (b.days || 0) - (a.days || 0))[0];
+const row = [...hits].sort((a, b) => (b.days || 0) - (a.days || 0))[0];
     const rangeHigh = requirePositive(row?.rangeHigh, `${symbol} 区间上沿`);
     const quote = await feed.ensureQuote(symbol, '清理');
     const yy = calcDistBelowRangeHighPct(quote.last, rangeHigh);
     if (yy == null) {
       throw new RangeMonitorFatal(`${symbol} yy 无法计算`, `last=${quote.last} high=${rangeHigh}`);
     }
+    // yy≤0（现价≥上沿）不算离开近带
     if (yy > leavePct) {
       toCancel.push(...pairOrders);
       cancelReasons.set(id, 'far_from_band');
@@ -815,17 +1087,32 @@ export const runRangeMonitorPositionStops = async ({
   onLog,
   priceFeed,
   binanceSnapshot,
+  /** 仅处理这些 symbol（大写）；缺省=全部多头 */
+  onlySymbols = null,
 } = {}) => {
   const aborted = () => signal?.aborted;
   const log = entry => onLog?.(entry);
   const feed = priceFeed || getSharedMiniTickerFeed();
+  const onlySet =
+    Array.isArray(onlySymbols) && onlySymbols.length
+      ? new Set(onlySymbols.map(s => String(s).toUpperCase()))
+      : onlySymbols instanceof Set
+        ? onlySymbols
+        : null;
 
   if (!isLiveOrderEnabled()) {
     throw new RangeMonitorFatal('交易未解锁', '持仓处理');
   }
 
-  onStatus?.('持仓：拉取多头持仓…');
-  const positions = await listAllLongPositions(binanceSnapshot);
+  onStatus?.('持仓：读取多头持仓…');
+  // 优先复用本轮已有快照；缺省再读内存镜像（勿在此处 forceRest，否则又打 4 路签名 REST）
+  const allPositions = await listAllLongPositions(binanceSnapshot, { onStatus });
+  // 孤儿清理必须用「全账户持仓」建 active 集合；onlySymbols 只收窄后面挂撤循环。
+  // 否则单币轻判时其它币止盈/止损/追踪会被当成孤儿全撤。
+  let positions = allPositions;
+  if (onlySet) {
+    positions = allPositions.filter(p => onlySet.has(String(p.symbol || '').toUpperCase()));
+  }
   if (aborted()) return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, aborted: true };
 
   if (!positions.length) {
@@ -833,14 +1120,18 @@ export const runRangeMonitorPositionStops = async ({
     return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, checked: 0 };
   }
 
-  onStatus?.('持仓：拉取条件单…');
+  onStatus?.(`持仓：已载入 ${positions.length} 仓 · 同步条件单…`);
   let algos;
   try {
-    const liveSnapshot = await getBinanceAccountSnapshot({ forceRest: true, ensureStarted: true });
+    // 有可用镜像则用内存；仅未打底时才 REST
+    const liveSnapshot =
+      binanceSnapshot?.ok && Array.isArray(binanceSnapshot.algoOrders)
+        ? binanceSnapshot
+        : await getBinanceAccountSnapshot({ ensureStarted: true });
     if (!liveSnapshot?.ok || !Array.isArray(liveSnapshot.algoOrders)) {
       throw new Error(liveSnapshot?.error || '条件单快照不可用');
     }
-  const liveOrders = Array.isArray(liveSnapshot.openOrders) ? liveSnapshot.openOrders : [];
+    const liveOrders = Array.isArray(liveSnapshot.openOrders) ? liveSnapshot.openOrders : [];
     algos = [...liveSnapshot.algoOrders, ...liveOrders];
     const orderKeys = new Set();
     algos = algos.filter(order => {
@@ -855,37 +1146,88 @@ export const runRangeMonitorPositionStops = async ({
   }
   if (aborted()) return { armed: 0, tpPlaced: 0, trailPlaced: 0, skipped: 0, failed: 0, aborted: true };
   const bySym = groupAlgosBySymbol(algos);
-  const activePositions = new Set(positions.map(pos => positionKey(pos.symbol, pos.positionSide)));
+  mergeRecentExitAlgos(bySym);
+  const activePositions = new Set(
+    allPositions.map(pos => positionKey(pos.symbol, pos.positionSide))
+  );
   let orphanExitCancelled = 0;
-  for (const order of algos) {
-    const side = String(order?.side || '').toUpperCase();
-    const expectedPositionSide = side === 'BUY' ? 'SHORT' : side === 'SELL' ? 'LONG' : '';
-    const orderPositionSide = String(order?.positionSide || 'BOTH').toUpperCase();
-    const key = positionKey(order.symbol, orderPositionSide === 'BOTH' ? expectedPositionSide : orderPositionSide);
-    if (!isExitOrderForPosition(order) || activePositions.has(key)) continue;
-    try {
-      const result = order.algoId != null || order.clientAlgoId
-        ? await cancelFutureAlgoOrder({ symbol: order.symbol, ...(order.algoId != null ? { algoId: order.algoId } : {}), ...(order.clientAlgoId ? { clientAlgoId: order.clientAlgoId } : {}) })
-        : await cancelFutureOrder({ symbol: order.symbol, orderId: order.orderId, origClientOrderId: order.clientOrderId });
-      if (result?.ok) {
-        orphanExitCancelled += 1;
-        log({ type: 'orphan_exit_cancelled', exchange: 'binance', symbol: order.symbol, positionSide: orderPositionSide });
+  // 全量轮才扫孤儿；单币轻判不碰其它币出场单
+  if (!onlySet) {
+    for (const order of algos) {
+      const side = String(order?.side || '').toUpperCase();
+      const expectedPositionSide = side === 'BUY' ? 'SHORT' : side === 'SELL' ? 'LONG' : '';
+      const orderPositionSide = String(order?.positionSide || 'BOTH').toUpperCase();
+      const key = positionKey(
+        order.symbol,
+        orderPositionSide === 'BOTH' ? expectedPositionSide : orderPositionSide
+      );
+      if (!isExitOrderForPosition(order) || activePositions.has(key)) continue;
+      try {
+        const result =
+          order.algoId != null || order.clientAlgoId
+            ? await cancelFutureAlgoOrder({
+                symbol: order.symbol,
+                ...(order.algoId != null ? { algoId: order.algoId } : {}),
+                ...(order.clientAlgoId ? { clientAlgoId: order.clientAlgoId } : {}),
+              })
+            : await cancelFutureOrder({
+                symbol: order.symbol,
+                orderId: order.orderId,
+                origClientOrderId: order.clientOrderId,
+              });
+        if (result?.ok) {
+          orphanExitCancelled += 1;
+          log({
+            type: 'orphan_exit_cancelled',
+            exchange: 'binance',
+            symbol: order.symbol,
+            positionSide: orderPositionSide,
+          });
+        }
+      } catch (e) {
+        log({
+          type: 'orphan_exit_cancel_failed',
+          exchange: 'binance',
+          symbol: order.symbol,
+          detail: e?.message || String(e),
+        });
       }
-    } catch (e) {
-      log({ type: 'orphan_exit_cancel_failed', exchange: 'binance', symbol: order.symbol, detail: e?.message || String(e) });
     }
   }
   const tpOrderCache = readTpOrderCache();
-  const activeTpCacheKeys = new Set(positions.map(tpCacheKey));
+  // 必须用全账户持仓收钥匙；onlySymbols 轻判若只留当前币，会把其它币止盈缓存清掉 → 下一轮重复挂
+  const activeTpCacheKeys = new Set(allPositions.map(tpCacheKey));
   Object.keys(tpOrderCache).forEach(key => {
-    if (!activeTpCacheKeys.has(key)) delete tpOrderCache[key];
+    if (!activeTpCacheKeys.has(key)) {
+      delete tpOrderCache[key];
+      // key ≈ exchange:SYMBOL:side — 平仓后清出场成功缓存，避免挡下次武装（不动开仓缓存）
+      const sym = String(key || '').split(':')[1];
+      if (sym) {
+        clearPlaceSuccessByIntent({
+          exchange: 'binance',
+          symbol: sym,
+          intent: PlaceIntent.EXIT_SL,
+        });
+        clearPlaceSuccessByIntent({
+          exchange: 'binance',
+          symbol: sym,
+          intent: PlaceIntent.EXIT_TP,
+        });
+        clearPlaceSuccessByIntent({
+          exchange: 'binance',
+          symbol: sym,
+          intent: PlaceIntent.EXIT_TRAIL,
+        });
+      }
+    }
   });
   writeTpOrderCache(tpOrderCache);
+  // xx 缓存生命周期按全账户持仓，避免 onlySymbols 轻判误删其它币 sticky 极值
   const activeXxCacheKeys = new Set(
-    positions.map(pos => `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${pos.openTime}`)
+    allPositions.map(pos => `${pos.exchange}:${String(pos.symbol).toUpperCase()}:${pos.openTime}`)
   );
-  [...xxKlineCache.keys()].forEach(key => {
-    if (!activeXxCacheKeys.has(key)) xxKlineCache.delete(key);
+  [...xxKlineCache().keys()].forEach(key => {
+    if (!activeXxCacheKeys.has(key)) xxKlineCache().delete(key);
   });
 
   let armed = 0;
@@ -903,25 +1245,49 @@ export const runRangeMonitorPositionStops = async ({
     onStatus?.(`持仓：${i + 1}/${positions.length} ${pos.symbol}`);
 
     const entry = requirePositive(pos.entryPrice, `${pos.symbol} 开仓均价`);
-    if (!(pos.openTime > 0)) {
-      skipped += 1;
+    const directionEarly = positionDirection(pos);
+    const quote = await feed.ensureQuote(pos.symbol, '持仓');
+    const liveForXx = directionalExtreme(quote.last, pos.markPrice, directionEarly);
+    if (pos.openTimeSource && pos.openTimeSource !== 'trade') {
       log({
-        type: 'open_time_unavailable',
+        type: 'open_time_fallback',
         exchange: pos.exchange,
         symbol: pos.symbol,
-        detail: '历史成交中未找到真实开仓时间，本轮跳过出场计算',
+        openTime: pos.openTime,
+        source: pos.openTimeSource,
+        detail: '未解析到成交开仓时间，xx 窗口可能偏晚',
       });
-      continue;
     }
 
-    const quote = await feed.ensureQuote(pos.symbol, '持仓');
-    const xxPack = await fetchHighSinceOpenXx({
-      symbol: pos.symbol,
-      exchange: pos.exchange,
-      openTimeMs: pos.openTime,
-      liveLast: quote.last,
-      direction: positionDirection(pos),
-    });
+    let xxPack;
+    if (!(pos.openTime > 0)) {
+      // 无真实开仓时间时仍用最新/标记价做 xx，避免漏挂成本止损；其它依赖小时K的档位可能偏保守
+      if (!(liveForXx > 0)) {
+        skipped += 1;
+        log({
+          type: 'open_time_unavailable',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          detail: '历史成交中未找到真实开仓时间，且无最新价，本轮跳过',
+        });
+        continue;
+      }
+      xxPack = { xx: liveForXx, a: null, b: liveForXx, bars: 0, note: 'openTime缺失，xx=live' };
+      log({
+        type: 'open_time_live_fallback',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+        xx: liveForXx,
+      });
+    } else {
+      xxPack = await fetchHighSinceOpenXx({
+        symbol: pos.symbol,
+        exchange: pos.exchange,
+        openTimeMs: pos.openTime,
+        liveLast: liveForXx,
+        direction: directionEarly,
+      });
+    }
     if (xxPack?.rateLimited) {
       log({
         type: 'xx_kline_rate_limited',
@@ -930,7 +1296,19 @@ export const runRangeMonitorPositionStops = async ({
         detail: xxPack.detail || 'Binance 限频冷却中，使用已有最高价缓存',
       });
     }
-    if (xxPack?.skipped || !(xxPack?.xx > 0)) {
+    let xx = xxPack?.xx;
+    // 小时 K 暂不可用时，仍用最新/标记价兜底，避免已冲过 1.2E 却整轮跳过不出场
+    if (!(xx > 0) && liveForXx > 0) {
+      xx = liveForXx;
+      log({
+        type: 'xx_live_fallback',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+        xx,
+        detail: xxPack?.detail || '小时K不可用，xx=live',
+      });
+    }
+    if (!(xx > 0)) {
       skipped += 1;
       log({
         type: 'xx_kline_skip',
@@ -942,32 +1320,90 @@ export const runRangeMonitorPositionStops = async ({
       await sleep(80);
       continue;
     }
-    const xx = xxPack.xx;
-
-    const symAlgos = bySym.get(sym) || [];
+const symAlgos = bySym.get(sym) || [];
     const direction = positionDirection(pos);
     const moveRatio = calcMoveRatio(entry, xx, direction);
     const stopOrders = symAlgos.filter(o => isBinanceStopAlgo(o, direction));
     let tpOrders = symAlgos.filter(o => isBinanceTakeProfitOrder(o, direction));
     const trailOrders = symAlgos.filter(o => isBinanceTrailingAlgo(o, direction));
     const rules = await getBinanceRules(pos.symbol);
-    const breakevenStops = stopOrders.filter(o => isBreakevenStopAlgo(o, entry, rules.tickSize, direction));
+    let breakevenStops = stopOrders.filter(o =>
+      isBreakevenStopAlgo(o, entry, rules.tickSize, direction)
+    );
+    const slKey = `sl:${pos.exchange}:${sym}:${direction}`;
+
+    // 已有重复成本止损：优先保留「有 algoId 的全平真单」，影子单只从本地摘掉不发撤单
+    if (breakevenStops.length > 1) {
+      const ranked = [...breakevenStops].sort((a, b) => {
+        const score = o =>
+          (isClosePositionAlgo(o) ? 4 : 0) +
+          (o?.algoId != null || o?.orderId != null ? 2 : 0) +
+          (o?._rememberedAt ? -1 : 0);
+        return score(b) - score(a);
+      });
+      const keep = ranked[0];
+      const dupes = ranked.slice(1);
+      onStatus?.(`持仓：${pos.symbol} 成本止损重复×${breakevenStops.length}，撤多余…`);
+      try {
+        await cancelBreakevenStops(pos.symbol, dupes);
+        dropAlgosFromBySym(bySym, sym, dupes);
+        breakevenStops = [keep];
+        log({
+          type: 'sl_breakeven_deduped',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          cancelled: dupes.length,
+        });
+      } catch (e) {
+        log({
+          type: 'sl_breakeven_dedupe_failed',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          detail: e?.message || String(e),
+        });
+      }
+    }
+
+    // 仅明确的按数量成本止损才撤改全平（避免把全平回包里的 quantity 误判后循环撤挂）
+    const qtyBreakevenStops = breakevenStops.filter(isQtyBasedStopAlgo);
+    if (qtyBreakevenStops.length) {
+      onStatus?.(`持仓：${pos.symbol} 成本止损非全平，改挂全部平仓…`);
+      try {
+        await cancelBreakevenStops(pos.symbol, qtyBreakevenStops);
+        dropAlgosFromBySym(bySym, sym, qtyBreakevenStops);
+        breakevenStops = breakevenStops.filter(o => !isQtyBasedStopAlgo(o));
+        slArmedAt.delete(slKey); // 避免冷却挡住立刻重挂 closePosition
+        log({
+          type: 'sl_breakeven_qty_upgraded',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          cancelled: qtyBreakevenStops.length,
+        });
+      } catch (e) {
+        log({
+          type: 'sl_breakeven_qty_upgrade_failed',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          detail: e?.message || String(e),
+        });
+      }
+    }
 
     // 盈利达到追踪武装点后撤掉开仓价全仓止损，改由追踪止盈保护。
     if (hasReachedTrailArm(entry, xx, direction) && breakevenStops.length) {
+      const cancelCount = breakevenStops.length;
       onStatus?.(`持仓：${pos.symbol} 已达追踪武装点，撤开仓价止损…`);
       try {
         await cancelBreakevenStops(pos.symbol, breakevenStops);
-        breakevenStops.forEach(order => {
-          const key = order.algoId != null ? `a:${order.algoId}` : `ac:${order.clientAlgoId || order.clientOrderId}`;
-          bySym.set(sym, (bySym.get(sym) || []).filter(item => `${item.algoId != null ? `a:${item.algoId}` : `ac:${item.clientAlgoId || item.clientOrderId}`}` !== key));
-        });
+        dropAlgosFromBySym(bySym, sym, breakevenStops);
+        breakevenStops = [];
+        slArmedAt.delete(slKey);
         log({
           type: 'sl_breakeven_cancelled',
           exchange: pos.exchange,
           symbol: pos.symbol,
           xx,
-          count: breakevenStops.length,
+          count: cancelCount,
         });
       } catch (e) {
         log({
@@ -981,11 +1417,52 @@ export const runRangeMonitorPositionStops = async ({
     }
 
     // 2.1 止损：已有追踪委托时由追踪止盈保护，不再重复挂成本止损。
-    if (hasReachedGainMult(entry, xx, direction, RANGE_MONITOR_SL_ARM_MULT) && !stopOrders.length && !trailOrders.length) {
+    const recentSlArm =
+      Date.now() - (slArmedAt.get(slKey) || 0) < SL_ARM_COOLDOWN_MS;
+    const liveStopOrders = (bySym.get(sym) || []).filter(o =>
+      isBinanceStopAlgo(o, direction)
+    );
+    if (
+      hasReachedGainMult(entry, xx, direction, RANGE_MONITOR_SL_ARM_MULT) &&
+      !liveStopOrders.length &&
+      !trailOrders.length &&
+      !slPlaceInFlight.has(slKey) &&
+      !recentSlArm
+    ) {
+      slPlaceInFlight.add(slKey);
       onStatus?.(`持仓：${pos.symbol} 盈利≥20%，挂成本止损…`);
-      const result = await placeBreakevenStop(pos);
-      if (result.ok) {
+      let result;
+      try {
+        result = await placeBreakevenStop(pos);
+      } finally {
+        slPlaceInFlight.delete(slKey);
+      }
+      if (result?.ok && result.alreadyExists) {
+        skipped += 1;
+        log({
+          type: 'sl_already_exists',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          entryPrice: entry,
+          xx,
+          detail: result.detail,
+        });
+      } else if (result?.ok) {
         armed += 1;
+        slArmedAt.set(slKey, Date.now());
+        const placed = {
+          type: 'STOP_MARKET',
+          orderType: 'STOP_MARKET',
+          algoType: 'CONDITIONAL',
+          side: exitOrderSide(pos),
+          positionSide: pos.positionSide,
+          triggerPrice: result.triggerPrice,
+          closePosition: true,
+          algoId: result.algoId,
+          clientAlgoId: result.clientAlgoId || result.result?.response?.clientAlgoId,
+        };
+        bySym.set(sym, [...(bySym.get(sym) || []), placed]);
+        rememberRecentExitAlgo(sym, placed);
         log({
           type: 'sl_armed',
           exchange: pos.exchange,
@@ -993,6 +1470,8 @@ export const runRangeMonitorPositionStops = async ({
           entryPrice: entry,
           xx,
           triggerPrice: result.triggerPrice,
+          algoId: result.algoId,
+          clientAlgoId: placed.clientAlgoId,
         });
       } else {
         failed += 1;
@@ -1002,11 +1481,23 @@ export const runRangeMonitorPositionStops = async ({
           symbol: pos.symbol,
           entryPrice: entry,
           xx,
-          detail: result.detail,
+          detail: result?.detail,
         });
-        onStatus?.(`持仓止损失败：${pos.symbol} ${result.detail || ''}`);
+        onStatus?.(`持仓止损失败：${pos.symbol} ${result?.detail || ''}`);
       }
       await sleep(RANGE_MONITOR_PLACE_GAP_MS);
+    } else if (
+      hasReachedGainMult(entry, xx, direction, RANGE_MONITOR_SL_ARM_MULT) &&
+      !liveStopOrders.length &&
+      !trailOrders.length &&
+      (slPlaceInFlight.has(slKey) || recentSlArm)
+    ) {
+      log({
+        type: 'sl_place_inflight_skip',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+        reason: slPlaceInFlight.has(slKey) ? 'inflight' : 'cooldown',
+      });
     }
 
     // 固定止盈：同时最多一笔；按已实现盈利倍数递进换档
@@ -1044,6 +1535,7 @@ export const runRangeMonitorPositionStops = async ({
           await sleep(80);
           clearTpCacheTier(tpOrderCache, pos, firstTier.key);
           writeTpOrderCache(tpOrderCache);
+          tpArmedAt.delete(`${pos.exchange}:${sym}:${direction}:${firstTier.key}`);
           tpOrders = tpOrders.filter(order => !exactFirst.includes(order));
           log({ type: 'tp_first_cancelled', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, quote: quote.last });
         } else if (duplicateOrders.length) {
@@ -1052,9 +1544,17 @@ export const runRangeMonitorPositionStops = async ({
       } else if (!tpOrders.length && shouldArmFirst && !tpCacheHas(tpOrderCache, pos, firstTier.key)) {
         // 一档曾成功挂出（含已成交）则不再重挂；仅主动撤档清缓存后才允许再挂。
         const placeKey = `${pos.exchange}:${sym}:${direction}:${firstTier.key}`;
-        if (tpPlaceInFlight.has(placeKey)) {
+        const recentTp =
+          Date.now() - (tpArmedAt.get(placeKey) || 0) < TP_ARM_COOLDOWN_MS;
+        if (tpPlaceInFlight.has(placeKey) || recentTp) {
           skipped += 1;
-          log({ type: 'tp_place_inflight_skip', exchange: pos.exchange, symbol: pos.symbol, tier: firstTier.key });
+          log({
+            type: 'tp_place_inflight_skip',
+            exchange: pos.exchange,
+            symbol: pos.symbol,
+            tier: firstTier.key,
+            reason: tpPlaceInFlight.has(placeKey) ? 'inflight' : 'cooldown',
+          });
         } else {
           tpPlaceInFlight.add(placeKey);
           let tpResult;
@@ -1063,11 +1563,34 @@ export const runRangeMonitorPositionStops = async ({
           } finally {
             tpPlaceInFlight.delete(placeKey);
           }
-          if (tpResult?.ok) {
-            tpPlaced += 1;
+          if (tpResult?.ok && tpResult.alreadyExists) {
+            skipped += 1;
             tpCacheAdd(tpOrderCache, pos, firstTier.key);
             writeTpOrderCache(tpOrderCache);
-            tpOrders = [{ type: 'TAKE_PROFIT_MARKET', orderType: 'TAKE_PROFIT_MARKET', algoType: 'CONDITIONAL', side: exitOrderSide(pos), positionSide: pos.positionSide, triggerPrice: tpResult.triggerPrice, clientAlgoId: tpResult.result?.response?.clientAlgoId }];
+            log({
+              type: 'tp_already_exists',
+              exchange: pos.exchange,
+              symbol: pos.symbol,
+              tier: firstTier.key,
+              detail: tpResult.detail,
+            });
+          } else if (tpResult?.ok) {
+            tpPlaced += 1;
+            tpArmedAt.set(placeKey, Date.now());
+            tpCacheAdd(tpOrderCache, pos, firstTier.key);
+            writeTpOrderCache(tpOrderCache);
+            const placed = {
+              type: 'TAKE_PROFIT_MARKET',
+              orderType: 'TAKE_PROFIT_MARKET',
+              algoType: 'CONDITIONAL',
+              side: exitOrderSide(pos),
+              positionSide: pos.positionSide,
+              triggerPrice: tpResult.triggerPrice,
+              clientAlgoId: tpResult.result?.response?.clientAlgoId,
+            };
+            tpOrders = [placed];
+            bySym.set(sym, [...(bySym.get(sym) || []), placed]);
+            rememberRecentExitAlgo(sym, placed);
             log({ type: 'tp_first_placed', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, quote: quote.last, triggerPrice: tpResult.triggerPrice });
           } else {
             failed += 1;
@@ -1094,9 +1617,17 @@ export const runRangeMonitorPositionStops = async ({
         skipped += 1;
       } else if (!tpOrders.length) {
         const placeKey = `${pos.exchange}:${sym}:${direction}:${wantTier.key}`;
-        if (tpPlaceInFlight.has(placeKey)) {
+        const recentTp =
+          Date.now() - (tpArmedAt.get(placeKey) || 0) < TP_ARM_COOLDOWN_MS;
+        if (tpPlaceInFlight.has(placeKey) || recentTp) {
           skipped += 1;
-          log({ type: 'tp_place_inflight_skip', exchange: pos.exchange, symbol: pos.symbol, tier: wantTier.key });
+          log({
+            type: 'tp_place_inflight_skip',
+            exchange: pos.exchange,
+            symbol: pos.symbol,
+            tier: wantTier.key,
+            reason: tpPlaceInFlight.has(placeKey) ? 'inflight' : 'cooldown',
+          });
         } else {
           tpPlaceInFlight.add(placeKey);
           let tpResult;
@@ -1105,10 +1636,34 @@ export const runRangeMonitorPositionStops = async ({
           } finally {
             tpPlaceInFlight.delete(placeKey);
           }
-          if (tpResult?.ok) {
-            tpPlaced += 1;
+          if (tpResult?.ok && tpResult.alreadyExists) {
+            skipped += 1;
             tpCacheAdd(tpOrderCache, pos, wantTier.key);
             writeTpOrderCache(tpOrderCache);
+            log({
+              type: 'tp_already_exists',
+              exchange: pos.exchange,
+              symbol: pos.symbol,
+              tier: wantTier.key,
+              detail: tpResult.detail,
+            });
+          } else if (tpResult?.ok) {
+            tpPlaced += 1;
+            tpArmedAt.set(placeKey, Date.now());
+            tpCacheAdd(tpOrderCache, pos, wantTier.key);
+            writeTpOrderCache(tpOrderCache);
+            const placed = {
+              type: 'TAKE_PROFIT_MARKET',
+              orderType: 'TAKE_PROFIT_MARKET',
+              algoType: 'CONDITIONAL',
+              side: exitOrderSide(pos),
+              positionSide: pos.positionSide,
+              triggerPrice: tpResult.triggerPrice,
+              clientAlgoId: tpResult.result?.response?.clientAlgoId,
+            };
+            tpOrders = [...tpOrders, placed];
+            bySym.set(sym, [...(bySym.get(sym) || []), placed]);
+            rememberRecentExitAlgo(sym, placed);
             log({ type: 'tp_placed', exchange: pos.exchange, symbol: pos.symbol, entryPrice: entry, xx, submitted: [{ key: wantTier.key, triggerPrice: tpResult.triggerPrice }] });
           } else {
             failed += 1;
@@ -1123,17 +1678,48 @@ export const runRangeMonitorPositionStops = async ({
         skipped += 1;
       }
     }
-
-    // 2.5 追踪：盈利超过追踪武装点（多 1.4E / 空 0.75E）；已越过则立刻激活（无 activatePrice）
-    if (hasReachedTrailArm(entry, xx, direction) && !trailOrders.length) {
+// 2.5 追踪：盈利超过追踪武装点（多 1.4E / 空 0.75E）；已越过则立刻激活（无 activatePrice）
+    const trailKey = `trail:${pos.exchange}:${sym}:${direction}`;
+    const liveTrailOrders = (bySym.get(sym) || []).filter(o =>
+      isBinanceTrailingAlgo(o, direction)
+    );
+    if (
+      hasReachedTrailArm(entry, xx, direction) &&
+      !liveTrailOrders.length &&
+      !trailPlaceInFlight.has(trailKey)
+    ) {
+      trailPlaceInFlight.add(trailKey);
       onStatus?.(
         direction === 'LONG'
           ? `持仓：${pos.symbol} 最高价已超 1.4E，立刻挂追踪（无激活价 · 回撤 ${RANGE_MONITOR_TRAIL_CALLBACK_PCT}%）…`
           : `持仓：${pos.symbol} 最低价已破 0.75E，立刻挂追踪（无激活价 · 回撤 ${RANGE_MONITOR_TRAIL_CALLBACK_PCT}%）…`
       );
-      const trailResult = await placeTrail(pos, quote.last, xx);
-      if (trailResult.ok) {
+      let trailResult;
+      try {
+        trailResult = await placeTrail(pos, quote.last, xx);
+      } finally {
+        trailPlaceInFlight.delete(trailKey);
+      }
+      if (trailResult?.ok && trailResult.alreadyExists) {
+        skipped += 1;
+        log({
+          type: 'trail_already_exists',
+          exchange: pos.exchange,
+          symbol: pos.symbol,
+          detail: trailResult.detail,
+        });
+      } else if (trailResult?.ok) {
         trailPlaced += 1;
+        const trailPlacedAlgo = {
+          type: 'TRAILING_STOP_MARKET',
+          orderType: 'TRAILING_STOP_MARKET',
+          algoType: 'CONDITIONAL',
+          side: exitOrderSide(pos),
+          positionSide: pos.positionSide,
+          clientAlgoId: trailResult.result?.response?.clientAlgoId,
+        };
+        bySym.set(sym, [...(bySym.get(sym) || []), trailPlacedAlgo]);
+        rememberRecentExitAlgo(sym, trailPlacedAlgo);
         log({
           type: 'trail_placed',
           exchange: pos.exchange,
@@ -1150,11 +1736,17 @@ export const runRangeMonitorPositionStops = async ({
           type: 'trail_failed',
           exchange: pos.exchange,
           symbol: pos.symbol,
-          detail: trailResult.detail,
+          detail: trailResult?.detail,
         });
-        onStatus?.(`持仓追踪失败：${pos.symbol} ${trailResult.detail || ''}`);
+        onStatus?.(`持仓追踪失败：${pos.symbol} ${trailResult?.detail || ''}`);
       }
       await sleep(RANGE_MONITOR_PLACE_GAP_MS);
+    } else if (trailPlaceInFlight.has(trailKey)) {
+      log({
+        type: 'trail_place_inflight_skip',
+        exchange: pos.exchange,
+        symbol: pos.symbol,
+      });
     }
   }
 
@@ -1199,6 +1791,7 @@ export const runRangeMonitorScanAndPlace = async ({
   if (!isLiveOrderEnabled()) {
     throw new RangeMonitorFatal('交易未解锁', '开仓扫描');
   }
+
   syncCandleCacheTodayFromFeed(feed);
   let pairs = listCachedMonitorPairs();
   if (!pairs.length) {
@@ -1328,8 +1921,9 @@ export const runRangeMonitorScanAndPlace = async ({
       throw new RangeMonitorFatal(`${row.symbol} yy 无效`, `last=${quote.last}`);
     }
 
-    // 日K/现价已破：只作「不挂」预检，不计入「破」（「破」仅=近带内实挂被 -2021）
-    if (getMonitorBreakAboveHigh(candles, row, quote.last)) {
+    // 已走出盒子（上破或下破）不计「在区间」；「破」计数仍仅=近带内实挂被 -2021
+    // 上破同时也不挂；下破同样不算在区间（与回测标记日 / 漏斗口径一致）
+    if (getMonitorLeftRange(candles, row, quote.last)) {
       skipped += 1;
       continue;
     }
@@ -1554,6 +2148,7 @@ export const runRangeMonitorRound = async ({
     onStatus,
     onLog,
     priceFeed: feed,
+    binanceSnapshot,
   });
   if (signal?.aborted || positions.aborted) {
     return { cleanup, positions, scan: null, aborted: true };
