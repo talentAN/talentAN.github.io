@@ -266,12 +266,6 @@ export const utcDayStartTs = ts => {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
-export const loadAutoOrderPct = () => {
-  if (typeof window === 'undefined') return DEFAULT_AUTO_ORDER_PCT;
-  const n = parseFloat(localStorage.getItem(AUTO_ORDER_PCT_KEY));
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_AUTO_ORDER_PCT;
-};
-
 export const saveAutoOrderPct = pct => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(AUTO_ORDER_PCT_KEY, String(pct));

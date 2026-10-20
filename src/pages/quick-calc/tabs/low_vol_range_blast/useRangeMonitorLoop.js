@@ -8,15 +8,17 @@ import {
   releaseBinanceAccountMirror,
 } from '@root/src/container/binance/accountMirror';
 import { scheduleMonitorAutoRecover, forceEnableBothMonitors } from '../_monitorAutoRecover';
+import { subscribeSharedMonitorRunning } from '../_sharedMonitorControl';
+import {
+  ensureSharedDayKColdBuild,
+  listSharedColdPairsForRange,
+  MONITORS_DAYK_COLD_READY,
+} from '../_sharedDayKColdBuild';
 import {
   RangeMonitorFatal,
   getSharedMiniTickerFeed,
 } from './_rangeMonitorEngine';
-import {
-  ensureRangeMonitorCandleCache,
-  listCachedMonitorPairs,
-  utcDayKey,
-} from './_rangeMonitorCandleCache';
+import { utcDayKey } from './_rangeMonitorCandleCache';
 import { createRangeEventEngine } from './_rangeEventEngine';
 import {
   LIST_LIMIT,
@@ -48,16 +50,21 @@ export const useRangeMonitorLoop = ({
   const [status, setStatus] = useState(() =>
     loadMonitorRunning() ? '启动中…' : '已停止'
   );
+
+  useEffect(
+    () =>
+      subscribeSharedMonitorRunning(next => {
+        setRunning(next);
+        if (next) setStatus(prev => (prev === '已停止' ? '启动中…' : prev));
+        else {
+          setStatus('已停止');
+          setQueueStatus('');
+        }
+      }),
+    []
+  );
   const [queueStatus, setQueueStatus] = useState('');
   const [lastRound, setLastRound] = useState(null);
-  const [lastRoundMs, setLastRoundMs] = useState(null);
-  const [exitStats, setExitStats] = useState({
-    tp1: 0,
-    tp2: 0,
-    tp3Trail: 0,
-    positionCount: 0,
-    updatedAt: null,
-  });
   const [stats, setStats] = useState({
     round: 0,
     placed: 0,
@@ -69,7 +76,7 @@ export const useRangeMonitorLoop = ({
   const [pendingCount, setPendingCount] = useState(0);
   const [pairTotal, setPairTotal] = useState(0);
   const [pendingSymbols, setPendingSymbols] = useState([]);
-  const exitUniqRef = useRef({ tp1: new Set(), tp2: new Set(), tp3Trail: new Set() });
+  const [avgRoundMs, setAvgRoundMs] = useState(null);
   const uniqStatsRef = useRef({
     placed: new Set(),
     cancelled: new Set(),
@@ -111,14 +118,6 @@ export const useRangeMonitorLoop = ({
     slArmed: uniqStatsRef.current.slArmed.size,
     failed: uniqStatsRef.current.failed.size,
     brokeOut: uniqStatsRef.current.brokeOut.size,
-  });
-
-  const snapshotExitStats = () => ({
-    tp1: exitUniqRef.current.tp1.size,
-    tp2: exitUniqRef.current.tp2.size,
-    tp3Trail: exitUniqRef.current.tp3Trail.size,
-    positionCount: exitUniqRef.current.positionCount || 0,
-    updatedAt: Date.now(),
   });
 
   const pushCancelled = entry => {
@@ -307,6 +306,9 @@ export const useRangeMonitorLoop = ({
         setPendingCount(s.pendingCount || 0);
         setPairTotal(s.pairTotal || 0);
         setPendingSymbols(Array.isArray(s.pendingSymbols) ? s.pendingSymbols : []);
+        setAvgRoundMs(
+          Number.isFinite(s.avgCoverageRoundMs) ? s.avgCoverageRoundMs : null
+        );
         if (s.lastEventAt) setLastRound(new Date(s.lastEventAt));
         if (s.funnel) {
           // 与顶部 pending/pairTotal 同一覆盖轮：检=本轮已触达币数
@@ -318,6 +320,9 @@ export const useRangeMonitorLoop = ({
             nearBandPending: s.funnel.nearBandPending || 0,
             minNotionalSkip: s.funnel.minNotionalSkip || 0,
             placeSkipped: s.funnel.placeSkipped || 0,
+            placeSkippedItems: Array.isArray(s.funnel.placeSkippedItems)
+              ? s.funnel.placeSkippedItems
+              : [],
             brokeOut: s.funnel.brokeOut || 0,
             placed: s.funnel.placed || 0,
             failed: s.funnel.failed || 0,
@@ -358,23 +363,19 @@ export const useRangeMonitorLoop = ({
         if (abortRef.current || gen !== bootGen) return;
 
         dayKeyRef.current = utcDayKey();
-        const coldStarted = Date.now();
-        const cacheResult = await ensureRangeMonitorCandleCache({
-          signal: {
-            get aborted() {
-              return abortRef.current || gen !== bootGen;
-            },
-          },
+        // 与暴涨共用一次 200 日 K 冷建；完成后派发 MONITORS_DAYK_COLD_READY
+        const cacheResult = await ensureSharedDayKColdBuild({
+          aborted: () => abortRef.current || gen !== bootGen,
           onStatus: setStatus,
           priceFeed: feed,
-          maxRangeMult: maxMultRef.current,
+          force: reason === 'utc',
         });
         if (abortRef.current || gen !== bootGen) return;
         if (cacheResult?.aborted) return;
 
-        const pairs = listCachedMonitorPairs();
+        const pairs = await listSharedColdPairsForRange();
         if (!pairs.length) {
-          throw new RangeMonitorFatal('日 K 缓存无币对', 'ensureRangeMonitorCandleCache');
+          throw new RangeMonitorFatal('共用日 K 冷建无币对', 'ensureSharedDayKColdBuild');
         }
 
         engine.setPairs(pairs);
@@ -390,11 +391,12 @@ export const useRangeMonitorLoop = ({
         setPairTotal(pairs.length);
         setPendingCount(pairs.length);
         setLastRound(new Date());
-        if (!cacheResult?.fromCache) {
-          setLastRoundMs(Date.now() - coldStarted);
-        }
-        const via = cacheResult?.fromCache ? '复用日K' : '冷建完成';
+        const via = cacheResult?.fromCache ? '复用日K' : '共用冷建完成';
         setStatus(`${via} · 事件驱动 ${pairs.length} 币 · REST 仅过期补K`);
+        console.info(`[RangeMonitor] ${MONITORS_DAYK_COLD_READY}`, {
+          fromCache: cacheResult?.fromCache,
+          size: pairs.length,
+        });
       } catch (e) {
         if (abortRef.current) return;
         if (e instanceof RangeMonitorFatal && /已停止/.test(e.message)) return;
@@ -457,12 +459,11 @@ export const useRangeMonitorLoop = ({
     status,
     queueStatus,
     lastRound,
-    lastRoundMs,
-    exitStats,
     stats,
     pendingCount,
     pairTotal,
     pendingSymbols,
+    avgRoundMs,
     lastScanFunnel,
     cancelledList,
     placedList,

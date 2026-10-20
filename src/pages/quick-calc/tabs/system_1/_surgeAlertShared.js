@@ -2,28 +2,25 @@
  * 暴涨100：常量与无 React 依赖的工具（hooks / UI 共用）。
  */
 
-import { getSurgeInfoFromCache } from './_surgeDayCache';
 import { DEFAULT_AUTO_ORDER_PCT } from './_autoOrderModel';
+import {
+  loadSharedMonitorRunning,
+  saveSharedMonitorRunning,
+} from '../_sharedMonitorControl';
 
-/** @deprecated 旧全表扫轮空闲间隔；现已事件驱动，代码未再引用 */
-export const ROUND_IDLE_MS = 5000;
 /** 空头止盈 tip 最多保留条数 */
 export const EXIT_TIPS_MAX = 12;
 
-/** @deprecated 旧暖扫分批大小；现已事件驱动，代码未再引用 */
-export const WARM_BATCH_SIZE = 80;
-/** @deprecated 旧暖扫批间隔；现已事件驱动，代码未再引用 */
-export const WARM_BATCH_MS = 0;
 /** 默认告警涨幅阈值（%） */
 export const DEFAULT_PCT = 90;
 /** localStorage：告警涨幅阈值 */
 export const STORAGE_KEY = 'surge-alert-threshold-pct';
 /** localStorage：浮动面板坐标 */
 export const POS_KEY = 'surge-alert-pos';
-/** localStorage：监控开关（'1'开/'0'关；缺省开） */
+/** localStorage：监控开关（与横盘共用；见 _sharedMonitorControl） */
 export const RUNNING_KEY = 'surge-alert-monitor-running';
-/** 浮动面板宽度，用于拖拽边界计算 */
-export const PANEL_W = 220;
+/** 浮动面板宽度，与 dock CSS `.qc-tool-panel--surge` 对齐 */
+export const PANEL_W = 240;
 /** 标题闪烁告警持续时长 */
 export const TITLE_FLASH_MS = 8000;
 
@@ -69,6 +66,17 @@ export const fmtDurationMs = ms => {
   return `${m}m${String(s).padStart(2, '0')}s`;
 };
 
+/** 平均每轮耗时：2min 15s / 45s */
+export const fmtAvgRoundMs = ms => {
+  const n = Number(ms);
+  if (!(n >= 0) || !Number.isFinite(n)) return '—';
+  const totalSec = Math.round(n / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m <= 0) return `${s}s`;
+  return `${m}min ${s}s`;
+};
+
 /** 读告警涨幅阈值；无效则 DEFAULT_PCT */
 export const loadPct = () => {
   if (typeof window === 'undefined') return DEFAULT_PCT;
@@ -95,19 +103,11 @@ export const loadPos = () => {
   return defaultPos();
 };
 
-/** 读监控开关：无记录默认开 */
-export const loadMonitorRunning = () => {
-  if (typeof window === 'undefined') return true;
-  const raw = localStorage.getItem(RUNNING_KEY);
-  if (raw == null || raw === '') return true;
-  return raw === '1' || raw === 'true';
-};
+/** 读监控开关（暴涨/横盘共用） */
+export const loadMonitorRunning = () => loadSharedMonitorRunning();
 
-/** 写监控开关 */
-export const saveMonitorRunning = enabled => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(RUNNING_KEY, enabled ? '1' : '0');
-};
+/** 写监控开关（暴涨/横盘共用） */
+export const saveMonitorRunning = enabled => saveSharedMonitorRunning(enabled);
 
 /** 把面板坐标夹进视口内 */
 export const clampPos = (x, y, w = PANEL_W, h = 80) => {
@@ -190,6 +190,3 @@ export const bringTabToFront = label => {
     }
   }
 };
-
-/** 扫轮读缓存：open 来自日K桶，high 取 max(缓存, Socket)；缺缓存返回 null */
-export const getPairSurgeInfo = (pair, feed) => getSurgeInfoFromCache(pair, feed);
