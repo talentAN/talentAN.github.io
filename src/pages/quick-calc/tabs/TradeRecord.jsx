@@ -122,6 +122,10 @@ const STAT_SYSTEMS = [
     label: '爆100回调',
   },
   {
+    key: PATTERN.range_breakout_upper,
+    label: '横盘突破上沿',
+  },
+  {
     key: PATTERN.trial_water,
     label: '试水',
   },
