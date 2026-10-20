@@ -21,9 +21,10 @@ export const useSurgeAlert = ({ docked = false } = {}) => {
     setExpanded: panel.setExpanded,
   });
 
-  /** 改告警涨幅阈值，并清空已命中、按新阈值重新武装 */
+  /** 改告警涨幅阈值（同时同步自动下单阈值），并清空已命中、按新阈值重新武装 */
   const applyPct = raw => {
     if (!settings.applyPctValue(raw)) return;
+    settings.applyAutoOrderPct(raw);
     monitor.onThresholdChanged();
   };
 
@@ -39,13 +40,6 @@ export const useSurgeAlert = ({ docked = false } = {}) => {
     setPctInput: settings.setPctInput,
     /** 提交告警阈值（校验后写 localStorage 并通知 monitor） */
     applyPct,
-    /** 自动开空用的涨幅阈值（%），可与告警阈值不同 */
-    autoOrderPct: settings.autoOrderPct,
-    /** 自动开空阈值输入框字符串 */
-    autoOrderPctInput: settings.autoOrderPctInput,
-    setAutoOrderPctInput: settings.setAutoOrderPctInput,
-    /** 提交自动开空阈值 */
-    applyAutoOrderPct: settings.applyAutoOrderPct,
     /** 是否允许自动挂阶梯空单 */
     autoOrderEnabled: settings.autoOrderEnabled,
     /** 切换自动下单开关并持久化 */
@@ -79,14 +73,14 @@ export const useSurgeAlert = ({ docked = false } = {}) => {
     lastPoll: monitor.lastPoll,
     /** bookTicker 全表覆盖轮次（seen 齐一轮 +1） */
     scanRounds: monitor.scanRounds,
-    /** 最近一次冷建日K耗时（ms）；非扫轮耗时 */
-    lastRoundMs: monitor.lastRoundMs,
     /** 本覆盖轮尚未见到 push 的币对数 */
     pendingCount: monitor.pendingCount,
     /** 监控中的 Binance 币对总数 */
     pairTotal: monitor.pairTotal,
     /** 未覆盖币对符号（仅当剩余很少时附带，供 UI 展示） */
     pendingSymbols: monitor.pendingSymbols,
+    /** 平均每覆盖轮耗时（ms） */
+    avgRoundMs: monitor.avgRoundMs,
     /** 监控是否在跑（与 localStorage RUNNING_KEY 同步） */
     running: monitor.running,
     /** 空头止盈/追踪 tip 列表（新在前） */

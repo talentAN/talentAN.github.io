@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_AUTO_ORDER_PCT,
-  loadAutoOrderPct,
   saveAutoOrderPct,
   loadAutoOrderEnabled,
   saveAutoOrderEnabled,
@@ -18,10 +17,6 @@ export const useSurgeAlertSettings = () => {
   const [pct, setPct] = useState(DEFAULT_PCT);
   /** 告警阈值输入框草稿 */
   const [pctInput, setPctInput] = useState(String(DEFAULT_PCT));
-  /** 自动开空涨幅阈值（%） */
-  const [autoOrderPct, setAutoOrderPct] = useState(DEFAULT_AUTO_ORDER_PCT);
-  /** 自动开空阈值输入框草稿 */
-  const [autoOrderPctInput, setAutoOrderPctInput] = useState(String(DEFAULT_AUTO_ORDER_PCT));
   /** 是否允许自动挂阶梯空单 */
   const [autoOrderEnabled, setAutoOrderEnabled] = useState(true);
   /** 批次列表（由 Map 同步出来给 React 渲染） */
@@ -44,10 +39,9 @@ export const useSurgeAlertSettings = () => {
     setPctInput(String(initial));
     pctRef.current = initial;
 
-    const initialAutoPct = loadAutoOrderPct();
-    setAutoOrderPct(initialAutoPct);
-    setAutoOrderPctInput(String(initialAutoPct));
-    autoOrderPctRef.current = initialAutoPct;
+    // UI 合并为单输入：告警阈值与自动下单阈值共用同一值
+    autoOrderPctRef.current = initial;
+    saveAutoOrderPct(initial);
 
     const initialEnabled = loadAutoOrderEnabled();
     setAutoOrderEnabled(initialEnabled);
@@ -82,15 +76,10 @@ export const useSurgeAlertSettings = () => {
     return true;
   };
 
-  /** 校验并写入自动开空阈值 */
+  /** 与告警阈值同步写入自动开空阈值 */
   const applyAutoOrderPct = raw => {
     const n = parseFloat(raw);
-    if (!Number.isFinite(n) || n <= 0) {
-      setAutoOrderPctInput(String(autoOrderPct));
-      return;
-    }
-    setAutoOrderPct(n);
-    setAutoOrderPctInput(String(n));
+    if (!Number.isFinite(n) || n <= 0) return;
     autoOrderPctRef.current = n;
     saveAutoOrderPct(n);
   };
@@ -109,9 +98,6 @@ export const useSurgeAlertSettings = () => {
     setPctInput,
     applyPctValue,
     pctRef,
-    autoOrderPct,
-    autoOrderPctInput,
-    setAutoOrderPctInput,
     applyAutoOrderPct,
     autoOrderPctRef,
     autoOrderEnabled,

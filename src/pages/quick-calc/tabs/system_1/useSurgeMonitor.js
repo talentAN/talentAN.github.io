@@ -27,15 +27,18 @@ import { filterBlacklistedPairs } from '../_symbolBlacklist';
 import {
   scheduleMonitorAutoRecover,
   forceEnableBothMonitors,
-  RANGE_MONITOR_RUNNING_KEY,
 } from '../_monitorAutoRecover';
-import { getSharedMiniTickerFeed } from '../low_vol_range_blast/_rangeMonitorPriceFeed';
 import {
-  ensureSurgeDayCache,
-  getSurgeDayCacheMeta,
-  surgeUtcDayKey,
-  stopSurgeHighReconcile,
-} from './_surgeDayCache';
+  loadSharedMonitorRunning,
+  subscribeSharedMonitorRunning,
+} from '../_sharedMonitorControl';
+import {
+  ensureSharedDayKColdBuild,
+  listSharedColdPairsForSurge,
+  MONITORS_DAYK_COLD_READY,
+} from '../_sharedDayKColdBuild';
+import { getSharedMiniTickerFeed } from '../low_vol_range_blast/_rangeMonitorPriceFeed';
+import { getSurgeDayCacheMeta, surgeUtcDayKey } from './_surgeDayCache';
 import { createSurgeEventEngine } from './_surgeEventEngine';
 import {
   EXIT_TIPS_MAX,
@@ -83,18 +86,32 @@ export const useSurgeMonitor = ({
   const [lastPoll, setLastPoll] = useState(null);
   /** bookTicker 全表覆盖轮次 */
   const [scanRounds, setScanRounds] = useState(0);
-  /** 最近一次冷建日K耗时（ms） */
-  const [lastRoundMs, setLastRoundMs] = useState(null);
   /** 本覆盖轮尚未见到 push 的币数 */
   const [pendingCount, setPendingCount] = useState(0);
   /** 监控币对总数 */
   const [pairTotal, setPairTotal] = useState(0);
+  /** 平均每覆盖轮耗时（ms） */
+  const [avgRoundMs, setAvgRoundMs] = useState(null);
   /** 未覆盖符号（少时才填） */
   const [pendingSymbols, setPendingSymbols] = useState([]);
-  /** 监控是否在跑 */
+  /** 监控是否在跑（与横盘共用） */
   const [running, setRunning] = useState(() => loadMonitorRunning());
   /** 空头出场 tip（新在前） */
   const [exitTips, setExitTips] = useState([]);
+
+  useEffect(
+    () =>
+      subscribeSharedMonitorRunning(next => {
+        setRunning(next);
+        if (next) setStatus(prev => (prev === '已停止' ? '启动中…' : prev));
+        else {
+          setStatus('已停止');
+          setReconcileStatus('');
+          setTradeQueueStatus('');
+        }
+      }),
+    []
+  );
 
   /** 当日已弹过音/通知的「日:币」集合，防同币重复吵 */
   const notifiedRef = useRef(new Set());
@@ -118,9 +135,6 @@ export const useSurgeMonitor = ({
     acquireBinanceAccountMirror().catch(e => {
       console.warn('[SurgeAlert] account mirror start', e);
     });
-
-    // 停掉旧全表补 H（若上次异常残留）
-    stopSurgeHighReconcile();
 
     /** Map → 按涨幅降序的 alerts state */
     const syncAlerts = () => {
@@ -414,8 +428,7 @@ export const useSurgeMonitor = ({
         autoOrderInFlightRef.current.delete(batchKey);
       }
     };
-
-    const notifyBatchResult = (freshHits, orderEvents) => {
+const notifyBatchResult = (freshHits, orderEvents) => {
       if (freshHits.length || orderEvents.some(e => e.type === 'submitted')) {
         const hitLabels = freshHits.slice(0, 3).map(item => {
           const pct = `+${((item.ratio - 1) * 100).toFixed(0)}%`;
@@ -468,6 +481,9 @@ export const useSurgeMonitor = ({
         setPendingSymbols(
           Array.isArray(stats.pendingSymbols) ? stats.pendingSymbols : []
         );
+        setAvgRoundMs(
+          Number.isFinite(stats.avgCoverageRoundMs) ? stats.avgCoverageRoundMs : null
+        );
         if (stats.lastEventAt) setLastPoll(new Date(stats.lastEventAt));
         const tq = stats.tradeQueue || getBinanceTradeQueueSnapshot();
         if (tq?.depth > 0 || tq?.currentJobKey) {
@@ -495,16 +511,23 @@ export const useSurgeMonitor = ({
     let unsubQuotes = () => {};
     let unsubAccount = () => {};
     let pairsTimer = null;
+    let stallTimer = null;
     let bootGen = 0;
+    /** 最近一次 engine.start 成功的本地时刻；stall 检测用 */
+    let engineStartedAt = 0;
+    /** 串行化 bootstrap：避免 A.stop() 后被 B 热路径「复用日K」直接 return，引擎永死 */
+    let bootChain = Promise.resolve();
 
-    const bootstrap = async reason => {
+    const runBootstrap = async reason => {
       const gen = (bootGen += 1);
       const needColdRebuild = reason === 'start' || reason === 'utc';
-      // pairs 定时刷新：当日缓存可用则只热更新币对，不停引擎（避免开仓黑窗）
+      // pairs 定时刷新：仅当引擎仍在跑且日K新鲜时热更新币对（不停引擎）
+      // 若 engineRef 在但 isRunning=false（被并发 stop 过），必须冷重建，否则 UI 假活
       if (!needColdRebuild && reason === 'pairs') {
         try {
           const meta = getSurgeDayCacheMeta();
-          if (meta.fresh && engineRef.current) {
+          const eng = engineRef.current;
+          if (meta.fresh && eng?.isRunning?.()) {
             setStatus('刷新币对列表…');
             let pairs = await getMergedTradingPairs();
             pairs = filterBlacklistedPairs(pairs).filter(p => p.exchange === 'binance');
@@ -513,12 +536,15 @@ export const useSurgeMonitor = ({
               setStatus('无可用 Binance 币对');
               return;
             }
-            engine.setPairs(pairs);
-            setPairTotal(pairs.length);
-            setStatus(
-              `复用日K · 事件驱动 ${pairs.length} 币 · REST 仅过期补K`
-            );
-            return;
+            // 热刷新途中若被并发 stop，落入下方冷建，禁止「假复用」
+            if (eng.isRunning()) {
+              eng.setPairs(pairs);
+              setPairTotal(pairs.length);
+              setStatus(
+                `复用日K · 事件驱动 ${pairs.length} 币 · REST 仅过期补K`
+              );
+              return;
+            }
           }
         } catch (e) {
           console.warn('[SurgeAlert] pairs hot refresh', e);
@@ -526,7 +552,11 @@ export const useSurgeMonitor = ({
         }
       }
 
+      if (abortRef.current || gen !== bootGen) return;
+
       engine.stop();
+      // 冷建窗口内勿让 stall 误判「引擎已停」连环入队
+      engineStartedAt = 0;
       setReconcileStatus('');
       setTradeQueueStatus('');
 
@@ -569,32 +599,41 @@ export const useSurgeMonitor = ({
         }
 
         dayKeyRef.current = surgeUtcDayKey();
-        const coldStarted = Date.now();
-        const cacheResult = await ensureSurgeDayCache({
-          pairs,
+        // 与横盘共用一次 200 日 K 冷建；完成后派发 MONITORS_DAYK_COLD_READY
+        const cacheResult = await ensureSharedDayKColdBuild({
           aborted: () => abortRef.current || gen !== bootGen,
           onStatus: setStatus,
           priceFeed: feed,
+          force: reason === 'utc',
         });
 
         if (abortRef.current || gen !== bootGen) return;
+        if (cacheResult?.aborted) return;
 
-        engine.setPairs(pairs);
+        const coldPairs = listSharedColdPairsForSurge();
+        const enginePairs = coldPairs.length ? coldPairs : pairs;
+        if (!enginePairs.length) {
+          throw new Error('共用日 K 冷建无可用币对');
+        }
+
+        engine.setPairs(enginePairs);
         engine.start({
-          pairs,
+          pairs: enginePairs,
           resetCoverage: reason === 'start' || reason === 'utc',
         });
+        engineStartedAt = Date.now();
         setLastPoll(new Date());
-        setPairTotal(pairs.length);
-        setPendingCount(pairs.length);
+        setPairTotal(enginePairs.length);
+        setPendingCount(enginePairs.length);
         setPendingSymbols([]);
-        const via = cacheResult?.fromCache ? '复用日K' : '冷建完成';
+        const via = cacheResult?.fromCache ? '复用日K' : '共用冷建完成';
         setStatus(
-          `${via} · 事件驱动 ${pairs.length} 币 · REST 仅过期补K`
+          `${via} · 事件驱动 ${enginePairs.length} 币 · REST 仅过期补K`
         );
-        if (!cacheResult?.fromCache) {
-          setLastRoundMs(Date.now() - coldStarted);
-        }
+        console.info(`[SurgeAlert] ${MONITORS_DAYK_COLD_READY}`, {
+          fromCache: cacheResult?.fromCache,
+          size: enginePairs.length,
+        });
       } catch (e) {
         if (abortRef.current) return;
         console.error('[SurgeAlert] bootstrap', e);
@@ -608,6 +647,15 @@ export const useSurgeMonitor = ({
           source: '暴涨监控',
         });
       }
+    };
+
+    const bootstrap = reason => {
+      bootChain = bootChain
+        .then(() => runBootstrap(reason))
+        .catch(e => {
+          console.error('[SurgeAlert] bootstrap chain', e);
+        });
+      return bootChain;
     };
 
     rebuildRef.current = bootstrap;
@@ -652,6 +700,38 @@ export const useSurgeMonitor = ({
       if (!abortRef.current) bootstrap('pairs');
     }, PAIRS_REFRESH_MS);
 
+    // 引擎假活检测：
+    // 1) React running 但 engine 已 stop → 立刻冷重建
+    // 2) engine 在跑但 bookTicker 长时间未进 onQuotes → 冷重建
+    // lastEventAt 在 start() 清零；用 engineStartedAt 兜底「启动后从未收到事件」
+    const STALL_MS = 90_000;
+    stallTimer = setInterval(() => {
+      if (abortRef.current) return;
+      const eng = engineRef.current;
+      if (!eng) return;
+      if (!eng.isRunning?.()) {
+        // 冷建中途也会 stop；仅当已成功 start 过且非刚停，才重建
+        if (!(engineStartedAt > 0)) return;
+        setStatus('事件引擎已停，自动重建…');
+        bootstrap('pairs');
+        return;
+      }
+      const stats = eng.getStats?.() || {};
+      const lastAt = Number(stats.lastEventAt) || 0;
+      const anchor = lastAt > 0 ? lastAt : engineStartedAt;
+      if (!(anchor > 0) || Date.now() - anchor <= STALL_MS) return;
+      console.warn('[SurgeAlert] quote stall, rebuild', {
+        idleMs: Date.now() - anchor,
+        pending: stats.pendingCount,
+        rounds: stats.coverageRounds,
+        hadEvent: lastAt > 0,
+      });
+      setStatus(
+        `行情事件停滞 ${Math.round((Date.now() - anchor) / 1000)}s，重建…`
+      );
+      bootstrap('pairs');
+    }, 15_000);
+
     return () => {
       abortRef.current = true;
       bootGen += 1;
@@ -660,13 +740,11 @@ export const useSurgeMonitor = ({
       unsubQuotes();
       unsubAccount();
       if (pairsTimer) clearInterval(pairsTimer);
-      stopSurgeHighReconcile();
+      if (stallTimer) clearInterval(stallTimer);
       setReconcileStatus('');
       releaseBinanceAccountMirror();
       try {
-        if (localStorage.getItem(RANGE_MONITOR_RUNNING_KEY) !== '1') {
-          feed.stop();
-        }
+        if (!loadSharedMonitorRunning()) feed.stop();
       } catch (_) {
         feed.stop();
       }
@@ -677,7 +755,6 @@ export const useSurgeMonitor = ({
   const stopMonitor = () => {
     abortRef.current = true;
     engineRef.current?.stop();
-    stopSurgeHighReconcile();
     saveMonitorRunning(false);
     setRunning(false);
     setStatus('已停止');
@@ -714,10 +791,10 @@ export const useSurgeMonitor = ({
     tradeQueueStatus,
     lastPoll,
     scanRounds,
-    lastRoundMs,
     pendingCount,
     pairTotal,
     pendingSymbols,
+    avgRoundMs,
     running,
     exitTips,
     setExitTips,

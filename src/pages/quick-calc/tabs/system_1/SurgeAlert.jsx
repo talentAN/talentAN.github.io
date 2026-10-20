@@ -12,17 +12,16 @@ import {
   PANEL_W,
   todayKey,
   fmtTime,
+  fmtAvgRoundMs,
 } from './_surgeAlertShared';
 import { useSurgeAlert } from './useSurgeAlert';
+import { Divider } from 'antd';
 
 const SurgeAlert = ({ docked = false }) => {
   const {
     pctInput,
     setPctInput,
     applyPct,
-    autoOrderPctInput,
-    setAutoOrderPctInput,
-    applyAutoOrderPct,
     autoOrderEnabled,
     toggleAutoOrder,
     autoBatches,
@@ -41,6 +40,7 @@ const SurgeAlert = ({ docked = false }) => {
     pendingCount,
     pairTotal,
     pendingSymbols,
+    avgRoundMs,
     running,
     exitTips,
     setExitTips,
@@ -171,7 +171,7 @@ const SurgeAlert = ({ docked = false }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>暴涨</div>
               <span
-                title="覆盖轮次：全部币对都至少触达一次（bookTicker 或 REST 补K）后 +1"
+                title="覆盖轮次：全部币对都至少触达一次（bookTicker 或已入补K队）后 +1；补K入队≥45s未清提权 DAY_K_OVERDUE"
                 style={{
                   minWidth: 22,
                   height: 20,
@@ -187,62 +187,6 @@ const SurgeAlert = ({ docked = false }) => {
               >
                 {scanRounds}
               </span>
-              {pairTotal > 0 ? (
-                <span
-                  title="本轮尚未触达的币数 / 跟踪币对数（Socket 或 REST 补K 任一算触达）"
-                  style={{
-                    height: 20,
-                    padding: '0 7px',
-                    borderRadius: 10,
-                    border: '1px solid #ffa39e',
-                    background: '#fff',
-                    color: '#cf1322',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    lineHeight: '18px',
-                    textAlign: 'center',
-                    fontVariantNumeric: 'tabular-nums',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 0,
-                  }}
-                >
-                  {pendingCount <= 10 && pendingSymbols.length > 0 ? (
-                    <Tooltip
-                      placement="bottomLeft"
-                      overlayStyle={{ maxWidth: 280 }}
-                      title={
-                        <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-                          <div style={{ marginBottom: 4, opacity: 0.85 }}>
-                            本轮尚未触达（无 Socket / 未补K）
-                          </div>
-                          {pendingSymbols.map(sym => (
-                            <div key={sym}>
-                              <a
-                                href={getTradeUrl(sym, 'binance')}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ color: '#91caff' }}
-                                onClick={e => e.stopPropagation()}
-                              >
-                                {sym}
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      }
-                    >
-                      <span style={{ cursor: 'help', borderBottom: '1px dashed #ffa39e' }}>
-                        {pendingCount}
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <span>{pendingCount}</span>
-                  )}
-                  <span style={{ opacity: 0.55 }}>/</span>
-                  <span>{pairTotal}</span>
-                </span>
-              ) : null}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {running ? (
@@ -259,7 +203,7 @@ const SurgeAlert = ({ docked = false }) => {
                     padding: '3px 8px',
                     borderRadius: 4,
                   }}
-                  title="停止事件监控"
+                  title="停止暴涨与横盘监控（共用开关）"
                 >
                   停止
                 </button>
@@ -277,7 +221,7 @@ const SurgeAlert = ({ docked = false }) => {
                     padding: '3px 8px',
                     borderRadius: 4,
                   }}
-                  title="开始事件监控"
+                  title="开始暴涨与横盘监控（共用冷建 200 日 K）"
                 >
                   开始
                 </button>
@@ -300,7 +244,15 @@ const SurgeAlert = ({ docked = false }) => {
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#cf1322' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              color: '#cf1322',
+              flexWrap: 'wrap',
+            }}
+          >
             <span>涨幅 &gt;</span>
             <input
               type="number"
@@ -314,8 +266,9 @@ const SurgeAlert = ({ docked = false }) => {
                   e.target.blur();
                 }
               }}
+              title="告警与自动下单共用阈值"
               style={{
-                width: 48,
+                width: 36,
                 height: 22,
                 border: '1px solid #ffa39e',
                 borderRadius: 4,
@@ -327,62 +280,74 @@ const SurgeAlert = ({ docked = false }) => {
                 cursor: 'text',
               }}
             />
-            <span>%</span>
+            <span>% 自动下单</span>
           </div>
+          <Divider orientation="left" plain style={{ margin: '8px 0' }}>
+          </Divider>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              color: '#a8071a',
+              gap: 8,
               marginTop: 4,
+              flexWrap: 'wrap',
+              minHeight: 20,
             }}
           >
-            <span>自动下单 &gt;</span>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={autoOrderPctInput}
-              onChange={e => setAutoOrderPctInput(e.target.value)}
-              onBlur={() => applyAutoOrderPct(autoOrderPctInput)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.target.blur();
-                }
-              }}
-              style={{
-                width: 40,
-                height: 22,
-                border: '1px solid #ffa39e',
-                borderRadius: 4,
-                padding: '0 4px',
-                fontSize: 12,
-                color: '#a8071a',
-                background: '#fff',
-                outline: 'none',
-                cursor: 'text',
-              }}
-            />
-            <span>%</span>
-            <button
-              type="button"
-              onClick={toggleAutoOrder}
-              title="按回测阶梯模型自动下单（真实签名请求，当前用 mock API Key）"
-              style={{
-                marginLeft: 2,
-                border: autoOrderEnabled ? '1px solid #b7eb8f' : '1px solid #d9d9d9',
-                background: autoOrderEnabled ? '#f6ffed' : '#fafafa',
-                color: autoOrderEnabled ? '#389e0d' : '#8c8c8c',
-                cursor: 'pointer',
-                fontSize: 10,
-                lineHeight: 1,
-                padding: '2px 6px',
-                borderRadius: 4,
-              }}
+            {pairTotal > 0 ? (
+              <>
+              <span
+                title="本轮尚未触达的币数 / 跟踪币对数（Socket 或已入补K队任一算触达）"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+              <span>本轮进度：</span>
+                {pendingCount <= 10 && pendingSymbols.length > 0 ? (
+                  <Tooltip
+                    placement="bottomLeft"
+                    overlayStyle={{ maxWidth: 280 }}
+                    title={
+                      <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+                        <div style={{ marginBottom: 4, opacity: 0.85 }}>
+                          本轮尚未触达（无 Socket / 未补K）
+                        </div>
+                        {pendingSymbols.map(sym => (
+                          <div key={sym}>
+                            <a
+                              href={getTradeUrl(sym, 'binance')}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: '#91caff' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {sym}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    }
+                  >
+                    <span style={{ cursor: 'help', borderBottom: '1px dashed #ffa39e' }}>
+                      {pendingCount}
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span>{pendingCount}</span>
+                )}
+                <span style={{ opacity: 0.55 }}>/</span>
+                <span>{pairTotal}</span>
+              </span>
+              </>
+
+            ) : null}
+            <span
+              style={{ color: '#8c8c8c', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
+              title="覆盖轮平均耗时（全书至少触达一次为一轮）"
             >
-              {autoOrderEnabled ? '已开启' : '已关闭'}
-            </button>
+              平均耗时：{avgRoundMs != null ? fmtAvgRoundMs(avgRoundMs) : '—'}
+            </span>
           </div>
           <div style={{ color: '#8c8c8c', marginTop: 4 }}>{status}</div>
           <div
@@ -406,7 +371,7 @@ const SurgeAlert = ({ docked = false }) => {
               minHeight: 14,
               lineHeight: '14px',
             }}
-            title="交易队双通道：OPEN(暴涨开仓)∥ OTHER(EXIT>RANGE)"
+            title="REST队 DAY_K_COLD>SURGE_OPEN>SURGE_EXIT>DAY_K_OVERDUE>RANGE_EXIT>RANGE_OPEN>DAY_K_EXPIRE>DEFAULT"
             aria-hidden={!tradeQueueStatus}
           >
             {tradeQueueStatus || '\u00a0'}
@@ -427,14 +392,15 @@ const SurgeAlert = ({ docked = false }) => {
             </div>
           )}
         </div>
-<div
+
+        <div
           style={{
             flex: 1,
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
-            padding: '0 10px 10px',
+            padding: '4px',
             maxHeight: 'calc(70vh - 110px)',
             touchAction: 'auto',
           }}
