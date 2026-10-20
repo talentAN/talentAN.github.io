@@ -12,9 +12,11 @@ import {
   SymbolLink,
   sectionHeaderStyle,
   fmtTime,
-  fmtDurationMs,
+  fmtAvgRoundMs,
   exTag,
+  formatRangePlaceSkipReason,
 } from './_rangeMonitorShared';
+import { Divider } from 'antd';
 
 const RangeMonitor = ({ docked = false }) => {
   const {
@@ -32,12 +34,11 @@ const RangeMonitor = ({ docked = false }) => {
     status,
     queueStatus,
     lastRound,
-    lastRoundMs,
-    exitStats,
     stats,
     pendingCount,
     pairTotal,
     pendingSymbols,
+    avgRoundMs,
     lastScanFunnel,
     cancelledList,
     placedList,
@@ -114,7 +115,7 @@ const RangeMonitor = ({ docked = false }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>横盘</div>
               <span
-                title="覆盖轮次：全部币对都至少触达一次（bookTicker 或 REST 补K）后 +1"
+                title="覆盖轮次：全部币对都至少触达一次（bookTicker 或已入补K队）后 +1；补K入队≥45s未清提权 DAY_K_OVERDUE"
                 style={{
                   minWidth: 22,
                   height: 20,
@@ -130,98 +131,13 @@ const RangeMonitor = ({ docked = false }) => {
               >
                 {stats.round}
               </span>
-              {pairTotal > 0 ? (
-                <span
-                  title="本轮尚未触达的币数 / 跟踪币对数（Socket 或 REST 补K 任一算触达）"
-                  style={{
-                    height: 20,
-                    padding: '0 7px',
-                    borderRadius: 10,
-                    border: '1px solid #b7eb8f',
-                    background: '#fff',
-                    color: '#389e0d',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    lineHeight: '18px',
-                    textAlign: 'center',
-                    fontVariantNumeric: 'tabular-nums',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 0,
-                  }}
-                >
-                  {pendingCount <= 10 && pendingSymbols.length > 0 ? (
-                    <Tooltip
-                      placement="bottomLeft"
-                      overlayStyle={{ maxWidth: 280 }}
-                      title={
-                        <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-                          <div style={{ marginBottom: 4, opacity: 0.85 }}>
-                            本轮尚未触达（无 Socket / 未补K）
-                          </div>
-                          {pendingSymbols.map(sym => (
-                            <div key={sym}>
-                              <a
-                                href={getTradeUrl(sym, 'binance')}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ color: '#95de64' }}
-                                onClick={e => e.stopPropagation()}
-                              >
-                                {sym}
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      }
-                    >
-                      <span style={{ cursor: 'help', borderBottom: '1px dashed #b7eb8f' }}>
-                        {pendingCount}
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <span>{pendingCount}</span>
-                  )}
-                  <span style={{ opacity: 0.55 }}>/</span>
-                  <span>{pairTotal}</span>
-                </span>
-              ) : lastRoundMs != null ? (
-                <span
-                  title="最近一次日 K 冷建耗时"
-                  style={{
-                    height: 20,
-                    padding: '0 7px',
-                    borderRadius: 10,
-                    border: '1px solid #b7eb8f',
-                    background: '#fff',
-                    color: '#389e0d',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    lineHeight: '18px',
-                    textAlign: 'center',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {fmtDurationMs(lastRoundMs)}
-                </span>
-              ) : null}
-              {null && exitStats.updatedAt ? (
-                <span
-                  style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 11 }}
-                  title="表格持仓出场状态统计的最近更新时间"
-                >
-                  数据更新时间：{fmtTime(exitStats.updatedAt)} · 一档成功 {exitStats.tp1}/
-                  {exitStats.positionCount || '—'} · 二档成功 {exitStats.tp2}/
-                  {exitStats.positionCount || '—'} · 三档/追踪成功 {exitStats.tp3Trail}/
-                  {exitStats.positionCount || '—'}
-                </span>
-              ) : null}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {running ? (
                 <button
                   type="button"
                   onClick={stopMonitor}
+                  title="停止暴涨与横盘监控（共用开关）"
                   style={{
                     border: '1px solid #b7eb8f',
                     background: '#fff',
@@ -239,6 +155,7 @@ const RangeMonitor = ({ docked = false }) => {
                 <button
                   type="button"
                   onClick={startMonitor}
+                  title="开始暴涨与横盘监控（共用冷建 200 日 K）"
                   style={{
                     border: '1px solid #b7eb8f',
                     background: '#f6ffed',
@@ -271,8 +188,14 @@ const RangeMonitor = ({ docked = false }) => {
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <span>高低比 ≤</span>
               <input
                 type="number"
@@ -288,7 +211,7 @@ const RangeMonitor = ({ docked = false }) => {
                 }}
                 title={running ? '运行中不可改；停止后再调' : '区间高低比须 ≤ 该值'}
                 style={{
-                  width: 56,
+                  width: 36,
                   height: 22,
                   padding: '0 4px',
                   border: '1px solid #b7eb8f',
@@ -297,7 +220,7 @@ const RangeMonitor = ({ docked = false }) => {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <span title="现价 ≥ 上沿×(1−该%/100) 才挂开仓；100≈不限制近带">距上沿</span>
               <input
                 type="number"
@@ -317,7 +240,7 @@ const RangeMonitor = ({ docked = false }) => {
                     : '现价距上沿不超过该百分比才挂开仓委托；填 100 近似关闭近带限制'
                 }
                 style={{
-                  width: 52,
+                  width: 36,
                   height: 22,
                   padding: '0 4px',
                   border: '1px solid #b7eb8f',
@@ -327,6 +250,67 @@ const RangeMonitor = ({ docked = false }) => {
               />
               <span>%</span>
             </div>
+          </div>
+          <Divider orientation="left" plain style={{ margin: '8px 0' }}>
+          </Divider>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 4,
+              flexWrap: 'wrap',
+              minHeight: 20,
+            }}
+          >
+            {pairTotal > 0 ? (
+              <span
+                title="本轮尚未触达的币数 / 跟踪币对数（Socket 或已入补K队任一算触达）"
+                style={{ fontSize: 11, fontWeight: 600 }}
+              >
+                <span>本轮进度：</span>
+                {pendingCount <= 10 && pendingSymbols.length > 0 ? (
+                  <Tooltip
+                    placement="bottomLeft"
+                    overlayStyle={{ maxWidth: 280 }}
+                    title={
+                      <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+                        <div style={{ marginBottom: 4, opacity: 0.85 }}>
+                          本轮尚未触达（无 Socket / 未补K）
+                        </div>
+                        {pendingSymbols.map(sym => (
+                          <div key={sym}>
+                            <a
+                              href={getTradeUrl(sym, 'binance')}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: '#95de64' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {sym}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    }
+                  >
+                    <span style={{ cursor: 'help', borderBottom: '1px dashed #b7eb8f' }}>
+                      {pendingCount}
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span>{pendingCount}</span>
+                )}
+                <span style={{ opacity: 0.55 }}>/</span>
+                <span>{pairTotal}</span>
+              </span>
+            ) : null}
+            <span
+              style={{ color: '#8c8c8c', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
+              title="覆盖轮平均耗时（全书至少触达一次为一轮）"
+            >
+              平均耗时：{avgRoundMs != null ? fmtAvgRoundMs(avgRoundMs) : '—'}
+            </span>
           </div>
           <div
             style={{
@@ -381,32 +365,72 @@ const RangeMonitor = ({ docked = false }) => {
               </div>
             );
           })()}
-          <div
-            style={{ marginTop: 4, color: '#8c8c8c' }}
-            title="挂/撤/止损/破/败均为会话内币对去重后的数量（非每轮累加）。止损=成本止损成功挂上（不含止盈/追踪）。败=开仓或出场提交失败（非跳过）"
-          >
-            {lastRound ? `上次 ${fmtTime(lastRound)}` : '尚未完成一轮'}
-            {` · 挂${stats.placed}/撤${stats.cancelled}/止损${stats.slArmed}/破${stats.brokeOut}/败${stats.failed}`}
-          </div>
           {lastScanFunnel ? (
             <div
               style={{ marginTop: 2, color: '#595959', fontSize: 11 }}
               title={
-                '本覆盖轮开仓漏斗（按币去重）。' +
-                '距上沿=现价判定近带；待挂=已进交易队尚未出结果（暴涨开仓优先时会在此堆积）；' +
-                '忙/名义跳过/挂=交易队跑完后的结果，不是对「距上沿」同步扣减。' +
-                '名义跳过=交易所最小开仓≥20U 策略不挂。'
+                '本覆盖轮开仓漏斗（按币去重）。\n' +
+                '距上沿=现价已进近带；待挂=已进 REST 队尚未出结果；\n' +
+                '已有仓/单=近带内已有持仓或开多委托，本轮不再重复挂；\n' +
+                '名义跳过=最小开仓≥20U 策略不挂；下单跳过=其它原因未挂成；\n' +
+                '破=近带挂单被交易所拒（如 -2021）；挂=本轮新挂开多成功。'
               }
             >
-              检{lastScanFunnel.scanned} · 在区间{lastScanFunnel.hits} · 距上沿≤
-              {lastScanFunnel.bandPct != null ? Number(lastScanFunnel.bandPct) : '?'}%{' '}
-              {lastScanFunnel.nearBandIn || 0}
-              · 待挂{lastScanFunnel.nearBandPending || 0}
-              · 忙{lastScanFunnel.nearBandBusy || 0}
-              · 名义跳过{lastScanFunnel.minNotionalSkip} · 下单跳过
-              {lastScanFunnel.placeSkipped || 0} · 破{lastScanFunnel.brokeOut} · 挂
-              {lastScanFunnel.placed}
-              {lastScanFunnel.slotLeft != null ? ` · 坑余${lastScanFunnel.slotLeft}` : ''}
+              <div>
+                检：{lastScanFunnel.scanned} | 在区间：{lastScanFunnel.hits} | 距上沿≤
+                {lastScanFunnel.bandPct != null ? Number(lastScanFunnel.bandPct) : '?'}%{' ：'}
+                {lastScanFunnel.nearBandIn || 0}
+              </div>
+              <div>
+              待挂：{lastScanFunnel.nearBandPending || 0} 
+              {' '}| 已有仓/单：{lastScanFunnel.nearBandBusy || 0} 
+              {' '}| 名义跳过：{lastScanFunnel.minNotionalSkip} 
+              </div>
+              <div>
+                {(lastScanFunnel.placeSkipped || 0) > 0 ? (
+                  <Tooltip
+                    placement="bottomLeft"
+                    overlayStyle={{ maxWidth: 360 }}
+                    title={
+                      <div style={{ fontSize: 12, lineHeight: 1.65, maxHeight: 280, overflow: 'auto' }}>
+                        <div style={{ marginBottom: 4, opacity: 0.85 }}>
+                          本轮下单跳过（按币去重）
+                        </div>
+                        {(lastScanFunnel.placeSkippedItems || []).map(item => (
+                          <div key={item.symbol}>
+                            <a
+                              href={getTradeUrl(item.symbol, 'binance')}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: '#95de64' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {item.symbol}
+                            </a>
+                            <span style={{ opacity: 0.9 }}>
+                              {' · '}
+                              {formatRangePlaceSkipReason(item.reason, item.detail)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    }
+                  >
+                    <span
+                      style={{
+                        cursor: 'help',
+                        borderBottom: '1px dashed #b7eb8f',
+                      }}
+                    >
+                      下单跳过：{lastScanFunnel.placeSkipped || 0}
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span>下单跳过：{lastScanFunnel.placeSkipped || 0}</span>
+                )}
+                {' | '}破：{lastScanFunnel.brokeOut} | 挂：{lastScanFunnel.placed}
+                {lastScanFunnel.slotLeft != null ? ` | 坑余：${lastScanFunnel.slotLeft}` : ''}
+              </div>
             </div>
           ) : null}
         </div>

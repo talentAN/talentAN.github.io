@@ -1,8 +1,8 @@
 /**
  * 横盘监控日 K 缓存：
- * - 存储：统一 KLineMirror.rangeLookback（与暴涨分桶，互不覆盖）
- * - 已收盘日 K：同 UTC 日内复用，不每轮 REST
- * - 当日未收盘：REST 首轮写入 O/H/L/C；读时仅把 close 换成 Socket last
+ * - 已收盘 lookback：KLineMirror.rangeLookback（横盘私有）
+ * - 当日 OHLC：统一 dayTruth（与暴涨共用）；本桶 todaySeed 为写穿投影
+ * - 读盒子：closedBars + today（仅 close 换 Socket last，high 保持 REST）
  * - UTC 切日：整表失效，下一轮全量 REST
  */
 
@@ -12,6 +12,13 @@ import {
   getSharedKLineMirror,
   createEmptyRangeLookbackBucket,
 } from '@root/src/container/market/klineMirror';
+import {
+  getTodayTruth,
+  upsertTodayFromCandle,
+  todayTruthToBar,
+  clearTodayTruth,
+  rotateTodayTruthIfNeeded,
+} from '@root/src/container/market/dayTruth';
 import { loadStockSymbolSet } from '../backtest/_tradFiSymbols';
 import { filterBlacklistedPairs } from '../_symbolBlacklist';
 import { fetchLookbackCandles, RANGE_LOOKBACK_DAYS } from './_rangeScan';
@@ -50,6 +57,9 @@ const newEmptyCacheState = createEmptyRangeLookbackBucket;
 
 export const clearRangeMonitorCandleCache = () => {
   setRangeBucket(newEmptyCacheState());
+  const day = utcDayKey();
+  const today = getSharedKLineMirror().todayDay;
+  if (today?.dayKey && today.dayKey !== day) clearTodayTruth();
 };
 
 export const getRangeMonitorCandleCacheMeta = () => {
@@ -60,10 +70,7 @@ export const getRangeMonitorCandleCacheMeta = () => {
     pairCount: cacheState.pairCount,
     builtAt: cacheState.builtAt,
     complete: cacheState.complete,
-    fresh:
-      cacheState.complete &&
-      cacheState.dayKey === utcDayKey() &&
-      cacheState.bySymbol.size > 0,
+    fresh: cacheState.complete && cacheState.dayKey === utcDayKey() && cacheState.bySymbol.size > 0,
   };
 };
 
@@ -127,30 +134,24 @@ export const applyQuoteToTodayBar = (todayBar, quote) => {
   return out;
 };
 
-const seedFeedFromToday = (feed, symbol, today) => {
-  if (!feed || typeof feed.seedDayOhlc !== 'function' || !Array.isArray(today)) return;
-  const open = Number(today[1]);
-  const high = Number(today[2]);
-  const low = Number(today[3]);
-  const close = Number(today[4]);
-  if (!(close > 0) && !(high > 0)) return;
-  feed.seedDayOhlc(symbol, {
-    open: open > 0 ? open : close,
-    high: high > 0 ? high : close,
-    low: low > 0 ? low : close,
-    close: close > 0 ? close : high,
-  });
-};
-
 /**
  * Socket 只更新 feed 里的 last/high/low，不再改缓存日 K 的 H/L。
  * （旧逻辑把 mid 滚进今日 high 会导致 findMonitorActiveRanges 误杀几乎全部盒子）
  */
 export const syncCandleCacheTodayFromFeed = () => 0;
 
+/** lookback 末根 / 既有 seed → 写入唯一当日真相，并拿回投影 bar */
+const commitTodayBar = (symbol, todayBar, feed, exchange = 'binance') => {
+  if (!Array.isArray(todayBar) || todayBar.length < 5) return null;
+  const key = String(symbol || '').toUpperCase();
+  rotateTodayTruthIfNeeded();
+  const truth = upsertTodayFromCandle(key, todayBar, { feed, exchange });
+  return todayTruthToBar(truth) || cloneBar(todayBar);
+};
+
 /**
- * 算盒子用日 K：closed + REST 当日 bar；仅把 close 换成 Socket last（判现价是否已过上沿）。
- * 今日 high/low 保持 REST 种子，绝不被 bookTicker mid / 24h ticker 撑破。
+ * 算盒子用日 K：closed + 当日真相 bar；仅把 close 换成 Socket last。
+ * 今日 high/low 保持 REST 真相，绝不被 bookTicker mid / 24h ticker 撑破。
  */
 export const getCachedMonitorCandles = (symbol, priceFeed) => {
   const key = String(symbol || '').toUpperCase();
@@ -160,7 +161,8 @@ export const getCachedMonitorCandles = (symbol, priceFeed) => {
   const entry = cacheState.bySymbol.get(key);
   if (!entry) return null;
 
-  const seed = entry.todaySeed || entry.today;
+  const truth = getTodayTruth(key);
+  const seed = (truth && todayTruthToBar(truth)) || entry.todaySeed || entry.today || null;
   if (!seed) return [...entry.closedBars];
 
   const today = cloneBar(seed);
@@ -172,7 +174,7 @@ export const getCachedMonitorCandles = (symbol, priceFeed) => {
   return [...entry.closedBars, today];
 };
 
-/** 单币 REST 补种并写入当日缓存（清理遇到缺缓存时用） */
+/** 单币 REST 补种：lookback 写 range；今日 bar 写 dayTruth */
 export const fetchAndCacheMonitorCandles = async (pair, priceFeed) => {
   const feed = priceFeed || getSharedMiniTickerFeed();
   const day = utcDayKey();
@@ -187,10 +189,13 @@ export const fetchAndCacheMonitorCandles = async (pair, priceFeed) => {
   if (!Array.isArray(candles) || !candles.length) return null;
 
   const { closedBars, today } = splitClosedAndToday(candles);
-  const todaySeed = today || null;
-  if (todaySeed) seedFeedFromToday(feed, pair.symbol, todaySeed);
-
   const key = String(pair.symbol).toUpperCase();
+  const todaySeed = today
+    ? commitTodayBar(key, today, feed, pair.exchange)
+    : getTodayTruth(key)
+      ? todayTruthToBar(getTodayTruth(key))
+      : null;
+
   cacheState.bySymbol.set(key, {
     pair: { exchange: pair.exchange, symbol: key },
     closedBars,
@@ -252,10 +257,18 @@ export const ensureRangeMonitorCandleCache = async ({
 
   let cacheState = rangeBucket();
   if (!force && isReusableToday()) {
+    // 热重载 / 旧会话：range 有 todaySeed 但 today 桶空 → 回填唯一真相
+    rotateTodayTruthIfNeeded();
+    let backfilled = 0;
+    cacheState.bySymbol.forEach((row, key) => {
+      if (getTodayTruth(key)) return;
+      const seed = row?.todaySeed || row?.today;
+      if (seed && commitTodayBar(key, seed, feed, row?.pair?.exchange)) backfilled += 1;
+    });
     const synced = syncCandleCacheTodayFromFeed(feed);
     cacheState = rangeBucket();
     onStatus?.(
-      `日 K 缓存复用：${cacheState.bySymbol.size} 币 · UTC ${day} · Socket 同步 ${synced}${multHint}`
+      `日 K 缓存复用：${cacheState.bySymbol.size} 币 · UTC ${day} · Socket 同步 ${synced}${backfilled ? ` · 回填当日 ${backfilled}` : ''}${multHint}`
     );
     return {
       fromCache: true,
@@ -337,9 +350,7 @@ export const ensureRangeMonitorCandleCache = async ({
     const chunk = pairs.slice(i, i + COLD_PARALLEL);
     const done = Math.min(i + chunk.length, total);
     const pct = Math.round((done / total) * 100);
-    onStatus?.(
-      `日 K REST ${done}/${total}（${pct}%）· 已写入 ${cacheState.bySymbol.size} · 并行${chunk.length}`
-    );
+    onStatus?.(`日 K REST ${done}/${total}（${pct}%）`);
 
     const results = await Promise.all(
       chunk.map(async pair => {
@@ -364,8 +375,7 @@ export const ensureRangeMonitorCandleCache = async ({
         continue;
       }
       const { closedBars, today } = splitClosedAndToday(candles);
-      const todaySeed = today || null;
-      if (todaySeed) seedFeedFromToday(feed, key, todaySeed);
+      const todaySeed = today ? commitTodayBar(key, today, feed, pair.exchange) : null;
       rangeBucket().bySymbol.set(key, {
         pair: { exchange: pair.exchange, symbol: key },
         closedBars,

@@ -1750,9 +1750,6 @@ const symAlgos = bySym.get(sym) || [];
     }
   }
 
-  onStatus?.(
-    `持仓完成：检查 ${positions.length} · 止盈 ${tpPlaced} · 止损 ${armed} · 追踪 ${trailPlaced} · 跳过 ${skipped} · 失败 ${failed}`
-  );
   if (armed + tpPlaced + trailPlaced > 0) {
     try {
       await refreshBinanceAccountMirror();
