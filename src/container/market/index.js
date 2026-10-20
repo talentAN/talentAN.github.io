@@ -10,6 +10,15 @@ export {
   resetSharedKLineMirror,
   KLINE_NS,
 } from './klineMirror';
+export {
+  todayUtcDayKey,
+  getTodayTruth,
+  upsertTodayFromCandle,
+  todayTruthToBar,
+  clearTodayTruth,
+  rotateTodayTruthIfNeeded,
+  getTodayTruthMeta,
+} from './dayTruth';
 
 const exchanges = {
   bitget: bitgetApi,

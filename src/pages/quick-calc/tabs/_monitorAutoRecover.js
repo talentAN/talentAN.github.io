@@ -1,13 +1,21 @@
 /**
- * 监控异常自动恢复：弹窗提示 → 写入「两边均开启」→ 15s 后刷新页面。
+ * 监控异常自动恢复：弹窗提示 → 写入「共用开启」→ 15s 后刷新页面。
  * 横盘 / 暴涨共用，避免各写一套。
  */
 
 import React from 'react';
 import { Modal } from 'antd';
+import {
+  SURGE_MONITOR_RUNNING_KEY,
+  RANGE_MONITOR_RUNNING_KEY,
+  forceEnableBothMonitors,
+} from './_sharedMonitorControl';
 
-export const SURGE_MONITOR_RUNNING_KEY = 'surge-alert-monitor-running';
-export const RANGE_MONITOR_RUNNING_KEY = 'range-monitor-running';
+export {
+  SURGE_MONITOR_RUNNING_KEY,
+  RANGE_MONITOR_RUNNING_KEY,
+  forceEnableBothMonitors,
+};
 
 const RECOVER_MS = 15 * 1000;
 const COUNTDOWN_ID = 'qc-monitor-auto-recover-countdown';
@@ -15,16 +23,6 @@ const COUNTDOWN_ID = 'qc-monitor-auto-recover-countdown';
 let recovering = false;
 let countdownTimer = null;
 let reloadTimer = null;
-
-export const forceEnableBothMonitors = () => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(SURGE_MONITOR_RUNNING_KEY, '1');
-    localStorage.setItem(RANGE_MONITOR_RUNNING_KEY, '1');
-  } catch (_) {
-    /* ignore */
-  }
-};
 
 const clearRecoverTimers = () => {
   if (countdownTimer) {
@@ -122,5 +120,7 @@ export const scheduleMonitorAutoRecover = ({
     }
   }, 1000);
 
-  reloadTimer = setTimeout(doReload, RECOVER_MS);
+  reloadTimer = setTimeout(() => {
+    doReload();
+  }, RECOVER_MS);
 };
