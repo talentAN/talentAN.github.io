@@ -20,7 +20,7 @@
     "d3-scale": "^4.0.2",
     "feather-icons-react": "^0.4.3",
     "font-awesome": "^4.7.0",
-    "gatsby": "^5.13.1",
+    "gatsby": "^5.16.1",
     "gatsby-image": "^3.11.0",
     "gatsby-plugin-antd": "^2.2.0",
     "gatsby-plugin-google-gtag": "5.13.0",
